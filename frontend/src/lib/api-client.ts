@@ -13,7 +13,11 @@ apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
     const message =
-      error.response?.data?.detail ?? error.response?.data?.error ?? error.message ?? '请求失败'
+      error.response?.data?.error?.message ??
+      error.response?.data?.detail ??
+      error.response?.data?.error ??
+      error.message ??
+      '请求失败'
 
     return Promise.reject(new Error(message))
   },

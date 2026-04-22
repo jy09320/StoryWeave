@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes import ai, chapters, projects
 from app.core.config import settings
+from app.core.error_handlers import register_exception_handlers
 from app.core.init_db import init_db
 
 
@@ -23,6 +24,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+register_exception_handlers(app)
 
 app.include_router(projects.router, prefix="/api/projects", tags=["projects"])
 app.include_router(chapters.router, prefix="/api/chapters", tags=["chapters"])
