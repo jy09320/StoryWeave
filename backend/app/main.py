@@ -3,8 +3,10 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import projects, chapters, ai
+from app.api.routes import ai, chapters, projects
+from app.core.config import settings
 from app.core.init_db import init_db
+
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
@@ -16,7 +18,7 @@ app = FastAPI(title="StoryWeave - AI 同人文写作平台", version="0.1.0", li
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=settings.BACKEND_CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

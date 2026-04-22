@@ -6,6 +6,7 @@
 - `OPENAI_API_KEY`
 - `ANTHROPIC_API_KEY`
 - 如需修改端口，可调整 `FRONTEND_PORT`、`BACKEND_PORT`、`POSTGRES_PORT`
+- 如需从 Docker、局域网地址或非默认端口访问后端，可调整 `BACKEND_CORS_ORIGINS`（使用英文逗号分隔多个来源）
 - 如需使用代理或兼容网关，可填写 `OPENAI_BASE_URL`、`ANTHROPIC_BASE_URL`
 
 示例：
@@ -53,12 +54,14 @@ docker compose --env-file .env.docker down -v
 - 前端通过 [`VITE_API_BASE_URL`](frontend/src/lib/api-client.ts:3) 固定为 `/api`，因此浏览器只需访问前端地址即可
 
 ## 5. 当前限制
-当前仓库里还没有自动建表或 Alembic 迁移执行逻辑，因此 Docker 启动后，若数据库为空，后端在首次访问项目/章节接口时可能因缺表失败。
+当前后端已在应用启动时通过 [`init_db()`](backend/app/core/init_db.py:7) 自动执行 [`Base.metadata.create_all`](backend/app/core/init_db.py:11)，因此在空数据库场景下可以自动建表，Docker 已具备基础“一键启动 + 自动初始化”能力。
 
-这意味着：
-- 现阶段 Docker 化已完成“容器一键启动”骨架
-- 若要真正做到完全开箱即用，还需要补一层数据库初始化流程，例如：
-  - 启动时自动执行建表
-  - 或补充 Alembic 迁移并在容器启动时运行
+当前仍然存在的限制主要是：
+- 目前使用的是 SQLAlchemy `create_all` 自动建表方案，还没有引入 Alembic 迁移体系
+- 当模型结构在后续迭代中发生变化时，现有数据库不会自动执行结构升级
+- 若进入多人协作或正式环境，仍建议补齐迁移脚本、版本管理与更稳健的启动检查
 
-下一步最合理的增强，是把数据库初始化也接进 [`docker-compose.yml`](docker-compose.yml) 与 [`backend/app/core/database.py`](backend/app/core/database.py)，这样才是完整意义上的“一键运行”。
+因此，下一步更合理的增强方向是：
+- 引入 Alembic 管理数据库 schema 演进
+- 在容器启动流程中加入显式迁移步骤
+- 为健康检查补充数据库连接与初始化状态校验
