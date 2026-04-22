@@ -1,5 +1,6 @@
 export type ProjectStatus = 'draft' | 'active' | 'paused' | 'completed'
 export type ProjectType = 'original' | 'fanfiction' | 'acg' | 'tv_movie'
+export type ChapterStatus = 'draft' | 'writing' | 'review' | 'done'
 
 export interface Chapter {
   id: string
@@ -10,7 +11,7 @@ export interface Chapter {
   plain_text: string | null
   summary: string | null
   word_count: number
-  status: string
+  status: ChapterStatus | string
   notes: string | null
   created_at: string
   updated_at: string
@@ -36,9 +37,9 @@ export interface ProjectDetail extends Project {
 export interface ProjectPayload {
   title: string
   description?: string | null
-  type?: string
+  type?: ProjectType
   source_work?: string | null
-  status?: string
+  status?: ProjectStatus
   default_model_provider?: string | null
   default_model_id?: string | null
 }
@@ -58,7 +59,7 @@ export interface ChapterUpdatePayload {
   content?: string | null
   plain_text?: string | null
   summary?: string | null
-  status?: string
+  status?: ChapterStatus
   notes?: string | null
 }
 

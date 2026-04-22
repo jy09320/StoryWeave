@@ -1,50 +1,154 @@
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+PROJECT_TYPE_VALUES = {"original", "fanfiction", "acg", "tv_movie"}
+PROJECT_STATUS_VALUES = {"draft", "active", "paused", "completed"}
+CHAPTER_STATUS_VALUES = {"draft", "writing", "review", "done"}
+
+
+def normalize_optional_text(value: str | None) -> str | None:
+    if value is None:
+        return None
+
+    stripped = value.strip()
+    return stripped or None
 
 
 class ProjectCreate(BaseModel):
-    title: str
-    description: str | None = None
-    type: str = "original"
-    source_work: str | None = None
-    default_model_provider: str | None = None
-    default_model_id: str | None = None
+    title: str = Field(min_length=1, max_length=200)
+    description: str | None = Field(default=None, max_length=4000)
+    type: str = Field(default="original")
+    source_work: str | None = Field(default=None, max_length=200)
+    default_model_provider: str | None = Field(default=None, max_length=50)
+    default_model_id: str | None = Field(default=None, max_length=100)
+
+    @field_validator("title")
+    @classmethod
+    def validate_title(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("Project title cannot be empty")
+        return stripped
+
+    @field_validator("description", "source_work", "default_model_provider", "default_model_id", mode="before")
+    @classmethod
+    def normalize_optional_fields(cls, value: str | None) -> str | None:
+        return normalize_optional_text(value)
+
+    @field_validator("type")
+    @classmethod
+    def validate_type(cls, value: str) -> str:
+        if value not in PROJECT_TYPE_VALUES:
+            raise ValueError("Invalid project type")
+        return value
 
 
 class ProjectUpdate(BaseModel):
-    title: str | None = None
-    description: str | None = None
+    title: str | None = Field(default=None, min_length=1, max_length=200)
+    description: str | None = Field(default=None, max_length=4000)
     type: str | None = None
-    source_work: str | None = None
+    source_work: str | None = Field(default=None, max_length=200)
     status: str | None = None
-    default_model_provider: str | None = None
-    default_model_id: str | None = None
+    default_model_provider: str | None = Field(default=None, max_length=50)
+    default_model_id: str | None = Field(default=None, max_length=100)
+
+    @field_validator("title")
+    @classmethod
+    def validate_optional_title(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("Project title cannot be empty")
+        return stripped
+
+    @field_validator("description", "source_work", "default_model_provider", "default_model_id", mode="before")
+    @classmethod
+    def normalize_optional_update_fields(cls, value: str | None) -> str | None:
+        return normalize_optional_text(value)
+
+    @field_validator("type")
+    @classmethod
+    def validate_optional_type(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        if value not in PROJECT_TYPE_VALUES:
+            raise ValueError("Invalid project type")
+        return value
+
+    @field_validator("status")
+    @classmethod
+    def validate_project_status(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        if value not in PROJECT_STATUS_VALUES:
+            raise ValueError("Invalid project status")
+        return value
 
 
 class ChapterCreate(BaseModel):
-    project_id: str
-    title: str
-    order_index: int = 0
+    project_id: str = Field(min_length=26, max_length=26)
+    title: str = Field(min_length=1, max_length=200)
+    order_index: int = Field(default=0, ge=0)
     content: str | None = None
     plain_text: str | None = None
-    notes: str | None = None
+    notes: str | None = Field(default=None, max_length=4000)
+
+    @field_validator("title")
+    @classmethod
+    def validate_chapter_title(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("Chapter title cannot be empty")
+        return stripped
+
+    @field_validator("content", "plain_text", "notes", mode="before")
+    @classmethod
+    def normalize_chapter_optional_fields(cls, value: str | None) -> str | None:
+        return normalize_optional_text(value)
 
 
 class ChapterUpdate(BaseModel):
-    title: str | None = None
-    order_index: int | None = None
+    title: str | None = Field(default=None, min_length=1, max_length=200)
+    order_index: int | None = Field(default=None, ge=0)
     content: str | None = None
     plain_text: str | None = None
-    summary: str | None = None
-    word_count: int | None = None
+    summary: str | None = Field(default=None, max_length=4000)
+    word_count: int | None = Field(default=None, ge=0)
     status: str | None = None
-    notes: str | None = None
+    notes: str | None = Field(default=None, max_length=4000)
+
+    @field_validator("title")
+    @classmethod
+    def validate_optional_chapter_title(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("Chapter title cannot be empty")
+        return stripped
+
+    @field_validator("content", "plain_text", "summary", "notes", mode="before")
+    @classmethod
+    def normalize_chapter_update_fields(cls, value: str | None) -> str | None:
+        return normalize_optional_text(value)
+
+    @field_validator("status")
+    @classmethod
+    def validate_chapter_status(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        if value not in CHAPTER_STATUS_VALUES:
+            raise ValueError("Invalid chapter status")
+        return value
 
 
 class ChapterReorderItem(BaseModel):
-    id: str
-    order_index: int = Field(ge=0)
+    id: str = Field(min_length=26, max_length=26)
+    order_index: int = Field(ge=1)
 
 
 class ChapterResponse(BaseModel):
