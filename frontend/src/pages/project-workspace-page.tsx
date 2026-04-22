@@ -48,7 +48,7 @@ export function ProjectWorkspacePage() {
     enabled: Boolean(projectId),
   })
 
-  const chapters = projectQuery.data?.chapters ?? []
+  const chapters = useMemo(() => projectQuery.data?.chapters ?? [], [projectQuery.data?.chapters])
   const selectedChapter = useMemo(() => {
     if (!chapters.length) {
       return null
@@ -388,11 +388,11 @@ export function ProjectWorkspacePage() {
 
                 <div className="flex flex-wrap gap-3">
                   <Link
-                    to={`/projects/${project.id}?chapterId=${selectedChapter.id}`}
+                    to={`/projects/${project.id}/editor/${selectedChapter.id}`}
                     className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground transition hover:opacity-90"
                   >
                     <PenSquare className="size-4" />
-                    打开编辑入口
+                    打开编辑器
                     <ChevronRight className="size-4" />
                   </Link>
                   <Button

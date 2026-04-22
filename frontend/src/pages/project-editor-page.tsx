@@ -97,13 +97,8 @@ export function ProjectEditorPage() {
   const { projectId, chapterId } = useParams<{ projectId: string; chapterId: string }>()
   const autosaveTimerRef = useRef<number | null>(null)
 
-  const [activeChapterId, setActiveChapterId] = useState<string | null>(null)
-  const [form, setForm] = useState<EditorFormState>({
-    title: '',
-    plainText: '',
-    notes: '',
-  })
-  const [isDirty, setIsDirty] = useState(false)
+  const [drafts, setDrafts] = useState<Record<string, EditorFormState>>({})
+  const [dirtyChapterIds, setDirtyChapterIds] = useState<Record<string, boolean>>({})
   const [generation, setGeneration] = useState<GenerationState>({
     instruction: defaultGenerationInstruction,
     provider: 'openai',
@@ -122,24 +117,18 @@ export function ProjectEditorPage() {
     () => getChapterById(projectQuery.data, chapterId),
     [projectQuery.data, chapterId],
   )
-
-  if (chapter?.id !== activeChapterId) {
-    setActiveChapterId(chapter?.id ?? null)
-    setForm(buildEditorForm(chapter))
-    setIsDirty(false)
-
-    if (generation.result) {
-      setGeneration((prev) => ({ ...prev, result: '' }))
-    }
-  }
+  const defaultGenerationProvider = projectQuery.data?.default_model_provider ?? 'openai'
+  const defaultGenerationModelId = projectQuery.data?.default_model_id ?? 'gpt-4o'
 
   const saveChapterMutation = useMutation({
-    mutationFn: async (payload: EditorFormState) => {
-      if (!chapterId) {
-        throw new Error('章节标识缺失，无法保存')
-      }
-
-      return updateChapter(chapterId, {
+    mutationFn: async ({
+      targetChapterId,
+      payload,
+    }: {
+      targetChapterId: string
+      payload: EditorFormState
+    }) => {
+      return updateChapter(targetChapterId, {
         title: payload.title.trim(),
         plain_text: payload.plainText,
         content: payload.plainText,
@@ -148,8 +137,14 @@ export function ProjectEditorPage() {
     },
     onSuccess: async (updatedChapter: Chapter) => {
       await queryClient.invalidateQueries({ queryKey: ['project', projectId] })
-      setForm(buildEditorForm(updatedChapter))
-      setIsDirty(false)
+      setDrafts((prev) => ({
+        ...prev,
+        [updatedChapter.id]: buildEditorForm(updatedChapter),
+      }))
+      setDirtyChapterIds((prev) => ({
+        ...prev,
+        [updatedChapter.id]: false,
+      }))
       toast.success('章节已保存')
     },
     onError: (error: Error) => {
@@ -157,7 +152,7 @@ export function ProjectEditorPage() {
     },
   })
 
-  function scheduleAutosave(nextForm: EditorFormState) {
+  function scheduleAutosave(targetChapterId: string, nextForm: EditorFormState) {
     if (autosaveTimerRef.current) {
       window.clearTimeout(autosaveTimerRef.current)
     }
@@ -167,17 +162,30 @@ export function ProjectEditorPage() {
         return
       }
 
-      saveChapterMutation.mutate(nextForm)
+      saveChapterMutation.mutate({
+        targetChapterId,
+        payload: nextForm,
+      })
     }, 1200)
   }
 
   function updateFormField<K extends keyof EditorFormState>(key: K, value: EditorFormState[K]) {
-    setForm((prev) => {
-      const next = { ...prev, [key]: value }
-      setIsDirty(true)
-      scheduleAutosave(next)
-      return next
-    })
+    if (!chapter?.id) {
+      return
+    }
+
+    const baseForm = drafts[chapter.id] ?? buildEditorForm(chapter)
+    const next = { ...baseForm, [key]: value }
+
+    setDrafts((prev) => ({
+      ...prev,
+      [chapter.id]: next,
+    }))
+    setDirtyChapterIds((prev) => ({
+      ...prev,
+      [chapter.id]: true,
+    }))
+    scheduleAutosave(chapter.id, next)
   }
 
   function handleTitleChange(event: ChangeEvent<HTMLInputElement>) {
@@ -193,12 +201,21 @@ export function ProjectEditorPage() {
   }
 
   async function handleManualSave() {
-    if (!form.title.trim()) {
+    if (!chapter?.id) {
+      toast.error('章节标识缺失，无法保存')
+      return
+    }
+
+    const activeForm = drafts[chapter.id] ?? buildEditorForm(chapter)
+    if (!activeForm.title.trim()) {
       toast.error('章节标题不能为空')
       return
     }
 
-    await saveChapterMutation.mutateAsync(form)
+    await saveChapterMutation.mutateAsync({
+      targetChapterId: chapter.id,
+      payload: activeForm,
+    })
   }
 
   async function handleGenerate() {
@@ -207,16 +224,26 @@ export function ProjectEditorPage() {
       return
     }
 
+    if (!activeForm.plainText.trim()) {
+      toast.error('请先输入章节正文，再发起 AI 续写')
+      return
+    }
+
+    if (autosaveTimerRef.current) {
+      window.clearTimeout(autosaveTimerRef.current)
+      autosaveTimerRef.current = null
+    }
+
     setGeneration((prev) => ({ ...prev, result: '', isGenerating: true }))
 
     try {
       const payload: AIGeneratePayload = {
         project_id: projectId,
         chapter_id: chapterId,
-        text: form.plainText,
+        text: activeForm.plainText,
         instruction: generation.instruction,
-        model_provider: generation.provider,
-        model_id: generation.modelId,
+        model_provider: generationProvider,
+        model_id: selectedModelId,
       }
 
       await streamGenerate(payload, (chunk) => {
@@ -237,8 +264,8 @@ export function ProjectEditorPage() {
       return
     }
 
-    const mergedText = form.plainText.trim()
-      ? `${form.plainText.trimEnd()}\n\n${generation.result.trim()}`
+    const mergedText = activeForm.plainText.trim()
+      ? `${activeForm.plainText.trimEnd()}\n\n${generation.result.trim()}`
       : generation.result.trim()
 
     setGeneration((prev) => ({ ...prev, result: '' }))
@@ -295,8 +322,14 @@ export function ProjectEditorPage() {
     )
   }
 
-  const wordCount = countWords(form.plainText)
-  const modelOptions = MODEL_OPTIONS[generation.provider] ?? MODEL_OPTIONS.openai
+  const activeForm = chapter ? drafts[chapter.id] ?? buildEditorForm(chapter) : buildEditorForm(null)
+  const isDirty = chapter ? (dirtyChapterIds[chapter.id] ?? false) : false
+  const wordCount = countWords(activeForm.plainText)
+  const generationProvider = generation.provider || defaultGenerationProvider
+  const generationModelId = generation.modelId || defaultGenerationModelId
+  const modelOptions = MODEL_OPTIONS[generationProvider] ?? MODEL_OPTIONS.openai
+  const currentModelIsAvailable = modelOptions.some((option) => option.value === generationModelId)
+  const selectedModelId = currentModelIsAvailable ? generationModelId : modelOptions[0]?.value ?? defaultGenerationModelId
 
   return (
     <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
@@ -328,7 +361,7 @@ export function ProjectEditorPage() {
               <label className="text-sm font-medium text-slate-200" htmlFor="chapter-title">
                 章节标题
               </label>
-              <Input id="chapter-title" value={form.title} onChange={handleTitleChange} maxLength={200} />
+              <Input id="chapter-title" value={activeForm.title} onChange={handleTitleChange} maxLength={200} />
             </div>
 
             <div className="space-y-2">
@@ -337,7 +370,7 @@ export function ProjectEditorPage() {
               </label>
               <Textarea
                 id="chapter-content"
-                value={form.plainText}
+                value={activeForm.plainText}
                 onChange={handlePlainTextChange}
                 rows={20}
                 placeholder="在这里开始撰写章节正文，后续将升级为正式富文本编辑器。"
@@ -351,7 +384,7 @@ export function ProjectEditorPage() {
               </label>
               <Textarea
                 id="chapter-notes"
-                value={form.notes}
+                value={activeForm.notes}
                 onChange={handleNotesChange}
                 rows={5}
                 placeholder="记录当前章节目标、伏笔提醒或 AI 指令草稿。"
@@ -384,11 +417,12 @@ export function ProjectEditorPage() {
               <div className="space-y-2">
                 <label className="text-sm font-medium text-slate-200">模型提供商</label>
                 <Select
-                  value={generation.provider}
+                  value={generationProvider}
                   onValueChange={(value) => {
                     const nextModel = (MODEL_OPTIONS[value] ?? MODEL_OPTIONS.openai)[0]?.value ?? 'gpt-4o'
                     setGeneration((prev) => ({
                       ...prev,
+                      result: '',
                       provider: value,
                       modelId: nextModel,
                     }))
@@ -410,8 +444,8 @@ export function ProjectEditorPage() {
               <div className="space-y-2">
                 <label className="text-sm font-medium text-slate-200">模型</label>
                 <Select
-                  value={generation.modelId}
-                  onValueChange={(value) => setGeneration((prev) => ({ ...prev, modelId: value }))}
+                  value={selectedModelId}
+                  onValueChange={(value) => setGeneration((prev) => ({ ...prev, result: '', modelId: value }))}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="选择模型" />
@@ -434,7 +468,7 @@ export function ProjectEditorPage() {
               <Textarea
                 id="ai-instruction"
                 value={generation.instruction}
-                onChange={(event) => setGeneration((prev) => ({ ...prev, instruction: event.target.value }))}
+                onChange={(event) => setGeneration((prev) => ({ ...prev, result: '', instruction: event.target.value }))}
                 rows={5}
                 placeholder="描述续写目标、情绪、节奏或限制条件。"
               />
