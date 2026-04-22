@@ -1,0 +1,14 @@
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+sqlalchemy==2.0.36
+alembic==1.14.1
+asyncpg==0.30.0
+pydantic==2.10.4
+pydantic-settings==2.7.1
+openai==1.58.1
+anthropic==0.42.0
+python-docx==1.1.2
+markdown==3.7
+sse-starlette==2.2.1
+tiktoken==0.8.0
+ulid-py==1.1.0
