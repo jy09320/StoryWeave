@@ -5,6 +5,7 @@ import { createBrowserRouter, Navigate, RouterProvider } from 'react-router-dom'
 import { AppShell } from '@/components/app-shell'
 import { queryClient } from '@/lib/query-client'
 import { DashboardPage } from '@/pages/dashboard-page'
+import { ProjectEditorPage } from '@/pages/project-editor-page'
 import { ProjectWorkspacePage } from '@/pages/project-workspace-page'
 
 const router = createBrowserRouter([
@@ -19,6 +20,10 @@ const router = createBrowserRouter([
       {
         path: '/projects/:projectId',
         element: <ProjectWorkspacePage />,
+      },
+      {
+        path: '/projects/:projectId/editor/:chapterId',
+        element: <ProjectEditorPage />,
       },
       {
         path: '*',
