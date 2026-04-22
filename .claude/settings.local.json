@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx --version)",
+      "Bash(npx @playwright/mcp --help)",
+      "Read(//c/Users/30799/.claude/**)",
+      "WebSearch",
+      "Read(//c/Users/30799/**)"
+    ],
+    "additionalDirectories": [
+      "C:\\Users\\30799"
+    ]
+  }
+}
