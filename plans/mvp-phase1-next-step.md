@@ -14,14 +14,14 @@
 
 ### 当前主要缺口
 - 前端仍是 Vite 默认首页，[`frontend/src/App.tsx`](frontend/src/App.tsx) 尚未进入业务态
-- [`frontend/package.json`](frontend/package.json) 尚未安装路由、UI 组件库、HTTP 层、状态管理、富文本编辑器
+- [`frontend/package.json`](frontend/package.json) 尚未完成写作场景所需依赖的最终收敛，当前已切换到 React Router + shadcn/ui + TanStack Query + Axios 方案，富文本编辑器仍待接入
 - 后端缺少数据库迁移、项目详情聚合返回、章节排序调整等 MVP 体验所需能力
 - AI 仅有原始流接口，尚未接入到编辑器页的交互面板
 
 ## 下一阶段实施顺序
 
 ### 1. 前端基础骨架初始化
-- 安装并配置 React Router、Ant Design、Axios
+- 安装并配置 React Router、shadcn/ui、TanStack Query、Axios
 - 重构[`frontend/src/App.tsx`](frontend/src/App.tsx)为应用路由入口
 - 建立页面目录、通用布局、API 基础封装
 

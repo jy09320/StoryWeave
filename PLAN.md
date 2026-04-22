@@ -16,10 +16,10 @@
 | **语言** | TypeScript | 类型安全，复杂数据结构（角色/世界观/模板）受益大 |
 | **路由** | React Router v7 | React 生态最主流的路由方案 |
 | **富文本编辑器** | Wangeditor v5 | 国产主流富文本编辑器，中文支持极好，文档全中文，开箱即用 |
-| **UI 组件库** | Ant Design 5 | 国际主流 React 组件库，企业级品质，中文文档完善 |
-| **状态管理** | Redux Toolkit (RTK Query) | 最主流的 React 状态管理，RTK Query 内置数据请求缓存 |
-| **HTTP 请求** | Axios | 最主流的 HTTP 客户端 |
-| **样式** | Ant Design 内置 + CSS Modules | 无需额外配置样式框架 |
+| **UI 组件库** | shadcn/ui + Radix UI | 基于可组合原子组件，和当前 Vite + Tailwind 架构更匹配，便于按业务自定义写作工作台界面 |
+| **状态管理** | TanStack Query + React 局部状态 | 当前项目以服务端数据拉取为主，先用 Query 管理远端状态，降低 MVP 复杂度 |
+| **HTTP 请求** | Axios | 保留统一 API 客户端与错误拦截能力 |
+| **样式** | Tailwind CSS v4 + shadcn 设计令牌 | 与现有组件体系一致，便于快速搭建深色写作界面 |
 
 ### 后端
 
@@ -48,8 +48,8 @@
 │  世界观编辑        │         │    ├ /api/ai/generate     │
 │  模板管理器        │         │    └ /api/export          │
 │                   │         │                           │
-│  (Ant Design UI)  │         │  服务层                    │
-│  (Redux Toolkit)  │         │    ├ AI Service (统一封装)  │
+│  (shadcn/ui)      │         │  服务层                    │
+│  (TanStack Query) │         │    ├ AI Service (统一封装)  │
 │                   │         │    ├ Prompt Engine         │
 │                   │         │    ├ Context Manager       │
 │                   │         │    └ Export Service        │
@@ -145,7 +145,7 @@
 ## 分阶段开发计划
 
 ### Phase 1: MVP 基础 (1-3 周)
-- 项目脚手架：前端 React+Vite+AntDesign，后端 FastAPI+SQLAlchemy+PostgreSQL
+- 项目脚手架：前端 React+Vite+shadcn/ui+Tailwind，后端 FastAPI+SQLAlchemy+PostgreSQL
 - 数据库模型：projects, chapters, chapter_versions
 - RESTful API：项目 CRUD + 章节管理
 - 前端：项目列表页 + Wangeditor 编辑器集成
