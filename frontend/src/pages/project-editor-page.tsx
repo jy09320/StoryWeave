@@ -30,7 +30,7 @@ import { formatDate } from '@/lib/format'
 import { queryClient } from '@/lib/query-client'
 import { streamGenerate } from '@/services/ai'
 import { getProject, updateChapter } from '@/services/projects'
-import type { AIGeneratePayload, Chapter, ProjectDetail } from '@/types/api'
+import type { AIGeneratePayload, Chapter, ChapterStatus, ProjectDetail } from '@/types/api'
 
 const MODEL_PROVIDER_OPTIONS = [
   { label: 'OpenAI', value: 'openai' },
@@ -48,8 +48,16 @@ const MODEL_OPTIONS: Record<string, Array<{ label: string; value: string }>> = {
   ],
 }
 
+const CHAPTER_STATUS_OPTIONS: Array<{ label: string; value: ChapterStatus }> = [
+  { label: '草稿', value: 'draft' },
+  { label: '写作中', value: 'writing' },
+  { label: '待审阅', value: 'review' },
+  { label: '已定稿', value: 'done' },
+]
+
 interface EditorFormState {
   title: string
+  status: ChapterStatus
   plainText: string
   notes: string
 }
@@ -76,6 +84,7 @@ function buildEditorForm(chapter: Chapter | null): EditorFormState {
   if (!chapter) {
     return {
       title: '',
+      status: 'draft',
       plainText: '',
       notes: '',
     }
@@ -83,6 +92,7 @@ function buildEditorForm(chapter: Chapter | null): EditorFormState {
 
   return {
     title: chapter.title,
+    status: (chapter.status as ChapterStatus) ?? 'draft',
     plainText: chapter.plain_text ?? '',
     notes: chapter.notes ?? '',
   }
@@ -130,6 +140,7 @@ export function ProjectEditorPage() {
     }) => {
       return updateChapter(targetChapterId, {
         title: payload.title.trim(),
+        status: payload.status,
         plain_text: payload.plainText,
         content: payload.plainText,
         notes: payload.notes.trim() || null,
@@ -198,6 +209,10 @@ export function ProjectEditorPage() {
 
   function handleNotesChange(event: ChangeEvent<HTMLTextAreaElement>) {
     updateFormField('notes', event.target.value)
+  }
+
+  function handleStatusChange(value: string) {
+    updateFormField('status', value as ChapterStatus)
   }
 
   async function handleManualSave() {
@@ -357,11 +372,29 @@ export function ProjectEditorPage() {
             </div>
           </CardHeader>
           <CardContent className="space-y-5">
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-200" htmlFor="chapter-title">
-                章节标题
-              </label>
-              <Input id="chapter-title" value={activeForm.title} onChange={handleTitleChange} maxLength={200} />
+            <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_220px]">
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-200" htmlFor="chapter-title">
+                  章节标题
+                </label>
+                <Input id="chapter-title" value={activeForm.title} onChange={handleTitleChange} maxLength={200} />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-200">章节状态</label>
+                <Select value={activeForm.status} onValueChange={handleStatusChange}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="选择章节状态" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CHAPTER_STATUS_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
             <div className="space-y-2">

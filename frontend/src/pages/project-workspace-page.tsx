@@ -400,7 +400,7 @@ export function ProjectWorkspacePage() {
                     onClick={() =>
                       updateChapterMutation.mutate({
                         chapterId: selectedChapter.id,
-                        payload: { status: selectedChapter.status === 'draft' ? 'active' : 'draft' },
+                        payload: { status: selectedChapter.status === 'draft' ? 'writing' : 'draft' },
                       })
                     }
                     disabled={updateChapterMutation.isPending}
