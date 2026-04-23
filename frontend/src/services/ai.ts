@@ -2,8 +2,50 @@ import type { AIGeneratePayload } from '@/types/api'
 
 const baseURL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000/api'
 
+export interface AIRuntimeSettings {
+  provider: string
+  model_id: string
+  base_url: string | null
+  api_key_masked: string | null
+  source: string
+  updated_at: string | null
+}
+
+export interface AIRuntimeSettingsPayload {
+  provider: string
+  model_id: string
+  base_url?: string | null
+  api_key?: string | null
+}
+
 function buildSseUrl() {
   return `${baseURL}/ai/generate`
+}
+
+export async function getAIRuntimeSettings() {
+  const response = await fetch(`${baseURL}/ai/runtime-settings`)
+  if (!response.ok) {
+    const text = await response.text()
+    throw new Error(text || '获取 AI 运行时配置失败')
+  }
+  return (await response.json()) as AIRuntimeSettings
+}
+
+export async function updateAIRuntimeSettings(payload: AIRuntimeSettingsPayload) {
+  const response = await fetch(`${baseURL}/ai/runtime-settings`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  })
+
+  if (!response.ok) {
+    const text = await response.text()
+    throw new Error(text || '更新 AI 运行时配置失败')
+  }
+
+  return (await response.json()) as AIRuntimeSettings
 }
 
 export async function streamGenerate(payload: AIGeneratePayload, onMessage: (chunk: string) => void) {

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { Bot, ChevronLeft, History, LoaderCircle, Save, Sparkles } from 'lucide-react'
@@ -35,7 +35,7 @@ import {
 } from '@/components/ui/dialog'
 import { formatDate } from '@/lib/format'
 import { queryClient } from '@/lib/query-client'
-import { streamGenerate } from '@/services/ai'
+import { getAIRuntimeSettings, streamGenerate, updateAIRuntimeSettings, type AIRuntimeSettings } from '@/services/ai'
 import { getProject, listChapterVersions, updateChapter } from '@/services/projects'
 import type { AIGeneratePayload, Chapter, ChapterStatus, ChapterVersion, ProjectDetail } from '@/types/api'
 
@@ -43,6 +43,11 @@ const MODEL_PROVIDER_OPTIONS = [
   { label: 'OpenAI', value: 'openai' },
   { label: 'Anthropic', value: 'anthropic' },
 ] as const
+
+const FALLBACK_MODEL_BY_PROVIDER: Record<string, string> = {
+  openai: 'gpt-4o',
+  anthropic: 'claude-3-5-sonnet-latest',
+}
 
 const MODEL_OPTIONS: Record<string, Array<{ label: string; value: string }>> = {
   openai: [
@@ -76,6 +81,13 @@ interface GenerationState {
   result: string
   isGenerating: boolean
   requestId: number
+}
+
+interface ProviderConfigFormState {
+  provider: string
+  modelId: string
+  baseUrl: string
+  apiKey: string
 }
 
 const defaultGenerationInstruction = '请基于当前正文继续写下去，保持风格一致，并自然衔接上一段。'
@@ -136,12 +148,54 @@ export function ProjectEditorPage() {
   })
 
   const [isVersionDialogOpen, setIsVersionDialogOpen] = useState(false)
+  const [isProviderConfigOpen, setIsProviderConfigOpen] = useState(false)
+  const [providerConfig, setProviderConfig] = useState<ProviderConfigFormState>({
+    provider: 'openai',
+    modelId: 'gpt-4o',
+    baseUrl: '',
+    apiKey: '',
+  })
+  const [runtimeSettings, setRuntimeSettings] = useState<AIRuntimeSettings | null>(null)
+  const [isSavingRuntimeSettings, setIsSavingRuntimeSettings] = useState(false)
 
   const projectQuery = useQuery<ProjectDetail, Error>({
     queryKey: ['project', projectId],
     queryFn: () => getProject(projectId ?? ''),
     enabled: Boolean(projectId),
   })
+
+  useEffect(() => {
+    let cancelled = false
+
+    getAIRuntimeSettings()
+      .then((settings) => {
+        if (cancelled) {
+          return
+        }
+
+        setRuntimeSettings(settings)
+        setProviderConfig({
+          provider: settings.provider,
+          modelId: settings.model_id,
+          baseUrl: settings.base_url ?? '',
+          apiKey: '',
+        })
+        setGeneration((prev) => ({
+          ...prev,
+          provider: settings.provider,
+          modelId: settings.model_id,
+        }))
+      })
+      .catch((error: Error) => {
+        if (!cancelled) {
+          toast.error(error.message)
+        }
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const chapter = useMemo(
     () => getChapterById(projectQuery.data, chapterId),
@@ -299,41 +353,61 @@ export function ProjectEditorPage() {
     const requestId = generation.requestId + 1
     setGeneration((prev) => ({ ...prev, result: '', isGenerating: true, requestId }))
 
-    try {
-      const payload: AIGeneratePayload = {
-        project_id: projectId,
-        chapter_id: chapterId,
-        text: activeForm.plainText,
-        instruction: generation.instruction,
-        model_provider: generationProvider,
-        model_id: selectedModelId,
-      }
+    const attemptModels = Array.from(
+      new Set([
+        selectedModelId,
+        FALLBACK_MODEL_BY_PROVIDER[generationProvider],
+        ...(MODEL_OPTIONS[generationProvider] ?? []).map((option) => option.value),
+      ].filter(Boolean)),
+    )
 
-      await streamGenerate(payload, (chunk) => {
+    let lastError: unknown = null
+
+    for (const modelId of attemptModels) {
+      try {
+        const payload: AIGeneratePayload = {
+          project_id: projectId,
+          chapter_id: chapterId,
+          text: activeForm.plainText,
+          instruction: generation.instruction,
+          model_provider: generationProvider,
+          model_id: modelId,
+        }
+
+        await streamGenerate(payload, (chunk) => {
+          setGeneration((prev) => {
+            if (prev.requestId !== requestId || !prev.isGenerating) {
+              return prev
+            }
+
+            return {
+              ...prev,
+              result: `${prev.result}${chunk}`,
+              modelId,
+            }
+          })
+        })
+
         setGeneration((prev) => {
-          if (prev.requestId !== requestId || !prev.isGenerating) {
+          if (prev.requestId !== requestId) {
             return prev
           }
 
           return {
             ...prev,
-            result: `${prev.result}${chunk}`,
+            isGenerating: false,
+            modelId,
           }
         })
-      })
-    } catch (error) {
-      setGeneration((prev) => {
-        if (prev.requestId !== requestId) {
-          return prev
+
+        if (modelId !== selectedModelId) {
+          toast.success(`当前模型不可用，已自动切换到 ${modelId}`)
         }
 
-        return {
-          ...prev,
-          isGenerating: false,
-        }
-      })
-      toast.error(error instanceof Error ? error.message : 'AI 续写失败')
-      return
+        return
+      } catch (error) {
+        lastError = error
+      }
     }
 
     setGeneration((prev) => {
@@ -346,6 +420,7 @@ export function ProjectEditorPage() {
         isGenerating: false,
       }
     })
+    toast.error(lastError instanceof Error ? lastError.message : 'AI 续写失败')
   }
 
   function handleAcceptGeneratedText() {
@@ -367,6 +442,47 @@ export function ProjectEditorPage() {
     updateFormField('plainText', restoredText)
     setIsVersionDialogOpen(false)
     toast.success('历史版本内容已恢复到正文，可继续编辑或保存')
+  }
+
+  async function handleProviderConfigSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+
+    const nextModel = providerConfig.modelId.trim()
+    const nextProvider = providerConfig.provider
+
+    if (!nextModel) {
+      toast.error('请填写模型标识')
+      return
+    }
+
+    setIsSavingRuntimeSettings(true)
+
+    try {
+      const saved = await updateAIRuntimeSettings({
+        provider: nextProvider,
+        model_id: nextModel,
+        base_url: providerConfig.baseUrl.trim() || null,
+        api_key: providerConfig.apiKey.trim() || null,
+      })
+
+      setRuntimeSettings(saved)
+      setGeneration((prev) => ({
+        ...prev,
+        provider: saved.provider,
+        modelId: saved.model_id,
+        result: '',
+      }))
+      setProviderConfig((prev) => ({
+        ...prev,
+        apiKey: '',
+      }))
+      setIsProviderConfigOpen(false)
+      toast.success('AI 运行时配置已更新，后端已立即切换到新配置')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '更新 AI 运行时配置失败')
+    } finally {
+      setIsSavingRuntimeSettings(false)
+    }
   }
 
   const activeForm = chapter ? drafts[chapter.id] ?? buildEditorForm(chapter) : buildEditorForm(null)
@@ -600,6 +716,17 @@ export function ProjectEditorPage() {
               AI 续写面板
             </CardTitle>
             <CardDescription>发送当前正文与附加指令，接收流式续写结果。</CardDescription>
+            <div className="rounded-xl border border-white/10 bg-black/10 px-3 py-2 text-xs leading-6 text-slate-300">
+              当前生效配置：{runtimeSettings?.provider ?? generationProvider} / {runtimeSettings?.model_id ?? selectedModelId}
+              <br />
+              来源：{runtimeSettings?.source === 'database' ? '运行时配置接口' : '环境变量'}
+              {runtimeSettings?.api_key_masked ? <><br />Key：{runtimeSettings.api_key_masked}</> : null}
+            </div>
+            <div className="flex flex-wrap gap-2 pt-2">
+              <Button variant="outline" size="sm" onClick={() => setIsProviderConfigOpen(true)}>
+                配置 AI 供应商
+              </Button>
+            </div>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-1">
@@ -698,6 +825,96 @@ export function ProjectEditorPage() {
           </CardContent>
         </Card>
       </aside>
+
+      <Dialog open={isProviderConfigOpen} onOpenChange={setIsProviderConfigOpen}>
+        <DialogContent className="max-w-2xl border border-white/10 bg-slate-950 text-slate-100">
+          <DialogHeader>
+            <DialogTitle>AI 运行时配置</DialogTitle>
+            <DialogDescription>
+              这里会直接调用后端运行时配置接口。保存后立即生效，新的 AI 续写请求会使用这套配置。
+            </DialogDescription>
+          </DialogHeader>
+
+          <form className="space-y-4" onSubmit={handleProviderConfigSubmit}>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-200">模型提供商</label>
+                <Select
+                  value={providerConfig.provider}
+                  onValueChange={(value) =>
+                    setProviderConfig((prev) => ({
+                      ...prev,
+                      provider: value,
+                      modelId: value === 'anthropic' ? 'claude-3-5-sonnet-latest' : 'gpt-4o',
+                    }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="选择模型提供商" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {MODEL_PROVIDER_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-200" htmlFor="provider-model-id">
+                  模型标识
+                </label>
+                <Input
+                  id="provider-model-id"
+                  value={providerConfig.modelId}
+                  onChange={(event) => setProviderConfig((prev) => ({ ...prev, modelId: event.target.value }))}
+                  placeholder="例如 gpt-4o / claude-3-5-sonnet-latest"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-200" htmlFor="provider-base-url">
+                OpenAI 兼容 Base URL
+              </label>
+              <Input
+                id="provider-base-url"
+                value={providerConfig.baseUrl}
+                onChange={(event) => setProviderConfig((prev) => ({ ...prev, baseUrl: event.target.value }))}
+                placeholder="例如 https://onehub.235.transcengram.com/v1"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-200" htmlFor="provider-api-key">
+                API Key
+              </label>
+              <Input
+                id="provider-api-key"
+                type="password"
+                value={providerConfig.apiKey}
+                onChange={(event) => setProviderConfig((prev) => ({ ...prev, apiKey: event.target.value }))}
+                placeholder="保存后将写入后端运行时配置"
+              />
+            </div>
+
+            <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-3 text-xs leading-6 text-emerald-100">
+              当前保存的是单租户全局 AI 运行时配置。保存成功后，后端 [`/api/ai/runtime-settings`](backend/app/api/routes/runtime_settings.py) 会立即成为新的生效配置源。
+            </div>
+
+            <div className="flex justify-end gap-3">
+              <Button type="button" variant="outline" onClick={() => setIsProviderConfigOpen(false)}>
+                取消
+              </Button>
+              <Button type="submit" disabled={isSavingRuntimeSettings}>
+                {isSavingRuntimeSettings ? '保存中...' : '保存并立即生效'}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={isVersionDialogOpen} onOpenChange={setIsVersionDialogOpen}>
         <DialogContent className="max-w-3xl border border-white/10 bg-slate-950 text-slate-100">
