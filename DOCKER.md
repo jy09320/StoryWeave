@@ -30,8 +30,8 @@ docker compose --env-file .env.docker up --build -d
 
 启动后默认访问：
 
-- 前端：`http://localhost:8080`
-- 后端健康检查：`http://localhost:8000/api/health`
+- 前端：`http://localhost:3001`
+- 后端健康检查：`http://localhost:8001/api/health`
 - PostgreSQL：`localhost:5432`
 
 ## 3. 停止服务

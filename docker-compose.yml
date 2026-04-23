@@ -32,7 +32,7 @@ services:
       OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
       ANTHROPIC_BASE_URL: ${ANTHROPIC_BASE_URL:-}
     ports:
-      - "${BACKEND_PORT:-8000}:8000"
+      - "${BACKEND_PORT:-8001}:8000"
 
   frontend:
     build:
@@ -44,7 +44,7 @@ services:
     depends_on:
       - backend
     ports:
-      - "${FRONTEND_PORT:-8080}:80"
+      - "${FRONTEND_PORT:-3001}:80"
 
 volumes:
   postgres_data:
