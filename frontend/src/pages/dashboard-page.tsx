@@ -230,44 +230,45 @@ export function DashboardPage() {
 
   return (
     <div className="space-y-6 pb-8">
-      <section className="grid gap-4 xl:grid-cols-[1.6fr_1fr]">
-        <Card className="overflow-hidden border border-white/10 bg-white/6 shadow-2xl shadow-black/10">
-          <CardHeader className="gap-4 pb-4">
-            <CardDescription className="text-primary/80">StoryWeave · AI 写作工作台</CardDescription>
-            <CardTitle className="max-w-3xl text-3xl font-semibold leading-tight text-white sm:text-4xl">
-              用创作场景组织工作流，让灵感直接落到项目、章节与正文里
+      <section className="grid gap-4 xl:grid-cols-[1.8fr_0.8fr]">
+        <Card className="border border-white/10 bg-white/6 shadow-2xl shadow-black/10">
+          <CardHeader className="gap-3 pb-3">
+            <CardTitle className="max-w-3xl text-2xl font-semibold leading-tight text-white sm:text-3xl">
+              直接开始创作，或回到上次写作现场
             </CardTitle>
-            <CardDescription className="max-w-3xl text-sm leading-7 text-slate-300">
-              当前版本优先强化“开始创作、继续写作、调用 AI 工具、回到最近项目”四条路径，让首页先成为真正的创作仪表盘。
+            <CardDescription className="max-w-2xl text-sm leading-6 text-slate-300">
+              保留最常用入口，减少说明性文案干扰，让首页信息更聚焦。
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-5">
+          <CardContent className="space-y-4">
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               <FeatureEntryCard
                 title="长篇创作"
-                description="管理卷章结构、持续推进连载与多章节工程。"
+                description="管理卷章结构并持续推进。"
                 icon={<BookOpen className="size-5 text-emerald-300" />}
               />
               <FeatureEntryCard
                 title="短篇速写"
-                description="快速落地灵感片段，适合场景、桥段和练笔。"
+                description="快速记录灵感片段与练笔。"
                 icon={<PenLine className="size-5 text-sky-300" />}
               />
-              <div className="relative">
-                <FeatureEntryCard
-                  title="AI 章节续写"
-                  description="把当前正文、设定与指令组合成可直接生成的续写任务。"
-                  icon={<Sparkles className="size-5 text-violet-300" />}
-                />
-                <div className="mt-3 px-4 pb-4">
-                  <Button variant="outline" size="sm" onClick={() => navigate('/ai-toolbox?task=continue')}>
-                    打开工具箱
-                  </Button>
+              <div className="relative rounded-2xl border border-white/10 bg-black/10 p-4">
+                <div className="mb-3 flex items-start gap-3">
+                  <div className="rounded-xl border border-white/10 bg-white/8 p-2">
+                    <Sparkles className="size-5 text-violet-300" />
+                  </div>
+                  <div className="space-y-1">
+                    <div className="text-sm font-medium text-white">AI 章节续写</div>
+                    <p className="text-sm leading-6 text-slate-300">把正文与指令组合成续写任务，直接进入工具箱。</p>
+                  </div>
                 </div>
+                <Button variant="outline" size="sm" onClick={() => navigate('/ai-toolbox?task=continue')}>
+                  打开工具箱
+                </Button>
               </div>
               <FeatureEntryCard
-                title="设定与冲突检查"
-                description="围绕角色、世界观和章节上下文做一致性辅助。"
+                title="设定检查"
+                description="快速核对角色与上下文一致性。"
                 icon={<BrainCircuit className="size-5 text-amber-300" />}
               />
             </div>
