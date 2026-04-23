@@ -1,6 +1,6 @@
 import { useMemo, useState, type Dispatch, type FormEvent, type ReactNode, type SetStateAction } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { BookOpen, BrainCircuit, PenLine, PenSquare, Plus, Sparkles, Swords, Trash2, WandSparkles } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -100,6 +100,7 @@ function getInitialFormState(project?: Project | null): ProjectFormState {
 }
 
 export function DashboardPage() {
+  const navigate = useNavigate()
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [editingProject, setEditingProject] = useState<Project | null>(null)
   const [createForm, setCreateForm] = useState<ProjectFormState>(defaultFormState)
@@ -252,11 +253,18 @@ export function DashboardPage() {
                 description="快速落地灵感片段，适合场景、桥段和练笔。"
                 icon={<PenLine className="size-5 text-sky-300" />}
               />
-              <FeatureEntryCard
-                title="AI 章节续写"
-                description="把当前正文、设定与指令组合成可直接生成的续写任务。"
-                icon={<Sparkles className="size-5 text-violet-300" />}
-              />
+              <div className="relative">
+                <FeatureEntryCard
+                  title="AI 章节续写"
+                  description="把当前正文、设定与指令组合成可直接生成的续写任务。"
+                  icon={<Sparkles className="size-5 text-violet-300" />}
+                />
+                <div className="mt-3 px-4 pb-4">
+                  <Button variant="outline" size="sm" onClick={() => navigate('/ai-toolbox?task=continue')}>
+                    打开工具箱
+                  </Button>
+                </div>
+              </div>
               <FeatureEntryCard
                 title="设定与冲突检查"
                 description="围绕角色、世界观和章节上下文做一致性辅助。"
@@ -373,6 +381,32 @@ export function DashboardPage() {
               description="围绕角色设定、时间线和世界观规则做一致性提醒。"
               icon={<Swords className="size-4 text-amber-300" />}
             />
+            <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4 text-sm text-slate-200">
+              <div className="font-medium text-white">统一入口已升级为任务入口</div>
+              <p className="mt-2 leading-6 text-slate-400">
+                现在可以直接进入续写、改写与设定检查任务页，按当前创作目标发起 AI 请求。
+              </p>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <Link
+                  to="/ai-toolbox?task=continue"
+                  className="inline-flex h-9 items-center justify-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground transition hover:opacity-90"
+                >
+                  进入续写任务
+                </Link>
+                <Link
+                  to="/ai-toolbox?task=rewrite"
+                  className="inline-flex h-9 items-center justify-center rounded-lg border border-white/10 bg-transparent px-4 text-sm font-medium text-white transition hover:bg-white/10"
+                >
+                  进入改写任务
+                </Link>
+                <Link
+                  to="/ai-toolbox?task=consistency"
+                  className="inline-flex h-9 items-center justify-center rounded-lg border border-white/10 bg-transparent px-4 text-sm font-medium text-white transition hover:bg-white/10"
+                >
+                  进入设定检查
+                </Link>
+              </div>
+            </div>
           </CardContent>
         </Card>
       </section>

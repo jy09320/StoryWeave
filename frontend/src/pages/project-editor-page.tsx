@@ -626,7 +626,7 @@ export function ProjectEditorPage() {
                   <span>{projectQuery.data.title}</span>
                 </div>
                 <CardTitle className="text-2xl text-white">章节编辑器</CardTitle>
-                <CardDescription>当前使用基础文本编辑方案，为后续富文本编辑器接入保留边界。</CardDescription>
+                <CardDescription>当前使用基础文本编辑方案，为后续富文本编辑器接入保留边界。也可以从统一 AI 工具箱查看能力分组与后续路线。</CardDescription>
               </div>
               <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
                 <StatusBadge status={chapter.status} />
@@ -705,6 +705,31 @@ export function ProjectEditorPage() {
               手动保存
             </Button>
           </CardFooter>
+        </Card>
+
+        <Card className="border border-primary/20 bg-primary/5">
+          <CardContent className="flex flex-col gap-3 py-5 sm:flex-row sm:items-center sm:justify-between">
+            <div className="space-y-1">
+              <div className="text-sm font-medium text-white">需要更多 AI 写作能力？</div>
+              <p className="text-sm leading-6 text-slate-300">
+                可前往统一的 AI 工具箱查看续写、改写、润色与设定辅助的整体规划，再返回当前章节继续工作。
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Link
+                to={`/ai-toolbox?task=continue&projectId=${projectId}&chapterId=${chapterId}`}
+                className="inline-flex h-9 shrink-0 items-center justify-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground transition hover:opacity-90"
+              >
+                打开续写任务
+              </Link>
+              <Link
+                to={`/ai-toolbox?task=rewrite&projectId=${projectId}&chapterId=${chapterId}`}
+                className="inline-flex h-9 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-transparent px-4 text-sm font-medium text-white transition hover:bg-white/10"
+              >
+                打开改写任务
+              </Link>
+            </div>
+          </CardContent>
         </Card>
       </section>
 

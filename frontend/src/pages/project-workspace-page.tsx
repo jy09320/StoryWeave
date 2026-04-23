@@ -244,7 +244,7 @@ export function ProjectWorkspacePage() {
             />
             <WorkspaceFocusCard
               title="AI 辅助入口"
-              description="后续在编辑器中承接续写、改写、设定辅助和一致性检查。"
+              description="已可跳转到工具箱执行续写、改写与设定检查任务。"
               icon={<Sparkles className="size-4 text-violet-300" />}
             />
           </CardContent>
@@ -264,14 +264,28 @@ export function ProjectWorkspacePage() {
                 <p className="mt-1 text-xs leading-5 text-slate-400">按章节组织当前作品主线，是本阶段的核心工作入口。</p>
               </div>
               <div className="rounded-2xl border border-dashed border-white/10 bg-black/10 p-3 text-xs leading-6 text-slate-400">
-                预留入口：角色库、世界观、时间线、设定冲突检查。
+                预留入口：角色库、世界观、时间线。设定冲突检查现已收敛到 AI 工具箱任务页。
               </div>
-              <Link
-                to="/"
-                className="inline-flex h-9 w-full items-center justify-center rounded-lg border border-white/10 bg-transparent px-3 text-sm font-medium text-white transition hover:bg-white/10"
-              >
-                返回项目面板
-              </Link>
+              <div className="grid gap-2">
+                <Link
+                  to={`/ai-toolbox?task=continue&projectId=${project.id}${selectedChapter ? `&chapterId=${selectedChapter.id}` : ''}`}
+                  className="inline-flex h-9 w-full items-center justify-center rounded-lg border border-primary/20 bg-primary/10 px-3 text-sm font-medium text-white transition hover:bg-primary/20"
+                >
+                  进入 AI 续写任务
+                </Link>
+                <Link
+                  to={`/ai-toolbox?task=consistency&projectId=${project.id}${selectedChapter ? `&chapterId=${selectedChapter.id}` : ''}`}
+                  className="inline-flex h-9 w-full items-center justify-center rounded-lg border border-white/10 bg-transparent px-3 text-sm font-medium text-white transition hover:bg-white/10"
+                >
+                  进入设定检查任务
+                </Link>
+                <Link
+                  to="/"
+                  className="inline-flex h-9 w-full items-center justify-center rounded-lg border border-white/10 bg-transparent px-3 text-sm font-medium text-white transition hover:bg-white/10"
+                >
+                  返回项目面板
+                </Link>
+              </div>
             </CardContent>
           </Card>
 
@@ -435,6 +449,12 @@ export function ProjectWorkspacePage() {
                     <PenSquare className="size-4" />
                     打开编辑器
                     <ChevronRight className="size-4" />
+                  </Link>
+                  <Link
+                    to={`/ai-toolbox?task=continue&projectId=${project.id}&chapterId=${selectedChapter.id}`}
+                    className="inline-flex h-8 items-center justify-center rounded-lg border border-white/10 bg-transparent px-3 text-sm font-medium text-white transition hover:bg-white/10"
+                  >
+                    续写任务
                   </Link>
                   <Button
                     variant="outline"
