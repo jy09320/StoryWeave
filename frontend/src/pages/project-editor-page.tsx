@@ -195,6 +195,7 @@ export function ProjectEditorPage() {
     }
   }, [])
 
+
   const chapter = useMemo(
     () => getChapterById(projectQuery.data, chapterId),
     [projectQuery.data, chapterId],
@@ -441,9 +442,16 @@ export function ProjectEditorPage() {
 
     const nextModel = providerConfig.modelId.trim()
     const nextProvider = providerConfig.provider
+    const nextBaseUrl = providerConfig.baseUrl.trim()
+    const nextApiKey = providerConfig.apiKey.trim()
 
     if (!nextModel) {
       toast.error('请填写模型标识')
+      return
+    }
+
+    if (!nextApiKey && !runtimeSettings?.api_key_masked) {
+      toast.error('请至少填写一次 API Key')
       return
     }
 
@@ -453,8 +461,8 @@ export function ProjectEditorPage() {
       const saved = await updateAIRuntimeSettings({
         provider: nextProvider,
         model_id: nextModel,
-        base_url: providerConfig.baseUrl.trim() || null,
-        api_key: providerConfig.apiKey.trim() || null,
+        base_url: nextBaseUrl || null,
+        api_key: nextApiKey || null,
       })
 
       setRuntimeSettings(saved)
@@ -464,12 +472,14 @@ export function ProjectEditorPage() {
         modelId: saved.model_id,
         result: '',
       }))
-      setProviderConfig((prev) => ({
-        ...prev,
+      setProviderConfig({
+        provider: saved.provider,
+        modelId: saved.model_id,
+        baseUrl: saved.base_url ?? '',
         apiKey: '',
-      }))
+      })
       setIsProviderConfigOpen(false)
-      toast.success('AI 运行时配置已更新，后端已立即切换到新配置')
+      toast.success(nextApiKey ? 'AI 运行时配置已更新，后端已立即切换到新配置' : 'AI 运行时配置已更新，沿用已保存的 API Key')
     } catch (error) {
       toast.error(error instanceof Error ? error.message : '更新 AI 运行时配置失败')
     } finally {
@@ -842,7 +852,20 @@ export function ProjectEditorPage() {
         </Card>
       </aside>
 
-      <Dialog open={isProviderConfigOpen} onOpenChange={setIsProviderConfigOpen}>
+      <Dialog
+        open={isProviderConfigOpen}
+        onOpenChange={(open) => {
+          setIsProviderConfigOpen(open)
+          if (open && runtimeSettings) {
+            setProviderConfig({
+              provider: runtimeSettings.provider,
+              modelId: runtimeSettings.model_id,
+              baseUrl: runtimeSettings.base_url ?? '',
+              apiKey: '',
+            })
+          }
+        }}
+      >
         <DialogContent className="max-w-2xl border border-white/10 bg-slate-950 text-slate-100">
           <DialogHeader>
             <DialogTitle>AI 运行时配置</DialogTitle>
@@ -911,8 +934,13 @@ export function ProjectEditorPage() {
                 type="password"
                 value={providerConfig.apiKey}
                 onChange={(event) => setProviderConfig((prev) => ({ ...prev, apiKey: event.target.value }))}
-                placeholder="保存后将写入后端运行时配置"
+                placeholder={runtimeSettings?.api_key_masked ? '留空则沿用当前已保存的 API Key' : '首次保存时必须填写 API Key'}
               />
+              {runtimeSettings?.api_key_masked ? (
+                <div className="text-xs text-slate-400">
+                  当前后端已保存 Key：{runtimeSettings.api_key_masked}。出于安全原因，弹窗再次打开时不会回填明文。
+                </div>
+              ) : null}
             </div>
 
             <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-3 text-xs leading-6 text-emerald-100 space-y-2">

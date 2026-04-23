@@ -91,7 +91,8 @@ export async function streamGenerate(payload: AIGeneratePayload, onMessage: (chu
     if (done) break
 
     buffer += decoder.decode(value, { stream: true })
-    const events = buffer.split('\n\n')
+    const normalizedBuffer = buffer.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
+    const events = normalizedBuffer.split('\n\n')
     buffer = events.pop() ?? ''
 
     for (const rawEvent of events) {
