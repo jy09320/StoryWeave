@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { Bot, ChevronLeft, History, LoaderCircle, Save, Sparkles } from 'lucide-react'
+import { Bot, ChevronLeft, FileText, History, LoaderCircle, Save, Sparkles, WandSparkles } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { EmptyState } from '@/components/empty-state'
@@ -714,43 +714,28 @@ export function ProjectEditorPage() {
             <div>
               <CardTitle className="flex items-center gap-2 text-lg text-white">
                 <Sparkles className="size-5 text-primary" />
-                AI 续写面板
+                AI 写作工作台
               </CardTitle>
-              <CardDescription>将“全局运行配置”和“本次续写使用配置”分开显示，避免混淆。</CardDescription>
+              <CardDescription>把运行时配置、任务配置、生成结果与后续动作分层组织，降低认知切换成本。</CardDescription>
             </div>
 
-            <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4 text-sm text-emerald-50 space-y-2">
-              <div className="text-xs font-medium uppercase tracking-wide text-emerald-200/90">后端当前运行配置</div>
-              <div>
-                提供商：<span className="font-medium text-white">{runtimeSettings?.provider ?? '-'}</span>
-              </div>
-              <div>
-                默认模型：<span className="font-medium text-white">{runtimeSettings?.model_id ?? '-'}</span>
-              </div>
-              <div>
-                来源：<span className="font-medium text-white">{runtimeSettings?.source === 'database' ? '运行时配置接口' : '环境变量'}</span>
-              </div>
-              {runtimeSettings?.api_key_masked ? (
-                <div>
-                  Key：<span className="font-medium text-white">{runtimeSettings.api_key_masked}</span>
-                </div>
-              ) : null}
-              <div className="text-xs leading-5 text-emerald-100/80">
-                这里只显示后端默认使用的配置。修改下面“本次续写使用模型”不会改动这里，只有点击“配置运行时默认值”并保存后才会更新。
-              </div>
-            </div>
-
-            <div className="rounded-2xl border border-white/10 bg-black/10 p-4 text-sm text-slate-200 space-y-3">
-              <div className="text-xs font-medium uppercase tracking-wide text-slate-400">本次续写使用配置</div>
-              <div>
-                提供商：<span className="font-medium text-white">{generationProvider}</span>
-              </div>
-              <div>
-                模型：<span className="font-medium text-white">{selectedModelId || '未填写'}</span>
-              </div>
-              <div className="text-xs leading-5 text-slate-400">
-                点击“开始 AI 续写”时，实际请求会使用这里的提供商和模型。你从“可用模型”中点击切换后，会立即作用于下一次续写请求。
-              </div>
+            <div className="grid gap-3">
+              <AiPanelInfoCard
+                title="后端当前运行配置"
+                tone="success"
+                description="这里显示系统当前默认生效的 AI 运行时配置，只有保存运行时默认值后才会更新。"
+                items={[
+                  `提供商：${runtimeSettings?.provider ?? '-'}`,
+                  `默认模型：${runtimeSettings?.model_id ?? '-'}`,
+                  `来源：${runtimeSettings?.source === 'database' ? '运行时配置接口' : '环境变量'}`,
+                  runtimeSettings?.api_key_masked ? `Key：${runtimeSettings.api_key_masked}` : 'Key：未展示',
+                ]}
+              />
+              <AiPanelInfoCard
+                title="本次任务使用配置"
+                description="点击开始生成时，请求会使用这里的提供商与模型；切换模型只影响下一次任务。"
+                items={[`提供商：${generationProvider}`, `模型：${selectedModelId || '未填写'}`]}
+              />
             </div>
 
             <div className="flex flex-wrap gap-2">
@@ -780,7 +765,10 @@ export function ProjectEditorPage() {
           </CardHeader>
           <CardContent className="space-y-5">
             <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4 space-y-4">
-              <div className="text-sm font-medium text-white">编辑本次续写请求</div>
+              <div className="flex items-center gap-2 text-sm font-medium text-white">
+                <WandSparkles className="size-4 text-primary" />
+                AI 任务配置
+              </div>
               <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-1">
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-slate-200">模型提供商</label>
@@ -853,41 +841,60 @@ export function ProjectEditorPage() {
                   )}
                 </div>
               </div>
-            </div>
 
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-200" htmlFor="ai-instruction">
-                续写指令
-              </label>
-              <Textarea
-                id="ai-instruction"
-                value={generation.instruction}
-                onChange={(event) => setGeneration((prev) => ({ ...prev, result: '', instruction: event.target.value }))}
-                rows={5}
-                placeholder="描述续写目标、情绪、节奏或限制条件。"
-              />
-            </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-200" htmlFor="ai-instruction">
+                  续写指令
+                </label>
+                <Textarea
+                  id="ai-instruction"
+                  value={generation.instruction}
+                  onChange={(event) => setGeneration((prev) => ({ ...prev, result: '', instruction: event.target.value }))}
+                  rows={5}
+                  placeholder="描述续写目标、情绪、节奏或限制条件。"
+                />
+              </div>
 
-            <div className="flex flex-wrap gap-3">
-              <Button className="flex-1" onClick={handleGenerate} disabled={generation.isGenerating || saveChapterMutation.isPending}>
-                {generation.isGenerating ? <LoaderCircle className="size-4 animate-spin" /> : <Bot className="size-4" />}
-                {generation.isGenerating ? '生成中...' : '开始 AI 续写'}
-              </Button>
-              <Button variant="outline" onClick={handleStopGeneration} disabled={!generation.isGenerating}>
-                停止生成
-              </Button>
+              <div className="flex flex-wrap gap-3">
+                <Button className="flex-1" onClick={handleGenerate} disabled={generation.isGenerating || saveChapterMutation.isPending}>
+                  {generation.isGenerating ? <LoaderCircle className="size-4 animate-spin" /> : <Bot className="size-4" />}
+                  {generation.isGenerating ? '生成中...' : '开始 AI 续写'}
+                </Button>
+                <Button variant="outline" onClick={handleStopGeneration} disabled={!generation.isGenerating}>
+                  停止生成
+                </Button>
+              </div>
             </div>
           </CardContent>
         </Card>
 
         <Card className="border border-white/10 bg-white/6">
           <CardHeader>
-            <CardTitle className="text-lg text-white">生成结果</CardTitle>
-            <CardDescription>可先预览，再决定是否追加到正文。</CardDescription>
+            <CardTitle className="flex items-center gap-2 text-lg text-white">
+              <FileText className="size-5 text-primary" />
+              结果与处理
+            </CardTitle>
+            <CardDescription>先预览生成结果，再决定接受、丢弃或继续生成下一版。</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="min-h-[260px] rounded-2xl border border-white/10 bg-black/10 p-4 text-sm leading-7 text-slate-200 whitespace-pre-wrap">
               {generation.result || 'AI 续写结果会显示在这里。'}
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <AiPanelInfoCard
+                title="当前状态"
+                description={generation.isGenerating ? '模型正在持续输出中。' : '等待你发起下一次生成。'}
+                items={[
+                  generation.isGenerating ? '生成状态：进行中' : '生成状态：空闲',
+                  generation.result.trim() ? '已有结果：可追加到正文' : '已有结果：暂无',
+                ]}
+              />
+              <AiPanelInfoCard
+                title="后续动作"
+                description="接受结果会把内容追加到正文；丢弃只清空本次生成结果，不影响正文。"
+                items={['动作 1：追加到正文', '动作 2：丢弃结果', '动作 3：调整指令后重新生成']}
+              />
             </div>
 
             <Separator className="bg-white/10" />
@@ -1059,6 +1066,39 @@ export function ProjectEditorPage() {
           </div>
         </DialogContent>
       </Dialog>
+    </div>
+  )
+}
+
+function AiPanelInfoCard({
+  title,
+  description,
+  items,
+  tone = 'default',
+}: {
+  title: string
+  description: string
+  items: string[]
+  tone?: 'default' | 'success'
+}) {
+  const toneClassName =
+    tone === 'success'
+      ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-50'
+      : 'border-white/10 bg-black/10 text-slate-200'
+
+  return (
+    <div className={`rounded-2xl border p-4 text-sm ${toneClassName}`}>
+      <div className="space-y-2">
+        <div className="text-xs font-medium uppercase tracking-wide text-slate-300">{title}</div>
+        <p className="text-xs leading-5 text-slate-400">{description}</p>
+        <div className="space-y-1.5">
+          {items.map((item) => (
+            <div key={item} className="leading-6">
+              {item}
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   )
 }

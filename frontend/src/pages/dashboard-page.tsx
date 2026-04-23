@@ -1,7 +1,7 @@
 import { useMemo, useState, type Dispatch, type FormEvent, type ReactNode, type SetStateAction } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
-import { BookOpen, PenSquare, Plus, Trash2 } from 'lucide-react'
+import { BookOpen, BrainCircuit, PenLine, PenSquare, Plus, Sparkles, Swords, Trash2, WandSparkles } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { EmptyState } from '@/components/empty-state'
@@ -223,25 +223,52 @@ export function DashboardPage() {
   }
 
   const projects = projectsQuery.data ?? []
+  const recentProjects = [...projects]
+    .sort((left, right) => new Date(right.updated_at).getTime() - new Date(left.updated_at).getTime())
+    .slice(0, 3)
 
   return (
     <div className="space-y-6 pb-8">
-      <section className="grid gap-4 lg:grid-cols-[1.7fr_1fr]">
-        <Card className="border border-white/10 bg-white/6 shadow-2xl shadow-black/10">
-          <CardHeader className="gap-3">
-            <CardDescription className="text-primary/80">MVP Phase 1 · 项目管理</CardDescription>
-            <CardTitle className="text-3xl font-semibold text-white">
-              从项目卡片进入你的 AI 写作工作台
+      <section className="grid gap-4 xl:grid-cols-[1.6fr_1fr]">
+        <Card className="overflow-hidden border border-white/10 bg-white/6 shadow-2xl shadow-black/10">
+          <CardHeader className="gap-4 pb-4">
+            <CardDescription className="text-primary/80">StoryWeave · AI 写作工作台</CardDescription>
+            <CardTitle className="max-w-3xl text-3xl font-semibold leading-tight text-white sm:text-4xl">
+              用创作场景组织工作流，让灵感直接落到项目、章节与正文里
             </CardTitle>
-            <CardDescription className="max-w-2xl text-sm leading-7 text-slate-300">
-              当前优先打通项目创建、章节管理与编辑器工作流。先把项目骨架建立起来，再逐步接入 AI 续写与正式富文本编辑能力。
+            <CardDescription className="max-w-3xl text-sm leading-7 text-slate-300">
+              当前版本优先强化“开始创作、继续写作、调用 AI 工具、回到最近项目”四条路径，让首页先成为真正的创作仪表盘。
             </CardDescription>
           </CardHeader>
+          <CardContent className="space-y-5">
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <FeatureEntryCard
+                title="长篇创作"
+                description="管理卷章结构、持续推进连载与多章节工程。"
+                icon={<BookOpen className="size-5 text-emerald-300" />}
+              />
+              <FeatureEntryCard
+                title="短篇速写"
+                description="快速落地灵感片段，适合场景、桥段和练笔。"
+                icon={<PenLine className="size-5 text-sky-300" />}
+              />
+              <FeatureEntryCard
+                title="AI 章节续写"
+                description="把当前正文、设定与指令组合成可直接生成的续写任务。"
+                icon={<Sparkles className="size-5 text-violet-300" />}
+              />
+              <FeatureEntryCard
+                title="设定与冲突检查"
+                description="围绕角色、世界观和章节上下文做一致性辅助。"
+                icon={<BrainCircuit className="size-5 text-amber-300" />}
+              />
+            </div>
+          </CardContent>
           <CardFooter className="flex flex-col items-start gap-3 border-white/10 bg-white/4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex flex-wrap items-center gap-3 text-sm text-slate-300">
               <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/10 px-3 py-1">
                 <BookOpen className="size-4 text-primary" />
-                {projectStats.total} 个项目
+                {projectStats.total} 个作品项目
               </span>
               <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/10 px-3 py-1">
                 <PenSquare className="size-4 text-primary" />
@@ -265,7 +292,7 @@ export function DashboardPage() {
               trigger={
                 <Button>
                   <Plus className="size-4" />
-                  新建项目
+                  开始新创作
                 </Button>
               }
               submitLabel="创建项目"
@@ -273,18 +300,88 @@ export function DashboardPage() {
           </CardFooter>
         </Card>
 
-        <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-1">
-          <StatCard label="草稿项目" value={projectStats.draft} hint="等待继续补全设定" />
-          <StatCard label="进行中" value={projectStats.active} hint="适合立即进入工作台" />
-          <StatCard label="已完成" value={projectStats.completed} hint="可继续扩展番外章节" />
+        <div className="grid gap-4 sm:grid-cols-3 xl:grid-cols-1">
+          <StatCard label="草稿项目" value={projectStats.draft} hint="等待补全设定与结构" />
+          <StatCard label="进行中" value={projectStats.active} hint="适合立即继续写作" />
+          <StatCard label="已完成" value={projectStats.completed} hint="可扩展番外或重修" />
         </div>
+      </section>
+
+      <section className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
+        <Card className="border border-white/10 bg-white/6 shadow-lg shadow-black/5">
+          <CardHeader>
+            <CardTitle className="text-xl text-white">最近继续写作</CardTitle>
+            <CardDescription>按最后更新时间排列，优先把你带回最近正在推进的项目。</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {recentProjects.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-white/10 bg-black/10 px-4 py-6 text-sm leading-7 text-slate-400">
+                还没有最近作品记录。创建项目后，这里会显示你最近编辑的作品与回到工作台入口。
+              </div>
+            ) : (
+              recentProjects.map((project) => (
+                <div
+                  key={project.id}
+                  className="flex flex-col gap-3 rounded-2xl border border-white/10 bg-black/10 p-4 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div className="space-y-2">
+                    <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
+                      <StatusBadge status={project.status} />
+                      <span className="rounded-full border border-white/10 px-2.5 py-1">{formatProjectType(project.type)}</span>
+                      <span>最近更新 {formatDate(project.updated_at)}</span>
+                    </div>
+                    <div className="text-base font-medium text-white">{project.title}</div>
+                    <p className="text-sm leading-6 text-slate-300">
+                      {project.description?.trim() || '还没有项目简介，可进入项目后继续补充主线、风格和创作边界。'}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <Button variant="outline" size="sm" onClick={() => openEditDialog(project)}>
+                      编辑
+                    </Button>
+                    <Link
+                      to={`/projects/${project.id}`}
+                      className="inline-flex h-9 items-center justify-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground transition hover:opacity-90"
+                    >
+                      继续写作
+                    </Link>
+                  </div>
+                </div>
+              ))
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="border border-white/10 bg-white/6 shadow-lg shadow-black/5">
+          <CardHeader>
+            <CardTitle className="text-xl text-white">AI 工具精选</CardTitle>
+            <CardDescription>先把高频工具显式放出来，降低功能发现成本。</CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-3">
+            <ToolHighlightCard
+              title="章节续写"
+              description="基于当前正文和指令流式生成后续内容。"
+              icon={<Sparkles className="size-4 text-violet-300" />}
+            />
+            <ToolHighlightCard
+              title="对白增强"
+              description="后续适合加入对话节奏、人物语气与张力优化。"
+              icon={<WandSparkles className="size-4 text-sky-300" />}
+            />
+            <ToolHighlightCard
+              title="冲突检查"
+              description="围绕角色设定、时间线和世界观规则做一致性提醒。"
+              icon={<Swords className="size-4 text-amber-300" />}
+            />
+          </CardContent>
+        </Card>
       </section>
 
       <section className="space-y-4">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <h2 className="text-xl font-semibold text-white">项目列表</h2>
-            <p className="text-sm text-slate-400">支持项目创建、编辑、删除，并可直接进入项目工作区。</p>
+            <h2 className="text-xl font-semibold text-white">我的作品</h2>
+            <p className="text-sm text-slate-400">保留完整项目管理能力，同时把入口表达从“管理”转向“继续创作”。</p>
           </div>
         </div>
 
@@ -373,6 +470,30 @@ export function DashboardPage() {
         pending={updateProjectMutation.isPending}
         submitLabel="保存修改"
       />
+    </div>
+  )
+}
+
+function FeatureEntryCard({ title, description, icon }: { title: string; description: string; icon: ReactNode }) {
+  return (
+    <div className="rounded-3xl border border-white/10 bg-black/10 p-4">
+      <div className="mb-3 inline-flex rounded-2xl border border-white/10 bg-white/5 p-2">{icon}</div>
+      <div className="space-y-2">
+        <h3 className="text-base font-medium text-white">{title}</h3>
+        <p className="text-sm leading-6 text-slate-400">{description}</p>
+      </div>
+    </div>
+  )
+}
+
+function ToolHighlightCard({ title, description, icon }: { title: string; description: string; icon: ReactNode }) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-black/10 p-4">
+      <div className="mb-2 inline-flex items-center gap-2 text-sm font-medium text-white">
+        {icon}
+        {title}
+      </div>
+      <p className="text-sm leading-6 text-slate-400">{description}</p>
     </div>
   )
 }
