@@ -4,6 +4,7 @@ import { createBrowserRouter, Navigate, RouterProvider } from 'react-router-dom'
 
 import { AppShell } from '@/components/app-shell'
 import { queryClient } from '@/lib/query-client'
+import { AIToolboxPage } from '@/pages/ai-toolbox-page'
 import { DashboardPage } from '@/pages/dashboard-page'
 import { ProjectEditorPage } from '@/pages/project-editor-page'
 import { ProjectWorkspacePage } from '@/pages/project-workspace-page'
@@ -24,6 +25,10 @@ const router = createBrowserRouter([
       {
         path: '/projects/:projectId/editor/:chapterId',
         element: <ProjectEditorPage />,
+      },
+      {
+        path: '/ai-toolbox',
+        element: <AIToolboxPage />,
       },
       {
         path: '*',
