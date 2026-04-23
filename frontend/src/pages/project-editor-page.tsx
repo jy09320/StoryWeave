@@ -114,6 +114,7 @@ export function ProjectEditorPage() {
   const navigate = useNavigate()
   const { projectId, chapterId } = useParams<{ projectId: string; chapterId: string }>()
   const autosaveTimerRef = useRef<number | null>(null)
+  const allowNextNavigationRef = useRef(false)
 
   useEffect(() => {
     return () => {
@@ -361,6 +362,82 @@ export function ProjectEditorPage() {
     toast.success('已追加到正文')
   }
 
+  const activeForm = chapter ? drafts[chapter.id] ?? buildEditorForm(chapter) : buildEditorForm(null)
+  const isDirty = chapter ? (dirtyChapterIds[chapter.id] ?? false) : false
+  const shouldBlockNavigation = Boolean(chapter) && (isDirty || saveChapterMutation.isPending)
+  const wordCount = countWords(activeForm.plainText)
+  const generationProvider = generation.provider || defaultGenerationProvider
+  const generationModelId = generation.modelId || defaultGenerationModelId
+  const modelOptions = MODEL_OPTIONS[generationProvider] ?? MODEL_OPTIONS.openai
+  const currentModelIsAvailable = modelOptions.some((option) => option.value === generationModelId)
+  const selectedModelId = currentModelIsAvailable ? generationModelId : modelOptions[0]?.value ?? defaultGenerationModelId
+
+  useEffect(() => {
+    if (!shouldBlockNavigation) {
+      allowNextNavigationRef.current = false
+      return
+    }
+
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault()
+      event.returnValue = ''
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+    }
+  }, [shouldBlockNavigation])
+
+  useEffect(() => {
+    if (!shouldBlockNavigation) {
+      allowNextNavigationRef.current = false
+      return
+    }
+
+    const handleDocumentClick = (event: MouseEvent) => {
+      const target = event.target
+      if (!(target instanceof Element)) {
+        return
+      }
+
+      const anchor = target.closest('a[href]') as HTMLAnchorElement | null
+      if (!anchor) {
+        return
+      }
+
+      const href = anchor.getAttribute('href')
+      if (!href || href.startsWith('#') || href.startsWith('javascript:')) {
+        return
+      }
+
+      const isExternal = anchor.target === '_blank' || /^https?:\/\//.test(href)
+      if (isExternal) {
+        return
+      }
+
+      if (allowNextNavigationRef.current) {
+        allowNextNavigationRef.current = false
+        return
+      }
+
+      const shouldLeave = window.confirm('当前章节还有未保存内容，确认离开当前页面吗？')
+      if (!shouldLeave) {
+        event.preventDefault()
+        event.stopPropagation()
+        return
+      }
+
+      allowNextNavigationRef.current = true
+    }
+
+    document.addEventListener('click', handleDocumentClick, true)
+    return () => {
+      document.removeEventListener('click', handleDocumentClick, true)
+      allowNextNavigationRef.current = false
+    }
+  }, [shouldBlockNavigation])
+
   if (!projectId || !chapterId) {
     return (
       <EmptyState
@@ -409,15 +486,6 @@ export function ProjectEditorPage() {
       />
     )
   }
-
-  const activeForm = chapter ? drafts[chapter.id] ?? buildEditorForm(chapter) : buildEditorForm(null)
-  const isDirty = chapter ? (dirtyChapterIds[chapter.id] ?? false) : false
-  const wordCount = countWords(activeForm.plainText)
-  const generationProvider = generation.provider || defaultGenerationProvider
-  const generationModelId = generation.modelId || defaultGenerationModelId
-  const modelOptions = MODEL_OPTIONS[generationProvider] ?? MODEL_OPTIONS.openai
-  const currentModelIsAvailable = modelOptions.some((option) => option.value === generationModelId)
-  const selectedModelId = currentModelIsAvailable ? generationModelId : modelOptions[0]?.value ?? defaultGenerationModelId
 
   return (
     <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
@@ -503,7 +571,11 @@ export function ProjectEditorPage() {
           </CardContent>
           <CardFooter className="flex flex-wrap items-center justify-between gap-3 border-white/10 bg-white/4">
             <div className="text-xs text-slate-400">
-              {saveChapterMutation.isPending ? '正在保存...' : isDirty ? '已修改，等待自动保存' : '内容已同步'}
+              {saveChapterMutation.isPending
+                ? '正在保存...'
+                : isDirty
+                  ? '已修改，等待自动保存；离开页面时会提醒保存风险'
+                  : '内容已同步'}
             </div>
             <Button onClick={handleManualSave} disabled={saveChapterMutation.isPending}>
               {saveChapterMutation.isPending ? <LoaderCircle className="size-4 animate-spin" /> : <Save className="size-4" />}
