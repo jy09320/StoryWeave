@@ -2,7 +2,27 @@
 
 ## Context
 
-用户想构建一个**个人使用**的 AI 同人文/小说创作 Web 应用，支持 ACG 二创、影视同人、原创小说等多种类型。核心需求：角色设定+剧情生成、章节续写+风格模仿、完整写作工作流（大纲→分章→正文→润色）、一键生成和人机协作两种模式，AI 底层同时支持 Claude 和 OpenAI 且可组合使用。
+用户想构建一个**个人使用**的 AI 同人文/小说创作 Web 应用，支持 ACG 二创、影视同人、原创小说等多种类型。核心需求：角色设定 + 剧情生成、章节续写 + 风格模仿、完整写作工作流、大纲到正文的人机协作，以及 Claude 与 OpenAI 的组合使用。
+
+---
+
+## 当前阶段状态
+
+### 已完成归档
+当前项目已经完成 Phase 1 与 Phase 1.5 的开发与验收，可直接参考：
+- [`plans/phase1-completed-summary.md`](plans/phase1-completed-summary.md)
+- [`plans/phase1-manual-acceptance-checklist.md`](plans/phase1-manual-acceptance-checklist.md)
+- [`plans/phase1-current-status-conclusion.md`](plans/phase1-current-status-conclusion.md)
+
+### 当前主执行文档
+下一轮开发以以下文档为准：
+- [`plans/phase2-detailed-plan.md`](plans/phase2-detailed-plan.md)
+
+### 历史规划文档
+以下文档保留作为历史阶段记录：
+- [`plans/mvp-phase1-next-step.md`](plans/mvp-phase1-next-step.md)
+- [`plans/mvp-phase1-acceptance-checklist.md`](plans/mvp-phase1-acceptance-checklist.md)
+- [`plans/storyweave-product-layout-upgrade.md`](plans/storyweave-product-layout-upgrade.md)
 
 ---
 
@@ -12,244 +32,191 @@
 
 | 层 | 选型 | 理由 |
 |---|---|---|
-| **框架** | React 19 + Vite | 主流成熟，生态丰富，构建快，教程和社区资源极多 |
-| **语言** | TypeScript | 类型安全，复杂数据结构（角色/世界观/模板）受益大 |
-| **路由** | React Router v7 | React 生态最主流的路由方案 |
-| **富文本编辑器** | Wangeditor v5 | 国产主流富文本编辑器，中文支持极好，文档全中文，开箱即用 |
-| **UI 组件库** | shadcn/ui + Radix UI | 基于可组合原子组件，和当前 Vite + Tailwind 架构更匹配，便于按业务自定义写作工作台界面 |
-| **状态管理** | TanStack Query + React 局部状态 | 当前项目以服务端数据拉取为主，先用 Query 管理远端状态，降低 MVP 复杂度 |
-| **HTTP 请求** | Axios | 保留统一 API 客户端与错误拦截能力 |
-| **样式** | Tailwind CSS v4 + shadcn 设计令牌 | 与现有组件体系一致，便于快速搭建深色写作界面 |
+| **框架** | React 19 + Vite | 主流成熟，生态丰富，构建快 |
+| **语言** | TypeScript | 类型安全，适合复杂创作数据结构 |
+| **路由** | React Router v7 | 适合当前前端结构 |
+| **UI 组件库** | shadcn/ui + Radix UI | 与当前 Tailwind 架构匹配 |
+| **状态管理** | TanStack Query + React 局部状态 | 贴合当前服务端拉取模式 |
+| **HTTP 请求** | Axios | 保持统一 API 客户端能力 |
+| **样式** | Tailwind CSS v4 | 便于快速迭代写作型界面 |
 
 ### 后端
 
 | 层 | 选型 | 理由 |
 |---|---|---|
-| **框架** | Python FastAPI | 高性能异步框架，自带 Swagger 文档，Python AI 生态丰富 |
-| **ORM** | SQLAlchemy 2.0 + Alembic | Python 最主流 ORM，Alembic 管理数据库迁移 |
-| **数据库** | PostgreSQL 16 | 功能强大，JSON 支持好（存储大纲/角色等结构化数据），国际主流 |
-| **AI 集成** | openai SDK + anthropic SDK | 官方 Python SDK，直接调用，无需第三方封装 |
-| **流式输出** | SSE (Server-Sent Events) | FastAPI 原生支持，前端用 EventSource 接收，简单可靠 |
-| **导出** | python-docx + markdown | Python 生态成熟的文档生成库 |
-| **验证** | Pydantic v2 | FastAPI 内置，请求/响应数据校验 |
+| **框架** | Python FastAPI | 异步能力好，适合 AI API 集成 |
+| **ORM** | SQLAlchemy 2.0 + Alembic | 主流 Python 数据层方案 |
+| **数据库** | PostgreSQL 16 | 适合结构化与半结构化创作数据 |
+| **AI 集成** | openai SDK + anthropic SDK | 保持原生调用能力 |
+| **流式输出** | SSE | 当前链路已验证可用 |
+| **验证** | Pydantic v2 | 与 FastAPI 配套 |
 
 ---
 
-## 系统架构
+## 当前系统形态
 
-```
-┌──────────────────┐          ┌──────────────────────────┐
-│  前端 (React+Vite)│  HTTP/  │  后端 (Python FastAPI)    │
-│                   │  SSE    │                           │
-│  写作编辑器        │ ◄─────► │  API 路由层               │
-│  (Wangeditor)     │         │    ├ /api/projects        │
-│  项目仪表盘        │         │    ├ /api/chapters        │
-│  角色构建器        │         │    ├ /api/characters      │
-│  世界观编辑        │         │    ├ /api/ai/generate     │
-│  模板管理器        │         │    └ /api/export          │
-│                   │         │                           │
-│  (shadcn/ui)      │         │  服务层                    │
-│  (TanStack Query) │         │    ├ AI Service (统一封装)  │
-│                   │         │    ├ Prompt Engine         │
-│                   │         │    ├ Context Manager       │
-│                   │         │    └ Export Service        │
-│                   │         │                           │
-│                   │         │  数据层 (SQLAlchemy)       │
-└──────────────────┘         └────────────┬──────────────┘
-                                          │
-                                  ┌───────▼──────┐
-                                  │ PostgreSQL   │
-                                  └──────────────┘
+```mermaid
+flowchart TD
+  A[Dashboard 首页] --> B[项目工作台]
+  B --> C[章节编辑器]
+  C --> D[AI 写作面板]
+  A --> E[AI 工具箱]
+  B --> F[项目章节管理]
+  B --> G[项目概览]
 ```
 
-### AI 生成流水线
+当前已经具备：
+- 项目管理
+- 章节管理
+- 写作编辑器
+- AI 续写
+- 版本历史最小闭环
+- 创作型首页与 AI 工具箱入口
 
-```
-用户输入 → Prompt Engine (组装模板+角色+世界观+风格+已有文本)
-        → Context Manager (处理上下文窗口：摘要化历史章节)
-        → AI Provider Router (按任务类型路由到 Claude/OpenAI)
-        → SSE Stream (流式输出到前端)
-        → 前端编辑器 (用户审阅/编辑/接受/拒绝)
-```
+当前仍待补齐的关键资产层：
+- 角色库
+- 项目内角色关联
+- 世界观设定
+- 可复用的结构化创作上下文
 
 ---
 
-## 核心数据模型
+## 分阶段规划
 
-| 实体 | 关键字段 | 说明 |
-|------|---------|------|
-| **Project** | title, type(original/fanfiction/acg/tv_movie), sourceWork, defaultModel | 作品项目 |
-| **Character** | name, personality, backstory, appearance, speechPattern, sourceWork, tags | 全局角色库，可跨项目复用 |
-| **CharacterRelationship** | characterA, characterB, type, description | 角色关系 |
-| **WorldSetting** | name, timePeriod, location, rules, lore, atmosphere | 世界观设定 |
-| **Outline** | content(树形 JSON), version | 大纲 |
-| **Chapter** | title, orderIndex, content(HTML/JSON), plainText, summary, status | 章节 |
-| **ChapterVersion** | content, changeNote | 版本历史 |
-| **StyleProfile** | name, sampleText, analysisResult, instructions | 风格档案 |
-| **PromptTemplate** | name, category, template, variables, modelProvider, temperature | 可复用 prompt 模板 |
-| **GenerationLog** | prompt, response, modelProvider, tokensUsed, accepted | 生成记录 |
+### Phase 1: MVP 基础
+状态：**已完成**
 
-关键关系：Project 1-* Chapter, Character *-* Project, Project 1-1 WorldSetting
+已完成内容：
+- 项目 CRUD
+- 章节 CRUD 与排序
+- 基础编辑器
+- 自动保存与手动保存
+- AI 流式续写
+- 版本历史查看与恢复
+- 未保存离开提醒
 
----
-
-## AI 集成设计
-
-### 多模型路由
-
-通过 AI Service 层统一封装 openai 和 anthropic 两个 Python SDK，支持按任务类型自动路由：
-
-| 任务 | 默认模型 | 理由 |
-|------|---------|------|
-| 大纲生成 | GPT-4o | 结构化输出好 |
-| 章节续写 | Claude Sonnet | 创意写作能力强 |
-| 风格分析 | Claude Sonnet | 细腻分析 |
-| 摘要生成 | GPT-4o-mini | 快速便宜 |
-| 润色修改 | Claude Sonnet | 文学性强 |
-
-用户可在项目级或模板级覆盖默认路由。
-
-### 长篇小说上下文管理（核心难点）
-
-采用**分层摘要策略**控制上下文在 12K token 以内：
-
-```
-系统提示 (固定)                     ~500 tokens
-角色卡片 (仅本章相关角色)            ~1000 tokens
-世界观规则 (精简)                   ~500 tokens
-风格指令                           ~300 tokens
-全局故事摘要                       ~500 tokens
-近期章节摘要 (前 2-3 章)            ~1500 tokens
-当前章节全文                       ~3000 tokens
-大纲上下文 (下一步走向)              ~500 tokens
-用户指令                           ~200 tokens
-═══ 留给生成 ═══                   ~4000 tokens
-```
-
-- 每章完成后自动生成摘要存入 DB
-- Context Manager 根据目标模型窗口大小动态调整策略（Claude 200K 可放更多原文）
-
----
-
-## 关键页面
-
-### 体验表达升级补充
-
-在既有页面规划基础上，增加一条明确的产品体验原则：页面入口按创作场景组织，而不是按底层技术功能组织。结合[`plans/storyweave-product-layout-upgrade.md`](plans/storyweave-product-layout-upgrade.md) 的分析，后续页面设计应补充以下方向：
-
-- 首页强化 创作入口 + 最近作品 + AI 工具精选，而不只是项目列表
-- 项目工作台强化 三栏式结构，即 项目结构导航 + 当前工作区 + AI 助手区
-- 写作编辑器强化 多工具 AI 面板，区分 续写、改写、设定辅助 等任务
-- 增加独立的 AI 工具箱页面，用于沉淀可复用的创作工具能力
-- 将 人设一致性、世界观一致性、章节版本接受机制 作为后续体验差异化重点
-
-1. **仪表盘** `/` — 项目卡片列表，快速新建，全局角色库/模板库入口
-2. **项目视图** `/projects/[id]` — 左侧章节列表 + 中间编辑器/大纲 + 右侧角色/AI 控制面板
-3. **写作编辑器** `/projects/[id]/editor/[chapterId]` — Wangeditor 编辑器 + 浮动 AI 工具栏(续写/改写/扩展/润色) + 模型选择器 + 流式生成区域
-4. **角色构建器** `/characters` — 角色表单 + 关系图 + 标签搜索
-5. **世界观编辑** `/projects/[id]/world` — 世界观表单
-6. **模板管理** `/templates` — Prompt 模板 CRUD，变量系统
-
----
-
-## 分阶段开发计划
-
-### Phase 1: MVP 基础 (1-3 周)
-- 项目脚手架：前端 React+Vite+shadcn/ui+Tailwind，后端 FastAPI+SQLAlchemy+PostgreSQL
-- 数据库模型：projects, chapters, chapter_versions
-- RESTful API：项目 CRUD + 章节管理
-- 前端：项目列表页 + Wangeditor 编辑器集成
-- AI 集成：单接口流式续写 (SSE)，接入 Claude + OpenAI
-- 基础模型选择器（下拉切换 provider/model）
+详细结论参考：
+- [`plans/phase1-completed-summary.md`](plans/phase1-completed-summary.md)
 
 ### Phase 1.5: 体验与布局升级
-- 首页升级为创作型仪表盘：创作场景入口、最近作品、最近章节、AI 工具入口
-- 项目工作台升级为更明确的结构化创作布局，突出章节树、项目概览与 AI 助手协同
-- 写作编辑器升级为更完整的写作工作台，支持 AI 多工具分组与上下文可见化
-- 增加最小可用的 AI 工具箱入口页，承接续写、润色、改写、拆解等可复用能力
-- 为角色库、世界观、风格系统预留统一导航与信息架构位置
+状态：**已完成**
 
-### Phase 2: 角色与世界观系统 (4-5 周)
-- characters, characterRelationships, projectCharacters 表
-- 角色创建表单 + 全局角色库
-- worldSettings 表和编辑界面
-- 将角色/世界观数据注入 AI prompt
+已完成内容：
+- 创作型 Dashboard
+- 最近项目与最近章节回流
+- 结构化项目工作台
+- 多工具 AI 表达
+- 独立 AI 工具箱入口
 
-### Phase 3: 写作流水线与大纲 (6-7 周)
-- 大纲编辑器（树形结构）
-- AI 大纲生成 + 章节拆分
-- 章节状态工作流：大纲 → 草稿 → 修订 → 定稿
-- 章节自动摘要 + Context Manager 分层管理
+详细结论参考：
+- [`plans/phase1-completed-summary.md`](plans/phase1-completed-summary.md)
 
-### Phase 4: 风格系统 (8-9 周)
-- styleProfiles 表
-- 风格分析：粘贴样本文本 → AI 提取风格特征
-- 风格应用到生成 prompt
+### Phase 2: 角色与世界观系统
+状态：**当前主阶段**
+
+目标：
+- 建立角色库
+- 建立项目世界观设定
+- 将结构化上下文接入编辑器与 AI 工具箱
+
+详细规划参考：
+- [`plans/phase2-detailed-plan.md`](plans/phase2-detailed-plan.md)
+
+### Phase 3: 写作流水线与大纲
+状态：**后续阶段**
+
+规划方向：
+- 大纲编辑器
+- AI 大纲生成与章节拆分
+- 章节状态工作流
+- 长篇上下文摘要管理
+
+### Phase 4: 风格系统
+状态：**后续阶段**
+
+规划方向：
+- 风格档案
+- 风格分析
+- 风格注入生成
 - 风格一致性检查
 
-### Phase 5: Prompt 模板与高级 AI (10-11 周)
-- promptTemplates 完整 CRUD
-- 内置模板库（大纲/续写/角色/对话/场景/润色）
-- 模板变量系统 `{{placeholder}}`
-- 按模板配置模型路由
-- 生成日志记录
+### Phase 5: Prompt 模板与高级 AI
+状态：**后续阶段**
 
-### Phase 6: 协作模式与一键生成 (12-13 周)
-- 一键生成流水线：设定 → 大纲 → 分章 → 正文 → 润色（带人工审核门）
-- 协作写作模式：光标续写、行内 AI 建议
+规划方向：
+- Prompt 模板库
+- 模板变量系统
+- 按模板路由模型
+- 生成日志
+
+### Phase 6: 协作模式与一键生成
+状态：**后续阶段**
+
+规划方向：
+- 一键生成流水线
+- 行内 AI 协作
 - 人机交替模式
-- 选中文本改写 + 接受/拒绝机制
+- 选中文本改写接受机制
 
-### Phase 7: 打磨与导出 (14-15 周)
-- 导出 Markdown/TXT/DOCX（DOCX 中文排版）
-- 版本历史 UI
+### Phase 7: 打磨与导出
+状态：**后续阶段**
+
+规划方向：
+- 导出能力
+- 高级版本历史体验
 - 全文搜索
 - 快捷键系统
-- 暗色模式
-- 自动保存 + 数据库备份恢复
+- 备份恢复
 
 ---
 
-## 关键技术挑战与方案
+## 当前优先建设对象
 
-| 挑战 | 方案 |
-|------|------|
-| **长篇上下文溢出** | 分层摘要策略，每章存摘要，Context Manager 按模型窗口动态分配 |
-| **跨章节风格一致** | StyleProfile + 前一章尾段锚定 + 生成后风格一致性检查 |
-| **中文处理** | CJK 字体(Noto/思源)、字符计数代替词计数、tiktoken 中文 token 估算 |
-| **流式长文生成** | FastAPI SSE + 前端 EventSource 实时追加 + 生成区域视觉区分 + 停止按钮 |
-| **同人角色准确性** | 显式角色卡片注入 prompt，指令 AI 以用户定义为准而非训练知识 |
+当前最优先建设的是 Phase 2 的上下文资产层：
+1. 角色库
+2. 项目角色关联
+3. 世界观设定
+4. AI 上下文注入
 
----
-
-## 关键文件清单
-
-### 后端 (Python FastAPI)
-
-| 文件 | 职责 |
-|------|------|
-| `backend/app/models/` | SQLAlchemy 模型定义 (projects, chapters, characters 等) |
-| `backend/app/services/ai_service.py` | AI Provider 统一封装与任务路由 |
-| `backend/app/services/context_manager.py` | 上下文窗口管理与分层摘要 |
-| `backend/app/services/prompt_engine.py` | Prompt 模板引擎 |
-| `backend/app/api/routes/` | FastAPI 路由 (RESTful API) |
-| `backend/alembic/` | 数据库迁移 |
-
-### 前端 (React + Vite)
-
-| 文件 | 职责 |
-|------|------|
-| `frontend/src/pages/` | 页面组件 (仪表盘、项目、编辑器、角色库) |
-| `frontend/src/components/Editor/` | Wangeditor 编辑器封装 + AI 工具栏 |
-| `frontend/src/store/` | Redux Toolkit slices + RTK Query API |
-| `frontend/src/services/` | API 调用封装 |
+原因：
+- 这些能力最直接增强现有写作主链路
+- 能提升 AI 输出稳定性与一致性
+- 能为 Prompt 模板、大纲与长篇管理打基础
 
 ---
 
-## 验证方案
+## 关键页面演进方向
 
-1. **Phase 1 完成后**：能创建项目 → 新建章节 → 在编辑器写文字 → 选择 Claude/OpenAI → 点击续写 → 看到流式输出
-2. **Phase 2 完成后**：创建角色(含性格/语气) → 关联到项目 → 续写时 AI 输出符合角色设定
-3. **Phase 3 完成后**：从零生成大纲 → 拆分为章节计划 → 逐章生成 → 前后文连贯
-4. **Phase 4 完成后**：粘贴金庸段落 → 分析出风格 → 用该风格续写 → 风格相似度可感知
-5. **全流程测试**：一键模式生成 3 章短篇 → 协作模式写 1 章 → 导出 DOCX → 打开查看排版正确
+1. **首页** `/`
+   - 保持创作型入口
+   - 增加角色库与设定相关入口预留位
+
+2. **项目工作台** `/projects/[id]`
+   - 承担章节结构、项目概览、角色与设定入口
+
+3. **写作编辑器** `/projects/[id]/editor/[chapterId]`
+   - 持续作为正文创作与 AI 协同主场景
+
+4. **角色库** `/characters`
+   - 作为全局角色资产中心
+
+5. **世界观编辑** `/projects/[id]/world`
+   - 作为项目级设定维护页
+
+6. **AI 工具箱** `/ai-toolbox`
+   - 逐步消费角色与世界观上下文
+
+---
+
+## 当前文档使用建议
+
+如果进入实施，请按以下顺序使用文档：
+1. 先看 [`plans/phase1-completed-summary.md`](plans/phase1-completed-summary.md)
+2. 再看 [`plans/phase2-detailed-plan.md`](plans/phase2-detailed-plan.md)
+3. 如需历史背景，再回看 [`plans/storyweave-product-layout-upgrade.md`](plans/storyweave-product-layout-upgrade.md)
+
+---
+
+## 当前结论
+
+StoryWeave 已完成第一阶段闭环，当前不再以补 Phase 1 为目标，而是正式进入以角色库与世界观为核心的 Phase 2 规划与实施阶段。
