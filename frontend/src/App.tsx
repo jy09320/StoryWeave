@@ -5,6 +5,7 @@ import { createBrowserRouter, Navigate, RouterProvider } from 'react-router-dom'
 import { AppShell } from '@/components/app-shell'
 import { queryClient } from '@/lib/query-client'
 import { AIToolboxPage } from '@/pages/ai-toolbox-page'
+import { CharactersPage } from '@/pages/characters-page'
 import { DashboardPage } from '@/pages/dashboard-page'
 import { ProjectEditorPage } from '@/pages/project-editor-page'
 import { ProjectWorkspacePage } from '@/pages/project-workspace-page'
@@ -17,6 +18,10 @@ const router = createBrowserRouter([
       {
         index: true,
         element: <DashboardPage />,
+      },
+      {
+        path: '/characters',
+        element: <CharactersPage />,
       },
       {
         path: '/projects/:projectId',
