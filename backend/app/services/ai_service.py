@@ -1,9 +1,15 @@
-from openai import AsyncOpenAI
+from collections.abc import AsyncIterator
+import json
+import logging
+
 from anthropic import AsyncAnthropic
+from openai import AsyncOpenAI
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.services.runtime_ai_config import runtime_ai_config_service
+
+logger = logging.getLogger(__name__)
 
 
 class AIService:
@@ -47,7 +53,36 @@ class AIService:
             "base_url": str(config["base_url"] or settings.OPENAI_BASE_URL) if (config["base_url"] or settings.OPENAI_BASE_URL) else None,
         }
 
-    async def generate_stream_openai(
+    def _extract_openai_delta_text(self, chunk: object) -> list[str]:
+        choices = getattr(chunk, "choices", None) or []
+        if not choices:
+            return []
+
+        texts: list[str] = []
+        for choice in choices:
+            delta = getattr(choice, "delta", None)
+            if delta is None:
+                continue
+
+            content = getattr(delta, "content", None)
+            if isinstance(content, str):
+                if content:
+                    texts.append(content)
+                continue
+
+            if isinstance(content, list):
+                for item in content:
+                    if isinstance(item, str):
+                        if item:
+                            texts.append(item)
+                        continue
+
+                    text_value = getattr(item, "text", None)
+                    if isinstance(text_value, str) and text_value:
+                        texts.append(text_value)
+        return texts
+
+    async def _generate_openai_stream_chunks(
         self,
         *,
         api_key: str | None,
@@ -57,7 +92,7 @@ class AIService:
         model: str,
         temperature: float,
         max_tokens: int,
-    ):
+    ) -> AsyncIterator[str]:
         client = self.get_openai_client(api_key, base_url)
         stream = await client.chat.completions.create(
             model=model,
@@ -69,10 +104,135 @@ class AIService:
             max_tokens=max_tokens,
             stream=True,
         )
+
         async for chunk in stream:
-            delta = chunk.choices[0].delta
-            if delta.content:
-                yield delta.content
+            texts = self._extract_openai_delta_text(chunk)
+            if texts:
+                for item in texts:
+                    yield item
+                continue
+
+            choices = getattr(chunk, "choices", None) or []
+            logger.debug(
+                "Skipped OpenAI-compatible stream chunk without text: chunk_type=%s choices=%s",
+                type(chunk).__name__,
+                len(choices),
+            )
+
+    async def _generate_openai_non_stream_text(
+        self,
+        *,
+        api_key: str | None,
+        base_url: str | None,
+        text: str,
+        instruction: str,
+        model: str,
+        temperature: float,
+        max_tokens: int,
+    ) -> str:
+        client = self.get_openai_client(api_key, base_url)
+        response = await client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": instruction},
+                {"role": "user", "content": text},
+            ],
+            temperature=temperature,
+            max_tokens=max_tokens,
+            stream=False,
+        )
+
+        choices = getattr(response, "choices", None) or []
+        if not choices:
+            raise RuntimeError("OpenAI Compatible 响应中未返回 choices")
+
+        message = getattr(choices[0], "message", None)
+        if message is None:
+            raise RuntimeError("OpenAI Compatible 响应中未返回 message")
+
+        content = getattr(message, "content", None)
+        if isinstance(content, str):
+            return content
+
+        if isinstance(content, list):
+            texts: list[str] = []
+            for item in content:
+                if isinstance(item, str):
+                    if item:
+                        texts.append(item)
+                    continue
+
+                text_value = getattr(item, "text", None)
+                if isinstance(text_value, str) and text_value:
+                    texts.append(text_value)
+            if texts:
+                return "".join(texts)
+
+        raise RuntimeError("OpenAI Compatible 响应内容为空或格式不受支持")
+
+    async def generate_stream_openai(
+        self,
+        *,
+        api_key: str | None,
+        base_url: str | None,
+        text: str,
+        instruction: str,
+        model: str,
+        temperature: float,
+        max_tokens: int,
+    ):
+        streamed_any = False
+        try:
+            async for chunk_text in self._generate_openai_stream_chunks(
+                api_key=api_key,
+                base_url=base_url,
+                text=text,
+                instruction=instruction,
+                model=model,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            ):
+                streamed_any = True
+                yield chunk_text
+        except Exception as exc:
+            logger.warning(
+                "OpenAI-compatible stream failed, fallback to non-stream mode: model=%s base_url=%s error=%s",
+                model,
+                base_url,
+                exc,
+            )
+            fallback_text = await self._generate_openai_non_stream_text(
+                api_key=api_key,
+                base_url=base_url,
+                text=text,
+                instruction=instruction,
+                model=model,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+            if fallback_text:
+                yield fallback_text
+            return
+
+        if streamed_any:
+            return
+
+        logger.warning(
+            "OpenAI-compatible stream returned no text chunks, fallback to non-stream mode: model=%s base_url=%s",
+            model,
+            base_url,
+        )
+        fallback_text = await self._generate_openai_non_stream_text(
+            api_key=api_key,
+            base_url=base_url,
+            text=text,
+            instruction=instruction,
+            model=model,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
+        if fallback_text:
+            yield fallback_text
 
     async def generate_stream_anthropic(
         self,
