@@ -5,9 +5,16 @@ import type {
   ChapterReorderItem,
   ChapterUpdatePayload,
   ChapterVersion,
+  Character,
+  CharacterPayload,
   Project,
+  ProjectCharacter,
+  ProjectCharacterPayload,
+  ProjectCharacterUpdatePayload,
   ProjectDetail,
   ProjectPayload,
+  WorldSetting,
+  WorldSettingPayload,
 } from '@/types/api'
 
 export async function listProjects() {
@@ -55,5 +62,64 @@ export async function reorderChapters(projectId: string, payload: ChapterReorder
 
 export async function listChapterVersions(chapterId: string) {
   const { data } = await apiClient.get<ChapterVersion[]>(`/chapters/${chapterId}/versions`)
+  return data
+}
+
+export async function listCharacters(keyword?: string) {
+  const { data } = await apiClient.get<Character[]>('/characters/', {
+    params: keyword?.trim() ? { keyword: keyword.trim() } : undefined,
+  })
+  return data
+}
+
+export async function getCharacter(characterId: string) {
+  const { data } = await apiClient.get<Character>(`/characters/${characterId}`)
+  return data
+}
+
+export async function createCharacter(payload: CharacterPayload) {
+  const { data } = await apiClient.post<Character>('/characters/', payload)
+  return data
+}
+
+export async function updateCharacter(characterId: string, payload: Partial<CharacterPayload>) {
+  const { data } = await apiClient.put<Character>(`/characters/${characterId}`, payload)
+  return data
+}
+
+export async function deleteCharacter(characterId: string) {
+  await apiClient.delete(`/characters/${characterId}`)
+}
+
+export async function listProjectCharacters(projectId: string) {
+  const { data } = await apiClient.get<ProjectCharacter[]>(`/projects/${projectId}/characters`)
+  return data
+}
+
+export async function attachProjectCharacter(projectId: string, payload: ProjectCharacterPayload) {
+  const { data } = await apiClient.post<ProjectCharacter>(`/projects/${projectId}/characters`, payload)
+  return data
+}
+
+export async function updateProjectCharacter(
+  projectId: string,
+  linkId: string,
+  payload: ProjectCharacterUpdatePayload,
+) {
+  const { data } = await apiClient.put<ProjectCharacter>(`/projects/${projectId}/characters/${linkId}`, payload)
+  return data
+}
+
+export async function deleteProjectCharacter(projectId: string, linkId: string) {
+  await apiClient.delete(`/projects/${projectId}/characters/${linkId}`)
+}
+
+export async function getProjectWorldSetting(projectId: string) {
+  const { data } = await apiClient.get<WorldSetting | null>(`/projects/${projectId}/world-setting`)
+  return data
+}
+
+export async function updateProjectWorldSetting(projectId: string, payload: WorldSettingPayload) {
+  const { data } = await apiClient.put<WorldSetting>(`/projects/${projectId}/world-setting`, payload)
   return data
 }

@@ -1,7 +1,7 @@
 import ulid
 from datetime import datetime
 
-from sqlalchemy import Boolean, String, Text, Integer, DateTime, ForeignKey, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -26,6 +26,15 @@ class Project(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 
     chapters: Mapped[list["Chapter"]] = relationship(back_populates="project", cascade="all, delete-orphan", order_by="Chapter.order_index")
+    project_characters: Mapped[list["ProjectCharacter"]] = relationship(
+        back_populates="project",
+        cascade="all, delete-orphan",
+    )
+    world_setting: Mapped["WorldSetting | None"] = relationship(
+        back_populates="project",
+        cascade="all, delete-orphan",
+        uselist=False,
+    )
 
 
 class Chapter(Base):
@@ -60,6 +69,63 @@ class ChapterVersion(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     chapter: Mapped["Chapter"] = relationship(back_populates="versions")
+
+
+class Character(Base):
+    __tablename__ = "characters"
+
+    id: Mapped[str] = mapped_column(String(26), primary_key=True, default=generate_ulid)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    alias: Mapped[str | None] = mapped_column(String(200))
+    description: Mapped[str | None] = mapped_column(Text)
+    profile: Mapped[str | None] = mapped_column(Text)
+    personality: Mapped[str | None] = mapped_column(Text)
+    background: Mapped[str | None] = mapped_column(Text)
+    relationship_notes: Mapped[str | None] = mapped_column(Text)
+    tags: Mapped[str | None] = mapped_column(String(500))
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+
+    project_links: Mapped[list["ProjectCharacter"]] = relationship(
+        back_populates="character",
+        cascade="all, delete-orphan",
+    )
+
+
+class ProjectCharacter(Base):
+    __tablename__ = "project_characters"
+    __table_args__ = (UniqueConstraint("project_id", "character_id", name="uq_project_characters_project_id_character_id"),)
+
+    id: Mapped[str] = mapped_column(String(26), primary_key=True, default=generate_ulid)
+    project_id: Mapped[str] = mapped_column(String(26), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
+    character_id: Mapped[str] = mapped_column(String(26), ForeignKey("characters.id", ondelete="CASCADE"), nullable=False)
+    role_label: Mapped[str | None] = mapped_column(String(100))
+    summary: Mapped[str | None] = mapped_column(Text)
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+
+    project: Mapped["Project"] = relationship(back_populates="project_characters")
+    character: Mapped["Character"] = relationship(back_populates="project_links")
+
+
+class WorldSetting(Base):
+    __tablename__ = "world_settings"
+    __table_args__ = (UniqueConstraint("project_id", name="uq_world_settings_project_id"),)
+
+    id: Mapped[str] = mapped_column(String(26), primary_key=True, default=generate_ulid)
+    project_id: Mapped[str] = mapped_column(String(26), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
+    title: Mapped[str] = mapped_column(String(200), nullable=False, default="世界观设定")
+    overview: Mapped[str | None] = mapped_column(Text)
+    rules: Mapped[str | None] = mapped_column(Text)
+    factions: Mapped[str | None] = mapped_column(Text)
+    locations: Mapped[str | None] = mapped_column(Text)
+    timeline: Mapped[str | None] = mapped_column(Text)
+    extra_notes: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+
+    project: Mapped["Project"] = relationship(back_populates="world_setting")
 
 
 class AIRuntimeSetting(Base):

@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.database import get_db
-from app.models.project import Project
+from app.models.project import Project, ProjectCharacter
 from app.schemas.project import ProjectCreate, ProjectDetailResponse, ProjectResponse, ProjectUpdate
 
 router = APIRouter()
@@ -29,7 +29,11 @@ async def create_project(data: ProjectCreate, db: AsyncSession = Depends(get_db)
 async def get_project(project_id: str, db: AsyncSession = Depends(get_db)):
     result = await db.execute(
         select(Project)
-        .options(selectinload(Project.chapters))
+        .options(
+            selectinload(Project.chapters),
+            selectinload(Project.project_characters).selectinload(ProjectCharacter.character),
+            selectinload(Project.world_setting),
+        )
         .where(Project.id == project_id)
     )
     project = result.scalar_one_or_none()
