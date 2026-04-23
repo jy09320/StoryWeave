@@ -14,6 +14,7 @@ import {
   Users2,
   Globe2,
   PencilLine,
+  SquarePen,
   Unlink,
 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -22,6 +23,14 @@ import { EmptyState } from '@/components/empty-state'
 import { LoadingState } from '@/components/loading-state'
 import { StatusBadge } from '@/components/status-badge'
 import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import {
   Card,
   CardContent,
@@ -44,6 +53,7 @@ import {
   listCharacters,
   reorderChapters,
   updateChapter,
+  updateProjectCharacter,
   updateProjectWorldSetting,
 } from '@/services/projects'
 import type {
@@ -51,6 +61,8 @@ import type {
   ChapterReorderItem,
   ChapterUpdatePayload,
   Character,
+  ProjectCharacter,
+  ProjectCharacterUpdatePayload,
   ProjectDetail,
   WorldSettingPayload,
 } from '@/types/api'
@@ -61,6 +73,11 @@ interface ChapterDraftState {
 
 interface CharacterLinkDraftState {
   characterId: string
+  roleLabel: string
+  summary: string
+}
+
+interface CharacterLinkEditState {
   roleLabel: string
   summary: string
 }
@@ -95,11 +112,25 @@ const defaultWorldSettingDraft: WorldSettingDraftState = {
   extra_notes: '',
 }
 
+const defaultCharacterLinkEditState: CharacterLinkEditState = {
+  roleLabel: '',
+  summary: '',
+}
+
+function buildCharacterLinkUpdatePayload(editState: CharacterLinkEditState): ProjectCharacterUpdatePayload {
+  return {
+    role_label: editState.roleLabel.trim() || null,
+    summary: editState.summary.trim() || null,
+  }
+}
+
 export function ProjectWorkspacePage() {
   const { projectId } = useParams<{ projectId: string }>()
   const [selectedChapterId, setSelectedChapterId] = useState<string | null>(null)
   const [newChapter, setNewChapter] = useState<ChapterDraftState>(defaultChapterDraft)
   const [characterLinkDraft, setCharacterLinkDraft] = useState<CharacterLinkDraftState>(defaultCharacterLinkDraft)
+  const [editingProjectCharacter, setEditingProjectCharacter] = useState<ProjectCharacter | null>(null)
+  const [characterLinkEditDraft, setCharacterLinkEditDraft] = useState<CharacterLinkEditState>(defaultCharacterLinkEditState)
   const [worldSettingDraft, setWorldSettingDraft] = useState<WorldSettingDraftState>(defaultWorldSettingDraft)
 
   const projectQuery = useQuery<ProjectDetail, Error>({
@@ -199,6 +230,20 @@ export function ProjectWorkspacePage() {
     },
   })
 
+  const updateProjectCharacterMutation = useMutation({
+    mutationFn: ({ linkId, payload }: { linkId: string; payload: ProjectCharacterUpdatePayload }) =>
+      updateProjectCharacter(projectId ?? '', linkId, payload),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['project', projectId] })
+      setEditingProjectCharacter(null)
+      setCharacterLinkEditDraft(defaultCharacterLinkEditState)
+      toast.success('项目角色信息已更新')
+    },
+    onError: (error: Error) => {
+      toast.error(error.message)
+    },
+  })
+
   const detachCharacterMutation = useMutation({
     mutationFn: (linkId: string) => deleteProjectCharacter(projectId ?? '', linkId),
     onSuccess: async () => {
@@ -289,6 +334,27 @@ export function ProjectWorkspacePage() {
     }
 
     detachCharacterMutation.mutate(linkId)
+  }
+
+  function openEditProjectCharacterDialog(projectCharacter: ProjectCharacter) {
+    setEditingProjectCharacter(projectCharacter)
+    setCharacterLinkEditDraft({
+      roleLabel: projectCharacter.role_label ?? '',
+      summary: projectCharacter.summary ?? '',
+    })
+  }
+
+  function handleUpdateProjectCharacter(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+
+    if (!editingProjectCharacter) {
+      return
+    }
+
+    updateProjectCharacterMutation.mutate({
+      linkId: editingProjectCharacter.id,
+      payload: buildCharacterLinkUpdatePayload(characterLinkEditDraft),
+    })
   }
 
   function handleSaveWorldSetting(event: FormEvent<HTMLFormElement>) {
@@ -667,16 +733,28 @@ export function ProjectWorkspacePage() {
                             {item.summary?.trim() || item.character.description?.trim() || '暂无项目内角色说明'}
                           </p>
                         </div>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          disabled={detachCharacterMutation.isPending}
-                          onClick={() => handleDetachCharacter(item.id, item.character.name)}
-                        >
-                          <Unlink className="size-4" />
-                          <span className="sr-only">移除角色</span>
-                        </Button>
+                        <div className="flex items-center gap-1">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            disabled={updateProjectCharacterMutation.isPending}
+                            onClick={() => openEditProjectCharacterDialog(item)}
+                          >
+                            <SquarePen className="size-4" />
+                            <span className="sr-only">编辑项目角色</span>
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            disabled={detachCharacterMutation.isPending}
+                            onClick={() => handleDetachCharacter(item.id, item.character.name)}
+                          >
+                            <Unlink className="size-4" />
+                            <span className="sr-only">移除角色</span>
+                          </Button>
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -845,6 +923,78 @@ export function ProjectWorkspacePage() {
           </Card>
         </aside>
       </div>
+
+      <Dialog
+        open={Boolean(editingProjectCharacter)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setEditingProjectCharacter(null)
+            setCharacterLinkEditDraft(defaultCharacterLinkEditState)
+          }
+        }}
+      >
+        <DialogContent className="max-w-xl border-white/10 bg-slate-950/95">
+          <DialogHeader>
+            <DialogTitle>编辑项目角色定位</DialogTitle>
+            <DialogDescription>
+              更新角色在当前项目中的定位与备注，后续 AI 上下文会优先消费这里的项目内信息。
+            </DialogDescription>
+          </DialogHeader>
+
+          {editingProjectCharacter ? (
+            <form className="space-y-4" onSubmit={handleUpdateProjectCharacter}>
+              <div className="rounded-2xl border border-white/10 bg-black/10 px-4 py-3 text-sm text-slate-300">
+                当前角色：<span className="font-medium text-white">{editingProjectCharacter.character.name}</span>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-200">项目内定位</label>
+                <Input
+                  value={characterLinkEditDraft.roleLabel}
+                  onChange={(event) =>
+                    setCharacterLinkEditDraft((prev) => ({
+                      ...prev,
+                      roleLabel: event.target.value,
+                    }))
+                  }
+                  placeholder="例如：主角 / 搭档 / 对手 / 导师"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-200">项目内备注</label>
+                <Textarea
+                  value={characterLinkEditDraft.summary}
+                  onChange={(event) =>
+                    setCharacterLinkEditDraft((prev) => ({
+                      ...prev,
+                      summary: event.target.value,
+                    }))
+                  }
+                  rows={5}
+                  placeholder="补充该角色在当前项目中的关系、冲突、弧线或使用约束"
+                />
+              </div>
+
+              <DialogFooter>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setEditingProjectCharacter(null)
+                    setCharacterLinkEditDraft(defaultCharacterLinkEditState)
+                  }}
+                >
+                  取消
+                </Button>
+                <Button type="submit" disabled={updateProjectCharacterMutation.isPending}>
+                  {updateProjectCharacterMutation.isPending ? '保存中...' : '保存项目角色'}
+                </Button>
+              </DialogFooter>
+            </form>
+          ) : null}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
