@@ -362,6 +362,13 @@ export function ProjectEditorPage() {
     toast.success('已追加到正文')
   }
 
+  function handleRestoreVersion(version: ChapterVersion) {
+    const restoredText = version.plain_text ?? version.content
+    updateFormField('plainText', restoredText)
+    setIsVersionDialogOpen(false)
+    toast.success('历史版本内容已恢复到正文，可继续编辑或保存')
+  }
+
   const activeForm = chapter ? drafts[chapter.id] ?? buildEditorForm(chapter) : buildEditorForm(null)
   const isDirty = chapter ? (dirtyChapterIds[chapter.id] ?? false) : false
   const shouldBlockNavigation = Boolean(chapter) && (isDirty || saveChapterMutation.isPending)
@@ -721,9 +728,14 @@ export function ProjectEditorPage() {
                       {version.change_note || '自动保存快照'} · {version.word_count ?? countWords(version.plain_text ?? version.content)} 字
                     </CardDescription>
                   </CardHeader>
-                  <CardContent>
+                  <CardContent className="space-y-3">
                     <div className="max-h-72 overflow-y-auto whitespace-pre-wrap rounded-2xl border border-white/10 bg-black/20 p-4 text-sm leading-7 text-slate-200">
                       {version.plain_text || version.content}
+                    </div>
+                    <div className="flex justify-end">
+                      <Button variant="outline" onClick={() => handleRestoreVersion(version)}>
+                        恢复到正文
+                      </Button>
                     </div>
                   </CardContent>
                 </Card>
