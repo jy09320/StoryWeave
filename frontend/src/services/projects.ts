@@ -4,6 +4,7 @@ import type {
   ChapterPayload,
   ChapterReorderItem,
   ChapterUpdatePayload,
+  ChapterVersion,
   Project,
   ProjectDetail,
   ProjectPayload,
@@ -49,5 +50,10 @@ export async function deleteChapter(chapterId: string) {
 
 export async function reorderChapters(projectId: string, payload: ChapterReorderItem[]) {
   const { data } = await apiClient.put<Chapter[]>(`/chapters/reorder/${projectId}`, payload)
+  return data
+}
+
+export async function listChapterVersions(chapterId: string) {
+  const { data } = await apiClient.get<ChapterVersion[]>(`/chapters/${chapterId}/versions`)
   return data
 }

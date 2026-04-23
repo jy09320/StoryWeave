@@ -168,6 +168,18 @@ class ChapterResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class ChapterVersionResponse(BaseModel):
+    id: str
+    chapter_id: str
+    content: str
+    plain_text: str | None
+    word_count: int | None
+    change_note: str | None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
 class ProjectResponse(BaseModel):
     id: str
     title: str

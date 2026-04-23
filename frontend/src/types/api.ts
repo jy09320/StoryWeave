@@ -68,6 +68,16 @@ export interface ChapterReorderItem {
   order_index: number
 }
 
+export interface ChapterVersion {
+  id: string
+  chapter_id: string
+  content: string
+  plain_text: string | null
+  word_count: number | null
+  change_note: string | null
+  created_at: string
+}
+
 export interface AIGeneratePayload {
   project_id: string
   chapter_id?: string | null

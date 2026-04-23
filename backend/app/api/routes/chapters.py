@@ -4,7 +4,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.models.project import Chapter, ChapterVersion, Project
-from app.schemas.project import ChapterCreate, ChapterReorderItem, ChapterResponse, ChapterUpdate
+from app.schemas.project import (
+    ChapterCreate,
+    ChapterReorderItem,
+    ChapterResponse,
+    ChapterUpdate,
+    ChapterVersionResponse,
+)
 
 router = APIRouter()
 
@@ -103,6 +109,20 @@ async def reorder_chapters(
         select(Chapter).where(Chapter.project_id == project_id).order_by(Chapter.order_index)
     )
     return updated.scalars().all()
+
+
+@router.get("/{chapter_id}/versions", response_model=list[ChapterVersionResponse])
+async def list_chapter_versions(chapter_id: str, db: AsyncSession = Depends(get_db)):
+    chapter = await db.get(Chapter, chapter_id)
+    if not chapter:
+        raise HTTPException(status_code=404, detail="Chapter not found")
+
+    result = await db.execute(
+        select(ChapterVersion)
+        .where(ChapterVersion.chapter_id == chapter_id)
+        .order_by(ChapterVersion.created_at.desc())
+    )
+    return result.scalars().all()
 
 
 @router.delete("/{chapter_id}")

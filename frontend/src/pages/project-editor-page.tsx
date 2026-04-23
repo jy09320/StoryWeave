@@ -1,7 +1,7 @@
-import { useMemo, useRef, useState, type ChangeEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { Bot, ChevronLeft, LoaderCircle, Save, Sparkles } from 'lucide-react'
+import { Bot, ChevronLeft, History, LoaderCircle, Save, Sparkles } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { EmptyState } from '@/components/empty-state'
@@ -26,11 +26,18 @@ import {
 } from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
 import { Textarea } from '@/components/ui/textarea'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { formatDate } from '@/lib/format'
 import { queryClient } from '@/lib/query-client'
 import { streamGenerate } from '@/services/ai'
-import { getProject, updateChapter } from '@/services/projects'
-import type { AIGeneratePayload, Chapter, ChapterStatus, ProjectDetail } from '@/types/api'
+import { getProject, listChapterVersions, updateChapter } from '@/services/projects'
+import type { AIGeneratePayload, Chapter, ChapterStatus, ChapterVersion, ProjectDetail } from '@/types/api'
 
 const MODEL_PROVIDER_OPTIONS = [
   { label: 'OpenAI', value: 'openai' },
@@ -68,6 +75,7 @@ interface GenerationState {
   modelId: string
   result: string
   isGenerating: boolean
+  requestId: number
 }
 
 const defaultGenerationInstruction = '请基于当前正文继续写下去，保持风格一致，并自然衔接上一段。'
@@ -107,6 +115,14 @@ export function ProjectEditorPage() {
   const { projectId, chapterId } = useParams<{ projectId: string; chapterId: string }>()
   const autosaveTimerRef = useRef<number | null>(null)
 
+  useEffect(() => {
+    return () => {
+      if (autosaveTimerRef.current) {
+        window.clearTimeout(autosaveTimerRef.current)
+      }
+    }
+  }, [])
+
   const [drafts, setDrafts] = useState<Record<string, EditorFormState>>({})
   const [dirtyChapterIds, setDirtyChapterIds] = useState<Record<string, boolean>>({})
   const [generation, setGeneration] = useState<GenerationState>({
@@ -115,7 +131,10 @@ export function ProjectEditorPage() {
     modelId: 'gpt-4o',
     result: '',
     isGenerating: false,
+    requestId: 0,
   })
+
+  const [isVersionDialogOpen, setIsVersionDialogOpen] = useState(false)
 
   const projectQuery = useQuery<ProjectDetail, Error>({
     queryKey: ['project', projectId],
@@ -163,10 +182,21 @@ export function ProjectEditorPage() {
     },
   })
 
-  function scheduleAutosave(targetChapterId: string, nextForm: EditorFormState) {
+  const chapterVersionsQuery = useQuery<ChapterVersion[], Error>({
+    queryKey: ['chapter-versions', chapterId],
+    queryFn: () => listChapterVersions(chapterId ?? ''),
+    enabled: Boolean(chapterId) && isVersionDialogOpen,
+  })
+
+  function clearAutosaveTimer() {
     if (autosaveTimerRef.current) {
       window.clearTimeout(autosaveTimerRef.current)
+      autosaveTimerRef.current = null
     }
+  }
+
+  function scheduleAutosave(targetChapterId: string, nextForm: EditorFormState) {
+    clearAutosaveTimer()
 
     autosaveTimerRef.current = window.setTimeout(() => {
       if (!nextForm.title.trim()) {
@@ -177,6 +207,7 @@ export function ProjectEditorPage() {
         targetChapterId,
         payload: nextForm,
       })
+      autosaveTimerRef.current = null
     }, 1200)
   }
 
@@ -215,6 +246,22 @@ export function ProjectEditorPage() {
     updateFormField('status', value as ChapterStatus)
   }
 
+  function handleDiscardGeneratedText() {
+    setGeneration((prev) => ({
+      ...prev,
+      result: '',
+    }))
+  }
+
+  function handleStopGeneration() {
+    setGeneration((prev) => ({
+      ...prev,
+      isGenerating: false,
+      requestId: prev.requestId + 1,
+    }))
+    toast.info('已停止接收本次 AI 续写结果')
+  }
+
   async function handleManualSave() {
     if (!chapter?.id) {
       toast.error('章节标识缺失，无法保存')
@@ -226,6 +273,8 @@ export function ProjectEditorPage() {
       toast.error('章节标题不能为空')
       return
     }
+
+    clearAutosaveTimer()
 
     await saveChapterMutation.mutateAsync({
       targetChapterId: chapter.id,
@@ -244,12 +293,10 @@ export function ProjectEditorPage() {
       return
     }
 
-    if (autosaveTimerRef.current) {
-      window.clearTimeout(autosaveTimerRef.current)
-      autosaveTimerRef.current = null
-    }
+    clearAutosaveTimer()
 
-    setGeneration((prev) => ({ ...prev, result: '', isGenerating: true }))
+    const requestId = generation.requestId + 1
+    setGeneration((prev) => ({ ...prev, result: '', isGenerating: true, requestId }))
 
     try {
       const payload: AIGeneratePayload = {
@@ -262,16 +309,42 @@ export function ProjectEditorPage() {
       }
 
       await streamGenerate(payload, (chunk) => {
-        setGeneration((prev) => ({
-          ...prev,
-          result: `${prev.result}${chunk}`,
-        }))
+        setGeneration((prev) => {
+          if (prev.requestId !== requestId || !prev.isGenerating) {
+            return prev
+          }
+
+          return {
+            ...prev,
+            result: `${prev.result}${chunk}`,
+          }
+        })
       })
     } catch (error) {
+      setGeneration((prev) => {
+        if (prev.requestId !== requestId) {
+          return prev
+        }
+
+        return {
+          ...prev,
+          isGenerating: false,
+        }
+      })
       toast.error(error instanceof Error ? error.message : 'AI 续写失败')
-    } finally {
-      setGeneration((prev) => ({ ...prev, isGenerating: false }))
+      return
     }
+
+    setGeneration((prev) => {
+      if (prev.requestId !== requestId) {
+        return prev
+      }
+
+      return {
+        ...prev,
+        isGenerating: false,
+      }
+    })
   }
 
   function handleAcceptGeneratedText() {
@@ -283,7 +356,7 @@ export function ProjectEditorPage() {
       ? `${activeForm.plainText.trimEnd()}\n\n${generation.result.trim()}`
       : generation.result.trim()
 
-    setGeneration((prev) => ({ ...prev, result: '' }))
+    setGeneration((prev) => ({ ...prev, result: '', isGenerating: false }))
     updateFormField('plainText', mergedText)
     toast.success('已追加到正文')
   }
@@ -368,6 +441,10 @@ export function ProjectEditorPage() {
                 <StatusBadge status={chapter.status} />
                 <span className="rounded-full border border-white/10 px-3 py-1">{wordCount} 字</span>
                 <span>最近更新 {formatDate(chapter.updated_at)}</span>
+                <Button variant="outline" size="sm" onClick={() => setIsVersionDialogOpen(true)}>
+                  <History className="size-4" />
+                  版本历史
+                </Button>
               </div>
             </div>
           </CardHeader>
@@ -507,10 +584,15 @@ export function ProjectEditorPage() {
               />
             </div>
 
-            <Button className="w-full" onClick={handleGenerate} disabled={generation.isGenerating}>
-              {generation.isGenerating ? <LoaderCircle className="size-4 animate-spin" /> : <Bot className="size-4" />}
-              {generation.isGenerating ? '生成中...' : '开始 AI 续写'}
-            </Button>
+            <div className="flex flex-wrap gap-3">
+              <Button className="flex-1" onClick={handleGenerate} disabled={generation.isGenerating || saveChapterMutation.isPending}>
+                {generation.isGenerating ? <LoaderCircle className="size-4 animate-spin" /> : <Bot className="size-4" />}
+                {generation.isGenerating ? '生成中...' : '开始 AI 续写'}
+              </Button>
+              <Button variant="outline" onClick={handleStopGeneration} disabled={!generation.isGenerating}>
+                停止生成
+              </Button>
+            </div>
           </CardContent>
         </Card>
 
@@ -530,17 +612,56 @@ export function ProjectEditorPage() {
               <Button onClick={handleAcceptGeneratedText} disabled={!generation.result.trim() || generation.isGenerating}>
                 追加到正文
               </Button>
-              <Button
-                variant="outline"
-                onClick={() => setGeneration((prev) => ({ ...prev, result: '' }))}
-                disabled={!generation.result.trim()}
-              >
-                清空结果
+              <Button variant="outline" onClick={handleDiscardGeneratedText} disabled={!generation.result.trim() && !generation.isGenerating}>
+                丢弃结果
               </Button>
             </div>
           </CardContent>
         </Card>
       </aside>
+
+      <Dialog open={isVersionDialogOpen} onOpenChange={setIsVersionDialogOpen}>
+        <DialogContent className="max-w-3xl border border-white/10 bg-slate-950 text-slate-100">
+          <DialogHeader>
+            <DialogTitle>章节版本历史</DialogTitle>
+            <DialogDescription>展示当前章节保存前自动生成的历史快照，可用于快速回看最近变更。</DialogDescription>
+          </DialogHeader>
+
+          <div className="max-h-[70vh] space-y-4 overflow-y-auto pr-2">
+            {chapterVersionsQuery.isLoading ? (
+              <LoadingState label="正在加载历史版本..." />
+            ) : chapterVersionsQuery.isError ? (
+              <EmptyState
+                title="历史版本加载失败"
+                description={chapterVersionsQuery.error?.message || '未能获取章节历史版本。'}
+                action={
+                  <Button variant="outline" onClick={() => chapterVersionsQuery.refetch()}>
+                    重新加载
+                  </Button>
+                }
+              />
+            ) : chapterVersionsQuery.data && chapterVersionsQuery.data.length > 0 ? (
+              chapterVersionsQuery.data.map((version) => (
+                <Card key={version.id} className="border border-white/10 bg-white/5">
+                  <CardHeader className="space-y-2">
+                    <CardTitle className="text-base text-white">{formatDate(version.created_at)}</CardTitle>
+                    <CardDescription>
+                      {version.change_note || '自动保存快照'} · {version.word_count ?? countWords(version.plain_text ?? version.content)} 字
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="max-h-72 overflow-y-auto whitespace-pre-wrap rounded-2xl border border-white/10 bg-black/20 p-4 text-sm leading-7 text-slate-200">
+                      {version.plain_text || version.content}
+                    </div>
+                  </CardContent>
+                </Card>
+              ))
+            ) : (
+              <EmptyState title="暂无历史版本" description="当前章节还没有生成可查看的版本快照。" />
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
