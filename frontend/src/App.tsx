@@ -2,6 +2,8 @@ import { Toaster } from 'sonner'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { createBrowserRouter, Navigate, RouterProvider } from 'react-router-dom'
 
+import { TooltipProvider } from '@/components/ui/tooltip'
+
 import { AppShell } from '@/components/app-shell'
 import { queryClient } from '@/lib/query-client'
 import { AIToolboxPage } from '@/pages/ai-toolbox-page'
@@ -46,8 +48,10 @@ const router = createBrowserRouter([
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <RouterProvider router={router} />
-      <Toaster richColors position="top-right" theme="dark" />
+      <TooltipProvider>
+        <RouterProvider router={router} />
+        <Toaster richColors position="top-right" theme="dark" />
+      </TooltipProvider>
     </QueryClientProvider>
   )
 }
