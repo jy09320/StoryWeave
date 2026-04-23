@@ -35,7 +35,14 @@ import {
 } from '@/components/ui/dialog'
 import { formatDate } from '@/lib/format'
 import { queryClient } from '@/lib/query-client'
-import { getAIRuntimeSettings, streamGenerate, updateAIRuntimeSettings, type AIRuntimeSettings } from '@/services/ai'
+import {
+  getAIRuntimeSettings,
+  listAIRuntimeModels,
+  streamGenerate,
+  updateAIRuntimeSettings,
+  type AIModelOption,
+  type AIRuntimeSettings,
+} from '@/services/ai'
 import { getProject, listChapterVersions, updateChapter } from '@/services/projects'
 import type { AIGeneratePayload, Chapter, ChapterStatus, ChapterVersion, ProjectDetail } from '@/types/api'
 
@@ -47,17 +54,6 @@ const MODEL_PROVIDER_OPTIONS = [
 const FALLBACK_MODEL_BY_PROVIDER: Record<string, string> = {
   openai: 'gpt-4o',
   anthropic: 'claude-3-5-sonnet-latest',
-}
-
-const MODEL_OPTIONS: Record<string, Array<{ label: string; value: string }>> = {
-  openai: [
-    { label: 'GPT-4o', value: 'gpt-4o' },
-    { label: 'GPT-4o-mini', value: 'gpt-4o-mini' },
-  ],
-  anthropic: [
-    { label: 'Claude 3.5 Sonnet', value: 'claude-3-5-sonnet-latest' },
-    { label: 'Claude 3 Haiku', value: 'claude-3-haiku-20240307' },
-  ],
 }
 
 const CHAPTER_STATUS_OPTIONS: Array<{ label: string; value: ChapterStatus }> = [
@@ -156,6 +152,8 @@ export function ProjectEditorPage() {
     apiKey: '',
   })
   const [runtimeSettings, setRuntimeSettings] = useState<AIRuntimeSettings | null>(null)
+  const [availableModels, setAvailableModels] = useState<AIModelOption[]>([])
+  const [isLoadingModels, setIsLoadingModels] = useState(false)
   const [isSavingRuntimeSettings, setIsSavingRuntimeSettings] = useState(false)
 
   const projectQuery = useQuery<ProjectDetail, Error>({
@@ -353,13 +351,7 @@ export function ProjectEditorPage() {
     const requestId = generation.requestId + 1
     setGeneration((prev) => ({ ...prev, result: '', isGenerating: true, requestId }))
 
-    const attemptModels = Array.from(
-      new Set([
-        selectedModelId,
-        FALLBACK_MODEL_BY_PROVIDER[generationProvider],
-        ...(MODEL_OPTIONS[generationProvider] ?? []).map((option) => option.value),
-      ].filter(Boolean)),
-    )
+    const attemptModels = Array.from(new Set([selectedModelId, FALLBACK_MODEL_BY_PROVIDER[generationProvider]].filter(Boolean)))
 
     let lastError: unknown = null
 
@@ -491,9 +483,7 @@ export function ProjectEditorPage() {
   const wordCount = countWords(activeForm.plainText)
   const generationProvider = generation.provider || defaultGenerationProvider
   const generationModelId = generation.modelId || defaultGenerationModelId
-  const modelOptions = MODEL_OPTIONS[generationProvider] ?? MODEL_OPTIONS.openai
-  const currentModelIsAvailable = modelOptions.some((option) => option.value === generationModelId)
-  const selectedModelId = currentModelIsAvailable ? generationModelId : modelOptions[0]?.value ?? defaultGenerationModelId
+  const selectedModelId = generationModelId || defaultGenerationModelId
 
   useEffect(() => {
     if (!shouldBlockNavigation) {
@@ -726,6 +716,25 @@ export function ProjectEditorPage() {
               <Button variant="outline" size="sm" onClick={() => setIsProviderConfigOpen(true)}>
                 配置 AI 供应商
               </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={async () => {
+                  setIsLoadingModels(true)
+                  try {
+                    const response = await listAIRuntimeModels()
+                    setAvailableModels(response.models)
+                    toast.success(`已获取 ${response.models.length} 个可用模型`)
+                  } catch (error) {
+                    toast.error(error instanceof Error ? error.message : '获取模型列表失败')
+                  } finally {
+                    setIsLoadingModels(false)
+                  }
+                }}
+                disabled={isLoadingModels}
+              >
+                {isLoadingModels ? '获取中...' : '自动获取模型'}
+              </Button>
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -735,12 +744,11 @@ export function ProjectEditorPage() {
                 <Select
                   value={generationProvider}
                   onValueChange={(value) => {
-                    const nextModel = (MODEL_OPTIONS[value] ?? MODEL_OPTIONS.openai)[0]?.value ?? 'gpt-4o'
                     setGeneration((prev) => ({
                       ...prev,
                       result: '',
                       provider: value,
-                      modelId: nextModel,
+                      modelId: prev.modelId || selectedModelId,
                     }))
                   }}
                 >
@@ -758,22 +766,30 @@ export function ProjectEditorPage() {
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-200">模型</label>
-                <Select
+                <label className="text-sm font-medium text-slate-200" htmlFor="generation-model-id">模型</label>
+                <Input
+                  id="generation-model-id"
                   value={selectedModelId}
-                  onValueChange={(value) => setGeneration((prev) => ({ ...prev, result: '', modelId: value }))}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="选择模型" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {modelOptions.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  onChange={(event) => setGeneration((prev) => ({ ...prev, result: '', modelId: event.target.value }))}
+                  placeholder="支持手动输入任意模型名，例如 openai/gpt-5.4"
+                />
+                {availableModels.length > 0 ? (
+                  <div className="rounded-xl border border-white/10 bg-black/10 p-3 text-xs text-slate-300">
+                    <div className="mb-2">可用模型：</div>
+                    <div className="flex flex-wrap gap-2">
+                      {availableModels.slice(0, 20).map((model) => (
+                        <button
+                          key={model.id}
+                          type="button"
+                          className="rounded-full border border-white/10 px-3 py-1 hover:border-primary hover:text-white"
+                          onClick={() => setGeneration((prev) => ({ ...prev, result: '', modelId: model.id }))}
+                        >
+                          {model.id}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
               </div>
             </div>
 
@@ -845,7 +861,6 @@ export function ProjectEditorPage() {
                     setProviderConfig((prev) => ({
                       ...prev,
                       provider: value,
-                      modelId: value === 'anthropic' ? 'claude-3-5-sonnet-latest' : 'gpt-4o',
                     }))
                   }
                 >
@@ -870,7 +885,7 @@ export function ProjectEditorPage() {
                   id="provider-model-id"
                   value={providerConfig.modelId}
                   onChange={(event) => setProviderConfig((prev) => ({ ...prev, modelId: event.target.value }))}
-                  placeholder="例如 gpt-4o / claude-3-5-sonnet-latest"
+                  placeholder="支持手动填写任意模型名，例如 openai/gpt-5.4"
                 />
               </div>
             </div>
@@ -900,8 +915,9 @@ export function ProjectEditorPage() {
               />
             </div>
 
-            <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-3 text-xs leading-6 text-emerald-100">
-              当前保存的是单租户全局 AI 运行时配置。保存成功后，后端 [`/api/ai/runtime-settings`](backend/app/api/routes/runtime_settings.py) 会立即成为新的生效配置源。
+            <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-3 text-xs leading-6 text-emerald-100 space-y-2">
+              <div>当前保存的是单租户全局 AI 运行时配置。保存成功后，后端 [`/api/ai/runtime-settings`](backend/app/api/routes/runtime_settings.py) 会立即成为新的生效配置源。</div>
+              <div>模型名不再限制死为内置选项。你可以手动填写任意第三方中转站支持的模型名，也可以在保存配置后点击“自动获取模型”从 [`/v1/models`](backend/app/api/routes/runtime_settings.py:58) 拉取可用模型。</div>
             </div>
 
             <div className="flex justify-end gap-3">

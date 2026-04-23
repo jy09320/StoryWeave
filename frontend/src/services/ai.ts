@@ -18,6 +18,17 @@ export interface AIRuntimeSettingsPayload {
   api_key?: string | null
 }
 
+export interface AIModelOption {
+  id: string
+  owned_by: string | null
+}
+
+export interface AIModelListResponse {
+  provider: string
+  source: string
+  models: AIModelOption[]
+}
+
 function buildSseUrl() {
   return `${baseURL}/ai/generate`
 }
@@ -46,6 +57,15 @@ export async function updateAIRuntimeSettings(payload: AIRuntimeSettingsPayload)
   }
 
   return (await response.json()) as AIRuntimeSettings
+}
+
+export async function listAIRuntimeModels() {
+  const response = await fetch(`${baseURL}/ai/runtime-settings/models`)
+  if (!response.ok) {
+    const text = await response.text()
+    throw new Error(text || '获取可用模型列表失败')
+  }
+  return (await response.json()) as AIModelListResponse
 }
 
 export async function streamGenerate(payload: AIGeneratePayload, onMessage: (chunk: string) => void) {

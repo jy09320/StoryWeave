@@ -237,6 +237,17 @@ class AIRuntimeSettingResponse(BaseModel):
     updated_at: datetime | None = None
 
 
+class AIModelOptionResponse(BaseModel):
+    id: str
+    owned_by: str | None = None
+
+
+class AIModelListResponse(BaseModel):
+    provider: str
+    source: str
+    models: list[AIModelOptionResponse]
+
+
 class AIGenerateRequest(BaseModel):
     project_id: str
     chapter_id: str | None = None
