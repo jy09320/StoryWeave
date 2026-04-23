@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { Bot, ChevronLeft, FileText, History, LoaderCircle, Save, Sparkles, WandSparkles } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -87,6 +87,20 @@ interface ProviderConfigFormState {
 }
 
 const defaultGenerationInstruction = '请基于当前正文继续写下去，保持风格一致，并自然衔接上一段。'
+const TOOLBOX_RESULT_DRAFT_KEY = 'storyweave.toolbox-result-draft'
+
+type ToolboxTaskType = 'continue' | 'rewrite' | 'consistency'
+type ToolboxDraftApplyMode = 'append' | 'replace'
+
+interface ToolboxResultDraft {
+  projectId: string
+  chapterId: string
+  task: ToolboxTaskType
+  result: string
+  sourceInput: string
+  createdAt: string
+  mode: ToolboxDraftApplyMode
+}
 
 function getChapterById(project: ProjectDetail | undefined, chapterId: string | undefined) {
   if (!project || !chapterId) {
@@ -120,6 +134,7 @@ function countWords(text: string) {
 
 export function ProjectEditorPage() {
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const { projectId, chapterId } = useParams<{ projectId: string; chapterId: string }>()
   const autosaveTimerRef = useRef<number | null>(null)
   const allowNextNavigationRef = useRef(false)
@@ -282,6 +297,47 @@ export function ProjectEditorPage() {
       [chapter.id]: true,
     }))
     scheduleAutosave(chapter.id, next)
+  }
+
+  function consumeToolboxDraft() {
+    if (!projectId || !chapterId) {
+      return null
+    }
+
+    const rawDraft = window.sessionStorage.getItem(TOOLBOX_RESULT_DRAFT_KEY)
+    if (!rawDraft) {
+      return null
+    }
+
+    try {
+      const parsed = JSON.parse(rawDraft) as ToolboxResultDraft
+      if (parsed.projectId !== projectId || parsed.chapterId !== chapterId || !parsed.result?.trim()) {
+        return null
+      }
+
+      return parsed
+    } catch {
+      return null
+    }
+  }
+
+  function clearToolboxDraft() {
+    window.sessionStorage.removeItem(TOOLBOX_RESULT_DRAFT_KEY)
+  }
+
+  function applyToolboxDraft(draft: ToolboxResultDraft) {
+    const nextPlainText = draft.mode === 'replace'
+      ? draft.result.trim()
+      : (activeForm.plainText.trim()
+          ? `${activeForm.plainText.trimEnd()}\n\n${draft.result.trim()}`
+          : draft.result.trim())
+
+    updateFormField('plainText', nextPlainText)
+    setGeneration((prev) => ({ ...prev, result: draft.result.trim(), isGenerating: false }))
+    clearToolboxDraft()
+    searchParams.delete('fromToolbox')
+    setSearchParams(searchParams, { replace: true })
+    toast.success(draft.mode === 'replace' ? '工具箱结果已覆盖到当前草稿' : '工具箱结果已追加到当前正文草稿')
   }
 
   function handleTitleChange(event: ChangeEvent<HTMLInputElement>) {
@@ -496,6 +552,25 @@ export function ProjectEditorPage() {
   const selectedModelId = generationModelId || defaultGenerationModelId
 
   useEffect(() => {
+    if (!chapter?.id || searchParams.get('fromToolbox') !== '1') {
+      return
+    }
+
+    const draft = consumeToolboxDraft()
+    if (!draft) {
+      return
+    }
+
+    const timer = window.setTimeout(() => {
+      applyToolboxDraft(draft)
+    }, 0)
+
+    return () => {
+      window.clearTimeout(timer)
+    }
+  }, [chapter?.id, searchParams])
+
+  useEffect(() => {
     if (!shouldBlockNavigation) {
       allowNextNavigationRef.current = false
       return
@@ -626,7 +701,7 @@ export function ProjectEditorPage() {
                   <span>{projectQuery.data.title}</span>
                 </div>
                 <CardTitle className="text-2xl text-white">章节编辑器</CardTitle>
-                <CardDescription>当前使用基础文本编辑方案，为后续富文本编辑器接入保留边界。也可以从统一 AI 工具箱查看能力分组与后续路线。</CardDescription>
+                <CardDescription>当前编辑器已支持基础写作、AI 续写与版本恢复；也可以从统一 AI 工具箱发起任务，再把结果带回这里继续收口。</CardDescription>
               </div>
               <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
                 <StatusBadge status={chapter.status} />
@@ -710,9 +785,9 @@ export function ProjectEditorPage() {
         <Card className="border border-primary/20 bg-primary/5">
           <CardContent className="flex flex-col gap-3 py-5 sm:flex-row sm:items-center sm:justify-between">
             <div className="space-y-1">
-              <div className="text-sm font-medium text-white">需要更多 AI 写作能力？</div>
+              <div className="text-sm font-medium text-white">需要切换到 AI 工具箱任务流？</div>
               <p className="text-sm leading-6 text-slate-300">
-                可前往统一的 AI 工具箱查看续写、改写、润色与设定辅助的整体规划，再返回当前章节继续工作。
+                可前往统一的 AI 工具箱执行续写、改写与设定检查任务，生成结果后再直接带回当前章节继续保存。
               </p>
             </div>
             <div className="flex flex-wrap gap-2">

@@ -9,7 +9,7 @@ import {
   Sparkles,
   WandSparkles,
 } from 'lucide-react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 
 import { EmptyState } from '@/components/empty-state'
@@ -75,7 +75,20 @@ const TASK_OPTIONS = [
   },
 ] as const
 
+const TOOLBOX_RESULT_DRAFT_KEY = 'storyweave.toolbox-result-draft'
+
 type ToolboxTaskType = (typeof TASK_OPTIONS)[number]['value']
+
+type ToolboxDraftApplyMode = 'append' | 'replace'
+
+interface ToolboxResultDraft {
+  projectId: string
+  chapterId: string
+  task: ToolboxTaskType
+  result: string
+  sourceInput: string
+  createdAt: string
+}
 
 interface GenerationState {
   instruction: string
@@ -114,6 +127,7 @@ function buildContextText(project: ProjectDetail | undefined, chapter: Chapter |
 }
 
 export function AIToolboxPage() {
+  const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const initialTask = (searchParams.get('task') as ToolboxTaskType | null) ?? 'continue'
   const projectId = searchParams.get('projectId') ?? ''
@@ -194,6 +208,45 @@ export function AIToolboxPage() {
       requestId: prev.requestId + 1,
     }))
     toast.info('已停止接收当前 AI 结果')
+  }
+
+  function persistResultDraft(mode: ToolboxDraftApplyMode) {
+    if (!selectedChapter || !projectId || !generation.result.trim()) {
+      return false
+    }
+
+    const draft: ToolboxResultDraft = {
+      projectId,
+      chapterId: selectedChapter.id,
+      task: activeTask,
+      result: generation.result.trim(),
+      sourceInput: generation.input.trim(),
+      createdAt: new Date().toISOString(),
+    }
+
+    window.sessionStorage.setItem(TOOLBOX_RESULT_DRAFT_KEY, JSON.stringify({ ...draft, mode }))
+    return true
+  }
+
+  function handleSendToEditor(mode: ToolboxDraftApplyMode) {
+    if (!selectedChapter || !projectId) {
+      toast.error('当前缺少章节上下文，无法把结果带回编辑器')
+      return
+    }
+
+    if (!generation.result.trim()) {
+      toast.error('当前没有可带回编辑器的结果')
+      return
+    }
+
+    const saved = persistResultDraft(mode)
+    if (!saved) {
+      toast.error('结果暂存失败，请稍后重试')
+      return
+    }
+
+    toast.success(mode === 'append' ? '结果已带回编辑器，可直接追加到正文' : '结果已带回编辑器，可直接覆盖当前草稿')
+    navigate(`/projects/${projectId}/editor/${selectedChapter.id}?fromToolbox=1`)
   }
 
   function handleFillFromChapter() {
@@ -545,7 +598,7 @@ export function AIToolboxPage() {
           <Card className="border border-white/10 bg-white/6 shadow-lg shadow-black/5">
             <CardHeader>
               <CardTitle className="text-xl text-white">{taskMeta.resultTitle}</CardTitle>
-              <CardDescription>生成结果会保留在当前页面，便于复制、比对或回到编辑器继续处理。</CardDescription>
+              <CardDescription>生成结果可直接复制，或带回章节编辑器作为草稿继续处理。</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="min-h-[260px] rounded-2xl border border-white/10 bg-black/10 p-4 text-sm leading-7 text-slate-200 whitespace-pre-wrap">
@@ -568,13 +621,15 @@ export function AIToolboxPage() {
                   复制结果
                 </Button>
                 {selectedChapter && projectId ? (
-                  <Link
-                    to={`/projects/${projectId}/editor/${selectedChapter.id}`}
-                    className="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground transition hover:opacity-90"
-                  >
-                    回到编辑器处理结果
-                    <ArrowRight className="size-4" />
-                  </Link>
+                  <>
+                    <Button variant="outline" onClick={() => handleSendToEditor('append')} disabled={!generation.result.trim()}>
+                      带回编辑器并追加
+                    </Button>
+                    <Button onClick={() => handleSendToEditor('replace')} disabled={!generation.result.trim()}>
+                      带回编辑器并覆盖草稿
+                      <ArrowRight className="size-4" />
+                    </Button>
+                  </>
                 ) : null}
               </div>
             </CardContent>
