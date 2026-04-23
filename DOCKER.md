@@ -32,7 +32,7 @@ docker compose --env-file .env.docker up --build -d
 
 - 前端：`http://localhost:3001`
 - 后端健康检查：`http://localhost:8001/api/health`
-- PostgreSQL：`localhost:5432`
+- PostgreSQL：`localhost:5433`
 
 ## 3. 停止服务
 
