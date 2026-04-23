@@ -3,12 +3,13 @@
 > 基于 [`PLAN.md`](../PLAN.md)、[`plans/mvp-phase1-next-step.md`](./mvp-phase1-next-step.md) 与 [`plans/phase1-manual-acceptance-checklist.md`](./phase1-manual-acceptance-checklist.md) 对当前项目状态进行收口判断。
 
 ## 结论摘要
-当前 StoryWeave 已完成 Phase 1 主链路的大部分产品闭环，并在 Phase 1.5 里提前完成了关键的信息架构与体验升级。项目现在处于：**MVP 主链路可用，正在进行手工验收沉淀与收口判断**。
+当前 StoryWeave 的代码与文档状态已经表明：**Phase 1 与 Phase 1.5 已完成，项目已正式进入 Phase 2 执行阶段**。
 
 更准确地说：
-- **项目 / 章节 / 编辑器 / AI 续写 / 版本历史 / 防误操作** 这些 Phase 1 核心能力已经具备
-- **首页 / 项目工作台 / 编辑器 AI 面板 / AI 工具箱入口** 这些 Phase 1.5 的体验升级已经先行完成
-- 当前真正缺的不是“还能不能用”，而是“是否已经完成正式验收记录，以及是否要继续扩张 Phase 1 范围”
+- **项目 / 章节 / 编辑器 / AI 续写 / 版本历史 / 防误操作** 这些 Phase 1 核心能力已经完成并可支撑主链路
+- **首页 / 项目工作台 / 编辑器 AI 面板 / AI 工具箱入口** 这些 Phase 1.5 的体验升级已经落地
+- [`plans/phase1-completed-summary.md`](./phase1-completed-summary.md) 与 [`PLAN.md`](../PLAN.md) 已将 Phase 1 / 1.5 结论归档为完成状态
+- 当前重点不再是补做 Phase 1 收口判断，而是围绕角色库、项目角色关联、世界观设定、AI 上下文注入继续推进 Phase 2
 
 ---
 
@@ -69,52 +70,37 @@
 
 ---
 
-## 二、当前仍未完成的事项判断
+## 二、当前仍需跟踪的事项判断
 
-### 1. 正式手工验收记录：未完成
-虽然已有：
-- 构建验证
-- Docker 验证
-- 主流程开发完成
+### 1. Phase 1 收尾类事项：已从主阶段目标中移出
+以下内容仍然值得记录，但已不再阻塞阶段推进：
+- Wangeditor/富文本编辑器升级
+- AI 服务端取消、重试、生成日志
+- 版本历史增强体验
+- 前端包体与懒加载优化
 
-但仍缺少：
-- 一份逐项执行并填写结果的验收记录
+判断：**这些项应统一进入后续增强池，而不是继续作为 Phase 1 的门槛条件**。
 
-目前已新增 [`plans/phase1-manual-acceptance-checklist.md`](./phase1-manual-acceptance-checklist.md)，这解决了“没有清单”的问题，但还没有形成“执行后的结果记录”。
+### 2. 当前代码已补齐 Phase 2 的基础能力骨架
+从当前实现可见，Phase 2 已不只是规划状态，而是已经进入“部分能力落地”状态：
+- [`backend/app/models/project.py`](../backend/app/models/project.py) 已包含 [`Character`](../backend/app/models/project.py:74)、[`ProjectCharacter`](../backend/app/models/project.py:95)、[`WorldSetting`](../backend/app/models/project.py:112)
+- [`backend/app/api/routes/characters.py`](../backend/app/api/routes/characters.py) 已提供角色 CRUD
+- [`backend/app/api/routes/project_settings.py`](../backend/app/api/routes/project_settings.py) 已提供项目角色关联与世界观设置接口
+- [`backend/app/api/routes/projects.py`](../backend/app/api/routes/projects.py) 的项目详情聚合接口已返回 `project_characters` 与 `world_setting`
+- [`frontend/src/pages/project-workspace-page.tsx`](../frontend/src/pages/project-workspace-page.tsx) 已接入角色绑定、角色编辑、世界观保存等交互能力
+- [`frontend/src/services/projects.ts`](../frontend/src/services/projects.ts) 与 [`frontend/src/types/api.ts`](../frontend/src/types/api.ts) 已完成对应前端服务与类型定义
 
-判断：**这是当前最应该继续推进的 Phase 1 任务**。
+判断：**项目当前并非“等待进入 Phase 2”，而是“Phase 2 Step 1~3 已部分实现，文档需要同步更新进度”**。
 
-### 2. Wangeditor 是否纳入 Phase 1：未决
-[`PLAN.md`](../PLAN.md) 原始 Phase 1 里提到富文本编辑器方向，但当前实际实现仍是基础文本编辑方案。
+### 3. 当前主要差距已转移到 Phase 2 后续闭环
+结合 [`plans/phase2-detailed-plan.md`](./phase2-detailed-plan.md) 与现有代码，当前仍待补齐的重点变成：
+- 角色库页面体验与筛选/编辑细节继续完善
+- 项目工作台中的角色/世界观表达继续打磨
+- 独立世界观页面与路由是否拆出仍待明确
+- 编辑器与 AI 工具箱对结构化上下文的消费闭环仍需接入和验证
+- Phase 2 对应的验收清单与阶段总结文档尚未沉淀
 
-结合当前状态判断：
-- 现有编辑器已经满足 MVP 闭环
-- 当前更缺的是验收收口，而不是继续扩大改造范围
-- 如果现在强行引入富文本，会把收口阶段重新拉回大功能开发阶段
-
-判断：**建议不纳入当前 Phase 1 收口，单独作为后续编辑器升级专题评估**。
-
-### 3. AI 服务端取消 / 重试 / 更细日志：未完成
-当前状态：
-- 前端“停止生成”本质是停止接收结果
-- 后端还没有完整的服务端取消机制
-- 缺少更系统的失败重试与生成日志
-
-判断：**属于 AI 深化体验，不阻塞 Phase 1 主链路验收，但应作为后续增强项列入待办**。
-
-### 4. 版本历史增强体验：未完成
-当前已有最小闭环，但还缺：
-- 版本对比
-- 恢复确认
-- 恢复后备注
-- 更清晰的来源说明
-
-判断：**不阻塞 Phase 1 收口，但适合作为收口后的增强项**。
-
-### 5. 前端包体优化：未完成
-[`npm run build`](../frontend/package.json) 已通过，但仍有 chunk 偏大的告警。
-
-判断：**属于工程优化项，不阻塞当前 Phase 1 可用性判断**。
+判断：**当前最需要推进的不是重新判断 Phase 1，而是把 Phase 2 的“已实现 / 未完成 / 下一步”明确写清楚**。
 
 ---
 
@@ -123,47 +109,45 @@
 ### 总判断
 当前项目状态可归纳为：
 
-> **Phase 1 主链路已经达到“可验收”水平，Phase 1.5 的关键体验升级也已提前落地；下一步应优先执行手工验收与结论归档，而不是继续扩张功能范围。**
+> **Phase 1 / Phase 1.5 已完成归档，Phase 2 已开始落地且已有部分代码实现；当前工作应转为更新 Phase 2 进度、补齐剩余闭环并形成新的阶段验收标准。**
 
-### 是否可以认为 Phase 1 已完成？
+### 当前阶段应如何定义？
 更严谨的说法是：
-- **开发意义上：基本完成**
-- **验收意义上：尚未正式完成**
-
-因为当前缺的主要是：
-- 手工验收执行记录
-- 对 Wangeditor / AI 深化 / 版本增强是否纳入当前阶段的正式取舍结论
+- **历史阶段上：Phase 1 与 Phase 1.5 已完成**
+- **执行阶段上：Phase 2 进行中**
+- **交付状态上：Phase 2 已完成部分数据层、接口层与工作台集成，但尚未完成 AI 上下文闭环与阶段文档沉淀**
 
 ---
 
 ## 四、建议的下一步执行顺序
 
-### 优先级 1：按清单完成一次手工验收记录
-直接基于 [`plans/phase1-manual-acceptance-checklist.md`](./phase1-manual-acceptance-checklist.md) 逐项执行并填写：
-- 首页与 AI 工具箱入口
-- 项目与章节主流程
-- 编辑器保存
-- AI 续写
-- 版本恢复
-- 离开提醒
+### 优先级 1：更新 Phase 2 当前进度文档
+建议先把当前代码现实与原计划重新对齐，明确：
+- 已完成：角色数据模型、项目角色关联模型、世界观模型
+- 已完成：角色 CRUD、项目角色关联接口、世界观设置接口
+- 已完成：项目详情聚合返回 Phase 2 相关字段
+- 已完成：项目工作台初步接入角色与世界观维护能力
+- 未完成：编辑器 / AI 工具箱上下文消费闭环
+- 未完成：独立世界观页面、Phase 2 验收文档、阶段总结文档
 
-这是当前最核心的下一步。
+### 优先级 2：把 Phase 2 剩余任务重新拆成可执行队列
+建议按最小闭环拆分为：
+1. 文档同步与状态校准
+2. 独立世界观页与路由收口
+3. 编辑器接入项目角色/世界观上下文
+4. AI 工具箱接入项目上下文
+5. Phase 2 验收清单与阶段总结沉淀
 
-### 优先级 2：产出一份“Phase 1 收口决定”
-建议明确写清：
-- Wangeditor 不纳入本轮 Phase 1 收口
-- AI 服务端取消 / 重试 / 生成日志不纳入本轮 Phase 1 收口
-- 版本历史增强不纳入本轮 Phase 1 收口
-- 以上内容转为后续增强项或 Phase 1.x / Phase 2 前置专题
-
-### 优先级 3：在验收完成后再决定是否进入下一轮开发
-验收完成后，可以二选一：
-- 进入 Phase 1 正式收尾与文档归档
-- 或进入 Phase 2 设计准备（角色库 / 世界观 / Prompt 模板）
+### 优先级 3：将历史增强项归档到后续增强池
+将以下内容从当前主线中剥离，避免干扰 Phase 2：
+- 富文本编辑器升级
+- AI 服务端取消 / 重试 / 日志体系
+- 版本历史增强
+- 包体优化与懒加载
 
 ---
 
 ## 五、推荐结论
 当前最合适的阶段结论是：
 
-> **Phase 1 可进入正式验收与收口阶段，不建议继续在当前阶段引入 Wangeditor 或更重的 AI 增强需求；应先完成手工验收记录，再把剩余增强项转入下一轮规划。**
+> **StoryWeave 当前应视为“Phase 1/1.5 已完成，Phase 2 已部分实现并继续推进中”。下一步不应回到 Phase 1 收口讨论，而应更新 Phase 2 进度基线，并围绕 AI 上下文接入闭环、独立设定页面和阶段验收文档继续推进。**
