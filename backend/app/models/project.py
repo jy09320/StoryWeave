@@ -1,7 +1,7 @@
 import ulid
 from datetime import datetime
 
-from sqlalchemy import String, Text, Integer, DateTime, ForeignKey, func
+from sqlalchemy import Boolean, String, Text, Integer, DateTime, ForeignKey, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -60,3 +60,16 @@ class ChapterVersion(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     chapter: Mapped["Chapter"] = relationship(back_populates="versions")
+
+
+class AIRuntimeSetting(Base):
+    __tablename__ = "ai_runtime_settings"
+
+    id: Mapped[str] = mapped_column(String(26), primary_key=True, default=generate_ulid)
+    provider: Mapped[str] = mapped_column(String(50), nullable=False, default="openai")
+    model_id: Mapped[str] = mapped_column(String(100), nullable=False, default="gpt-4o")
+    base_url: Mapped[str | None] = mapped_column(String(500))
+    api_key: Mapped[str | None] = mapped_column(Text)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())

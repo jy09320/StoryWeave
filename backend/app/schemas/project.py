@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field, field_validator
 PROJECT_TYPE_VALUES = {"original", "fanfiction", "acg", "tv_movie"}
 PROJECT_STATUS_VALUES = {"draft", "active", "paused", "completed"}
 CHAPTER_STATUS_VALUES = {"draft", "writing", "review", "done"}
+AI_PROVIDER_VALUES = {"openai", "anthropic"}
 
 
 def normalize_optional_text(value: str | None) -> str | None:
@@ -197,6 +198,43 @@ class ProjectResponse(BaseModel):
 
 class ProjectDetailResponse(ProjectResponse):
     chapters: list[ChapterResponse]
+
+
+class AIRuntimeSettingUpdate(BaseModel):
+    provider: str = Field(default="openai", max_length=50)
+    model_id: str = Field(min_length=1, max_length=100)
+    base_url: str | None = Field(default=None, max_length=500)
+    api_key: str | None = None
+
+    @field_validator("provider")
+    @classmethod
+    def validate_provider(cls, value: str) -> str:
+        stripped = value.strip()
+        if stripped not in AI_PROVIDER_VALUES:
+            raise ValueError("Invalid AI provider")
+        return stripped
+
+    @field_validator("model_id")
+    @classmethod
+    def validate_model_id(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("Model id cannot be empty")
+        return stripped
+
+    @field_validator("base_url", "api_key", mode="before")
+    @classmethod
+    def normalize_runtime_setting_fields(cls, value: str | None) -> str | None:
+        return normalize_optional_text(value)
+
+
+class AIRuntimeSettingResponse(BaseModel):
+    provider: str
+    model_id: str
+    base_url: str | None
+    api_key_masked: str | None
+    source: str
+    updated_at: datetime | None = None
 
 
 class AIGenerateRequest(BaseModel):
