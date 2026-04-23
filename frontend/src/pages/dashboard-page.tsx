@@ -1,7 +1,19 @@
 import { useMemo, useState, type Dispatch, type FormEvent, type ReactNode, type SetStateAction } from 'react'
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { useMutation, useQueries, useQuery } from '@tanstack/react-query'
 import { Link, useNavigate } from 'react-router-dom'
-import { BookOpen, BrainCircuit, PenLine, PenSquare, Plus, Sparkles, Swords, Trash2, WandSparkles } from 'lucide-react'
+import {
+  BookOpen,
+  BrainCircuit,
+  Clock3,
+  FileText,
+  PenLine,
+  PenSquare,
+  Plus,
+  Sparkles,
+  Swords,
+  Trash2,
+  WandSparkles,
+} from 'lucide-react'
 import { toast } from 'sonner'
 
 import { EmptyState } from '@/components/empty-state'
@@ -42,8 +54,9 @@ import {
   deleteProject,
   listProjects,
   updateProject,
+  getProject,
 } from '@/services/projects'
-import type { Project, ProjectPayload, ProjectStatus, ProjectType } from '@/types/api'
+import type { Chapter, Project, ProjectDetail, ProjectPayload, ProjectStatus, ProjectType } from '@/types/api'
 
 const PROJECT_TYPE_OPTIONS: Array<{ label: string; value: ProjectType }> = [
   { label: '原创', value: 'original' },
@@ -205,6 +218,44 @@ export function DashboardPage() {
     setEditForm(getInitialFormState(project))
   }
 
+  const projects = projectsQuery.data ?? []
+  const recentProjects = [...projects]
+    .sort((left, right) => new Date(right.updated_at).getTime() - new Date(left.updated_at).getTime())
+    .slice(0, 3)
+
+  const recentProjectDetailsQueries = useQueries({
+    queries: recentProjects.map((project) => ({
+      queryKey: ['project', project.id],
+      queryFn: () => getProject(project.id),
+      staleTime: 60_000,
+      enabled: !projectsQuery.isLoading && !projectsQuery.isError,
+    })),
+  })
+
+  const recentChapterCards = useMemo(() => {
+    return recentProjectDetailsQueries
+      .flatMap((query, index) => {
+        const project = recentProjects[index]
+        const projectDetail = query.data as ProjectDetail | undefined
+
+        if (!project || !projectDetail) {
+          return []
+        }
+
+        return projectDetail.chapters
+          .filter((chapter: Chapter) => Boolean(chapter.updated_at))
+          .map((chapter: Chapter) => ({
+            project,
+            chapter,
+          }))
+      })
+      .sort((left, right) => new Date(right.chapter.updated_at).getTime() - new Date(left.chapter.updated_at).getTime())
+      .slice(0, 4)
+  }, [recentProjectDetailsQueries, recentProjects])
+
+  const isRecentChaptersLoading = recentProjectDetailsQueries.some((query) => query.isLoading)
+  const recentChaptersError = recentProjectDetailsQueries.find((query) => query.isError)?.error
+
   if (projectsQuery.isLoading) {
     return <LoadingState label="正在加载项目面板..." />
   }
@@ -222,11 +273,6 @@ export function DashboardPage() {
       />
     )
   }
-
-  const projects = projectsQuery.data ?? []
-  const recentProjects = [...projects]
-    .sort((left, right) => new Date(right.updated_at).getTime() - new Date(left.updated_at).getTime())
-    .slice(0, 3)
 
   return (
     <div className="space-y-6 pb-8">
@@ -317,49 +363,79 @@ export function DashboardPage() {
       </section>
 
       <section className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
-        <Card className="border border-white/10 bg-white/6 shadow-lg shadow-black/5">
-          <CardHeader>
-            <CardTitle className="text-xl text-white">最近继续写作</CardTitle>
-            <CardDescription>按最后更新时间排列，优先把你带回最近正在推进的项目。</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {recentProjects.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-white/10 bg-black/10 px-4 py-6 text-sm leading-7 text-slate-400">
-                还没有最近作品记录。创建项目后，这里会显示你最近编辑的作品与回到工作台入口。
-              </div>
-            ) : (
-              recentProjects.map((project) => (
-                <div
-                  key={project.id}
-                  className="flex flex-col gap-3 rounded-2xl border border-white/10 bg-black/10 p-4 sm:flex-row sm:items-center sm:justify-between"
-                >
-                  <div className="space-y-2">
-                    <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
-                      <StatusBadge status={project.status} />
-                      <span className="rounded-full border border-white/10 px-2.5 py-1">{formatProjectType(project.type)}</span>
-                      <span>最近更新 {formatDate(project.updated_at)}</span>
-                    </div>
-                    <div className="text-base font-medium text-white">{project.title}</div>
-                    <p className="text-sm leading-6 text-slate-300">
-                      {project.description?.trim() || '还没有项目简介，可进入项目后继续补充主线、风格和创作边界。'}
-                    </p>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-2">
-                    <Button variant="outline" size="sm" onClick={() => openEditDialog(project)}>
-                      编辑
-                    </Button>
-                    <Link
-                      to={`/projects/${project.id}`}
-                      className="inline-flex h-9 items-center justify-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground transition hover:opacity-90"
-                    >
-                      继续写作
-                    </Link>
-                  </div>
+        <div className="grid gap-4">
+          <Card className="border border-white/10 bg-white/6 shadow-lg shadow-black/5">
+            <CardHeader>
+              <CardTitle className="text-xl text-white">最近继续写作</CardTitle>
+              <CardDescription>按最后更新时间排序，优先把你带回最近正在推进的项目。</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {recentProjects.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-white/10 bg-black/10 px-4 py-6 text-sm leading-7 text-slate-400">
+                  还没有最近作品记录。创建项目后，这里会显示你最近编辑的作品与回到工作台入口。
                 </div>
-              ))
-            )}
-          </CardContent>
-        </Card>
+              ) : (
+                recentProjects.map((project) => (
+                  <div
+                    key={project.id}
+                    className="flex flex-col gap-3 rounded-2xl border border-white/10 bg-black/10 p-4 sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    <div className="space-y-2">
+                      <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
+                        <StatusBadge status={project.status} />
+                        <span className="rounded-full border border-white/10 px-2.5 py-1">{formatProjectType(project.type)}</span>
+                        <span>最近更新 {formatDate(project.updated_at)}</span>
+                      </div>
+                      <div className="text-base font-medium text-white">{project.title}</div>
+                      <p className="text-sm leading-6 text-slate-300">
+                        {project.description?.trim() || '还没有项目简介，可进入项目后继续补充主线、风格和创作边界。'}
+                      </p>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <Button variant="outline" size="sm" onClick={() => openEditDialog(project)}>
+                        编辑
+                      </Button>
+                      <Link
+                        to={`/projects/${project.id}`}
+                        className="inline-flex h-9 items-center justify-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground transition hover:opacity-90"
+                      >
+                        继续写作
+                      </Link>
+                    </div>
+                  </div>
+                ))
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className="border border-white/10 bg-white/6 shadow-lg shadow-black/5">
+            <CardHeader>
+              <CardTitle className="text-xl text-white">最近编辑章节</CardTitle>
+              <CardDescription>直接回到上次推进的章节，减少从项目页重新定位的步骤。</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {recentProjects.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-white/10 bg-black/10 px-4 py-6 text-sm leading-7 text-slate-400">
+                  先创建项目和章节，这里会自动整理最近编辑过的章节入口。
+                </div>
+              ) : recentChaptersError ? (
+                <div className="rounded-2xl border border-dashed border-rose-500/30 bg-rose-500/5 px-4 py-6 text-sm leading-7 text-rose-200">
+                  最近章节加载失败，请稍后刷新页面后重试。
+                </div>
+              ) : isRecentChaptersLoading && recentChapterCards.length === 0 ? (
+                <LoadingState label="正在整理最近章节..." />
+              ) : recentChapterCards.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-white/10 bg-black/10 px-4 py-6 text-sm leading-7 text-slate-400">
+                  最近项目里还没有章节记录，可先进入工作台创建章节结构。
+                </div>
+              ) : (
+                recentChapterCards.map(({ project, chapter }) => (
+                  <RecentChapterCard key={chapter.id} project={project} chapter={chapter} />
+                ))
+              )}
+            </CardContent>
+          </Card>
+        </div>
 
         <Card className="border border-white/10 bg-white/6 shadow-lg shadow-black/5">
           <CardHeader>
@@ -550,6 +626,53 @@ function InfoBlock({ label, value }: { label: string; value: string }) {
     <div className="rounded-2xl border border-white/10 bg-black/10 p-3">
       <p className="text-xs uppercase tracking-[0.2em] text-slate-500">{label}</p>
       <p className="mt-2 text-sm text-slate-200">{value}</p>
+    </div>
+  )
+}
+
+function RecentChapterCard({ project, chapter }: { project: Project; chapter: Chapter }) {
+  const chapterSummary =
+    chapter.summary?.trim() || chapter.notes?.trim() || '还没有章节摘要，可直接回到编辑器继续补正文并补充摘要。'
+
+  return (
+    <div className="rounded-2xl border border-white/10 bg-black/10 p-4">
+      <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
+        <StatusBadge status={project.status} />
+        <span className="rounded-full border border-white/10 px-2.5 py-1">{project.title}</span>
+        <span>章节更新 {formatDate(chapter.updated_at)}</span>
+      </div>
+
+      <div className="mt-3 flex items-start justify-between gap-4">
+        <div className="space-y-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-xs text-slate-300">
+              <FileText className="size-3.5 text-primary" />
+              第 {chapter.order_index} 章
+            </span>
+            <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-xs text-slate-300">
+              <Clock3 className="size-3.5 text-primary" />
+              {chapter.word_count} 字
+            </span>
+          </div>
+          <h3 className="text-base font-medium text-white">{chapter.title}</h3>
+          <p className="text-sm leading-6 text-slate-300">{chapterSummary}</p>
+        </div>
+
+        <div className="flex shrink-0 flex-col gap-2 sm:flex-row">
+          <Link
+            to={`/projects/${project.id}`}
+            className="inline-flex items-center justify-center rounded-xl border border-white/10 px-3 py-2 text-sm text-slate-200 transition hover:border-primary/40 hover:text-white"
+          >
+            打开工作台
+          </Link>
+          <Link
+            to={`/projects/${project.id}/editor/${chapter.id}`}
+            className="inline-flex items-center justify-center rounded-xl bg-primary px-3 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90"
+          >
+            继续此章节
+          </Link>
+        </div>
+      </div>
     </div>
   )
 }
