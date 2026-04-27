@@ -22,6 +22,7 @@ import {
   readEditorUtilityContext,
   type EditorUtilityContext,
 } from '@/lib/editor-utility-context'
+import { writeToolboxInputDraft } from '@/lib/ai-toolbox-context'
 import { formatDate } from '@/lib/format'
 import { getProject } from '@/services/projects'
 import type { ProjectDetail } from '@/types/api'
@@ -562,6 +563,15 @@ export function AppShell() {
                       <div className="mt-3 flex flex-wrap gap-2">
                         <NavLink
                           to={`/ai-toolbox?task=${actionToToolboxTask[scopedEditorUtilityContext.action]}&projectId=${projectId}${chapterId ? `&chapterId=${chapterId}` : ''}`}
+                          onClick={() =>
+                            writeToolboxInputDraft({
+                              task: actionToToolboxTask[scopedEditorUtilityContext.action],
+                              projectId: projectId || null,
+                              chapterId: chapterId || null,
+                              input: scopedEditorUtilityContext.selectedText,
+                              createdAt: new Date().toISOString(),
+                            })
+                          }
                           className="inline-flex h-8 items-center justify-center rounded-md border border-amber-500/20 bg-amber-500/10 px-3 text-xs text-amber-100 transition hover:bg-amber-500/20"
                         >
                           带到工具箱

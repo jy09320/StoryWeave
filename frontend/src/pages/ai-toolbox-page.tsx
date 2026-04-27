@@ -25,6 +25,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
+import { readToolboxInputDraft, writeToolboxInputDraft } from '@/lib/ai-toolbox-context'
 import { formatDate } from '@/lib/format'
 import { getAIRuntimeSettings, listAIRuntimeModels, streamGenerate, type AIModelOption } from '@/services/ai'
 import { getProject } from '@/services/projects'
@@ -207,6 +208,29 @@ export function AIToolboxPage() {
   useEffect(() => {
     window.sessionStorage.setItem(TOOLBOX_HISTORY_KEY, JSON.stringify(history))
   }, [history])
+
+  useEffect(() => {
+    const draft = readToolboxInputDraft()
+    if (!draft || !draft.input.trim()) {
+      return
+    }
+
+    const sameProject = (draft.projectId ?? '') === projectId
+    const sameChapter = (draft.chapterId ?? '') === chapterId
+    const sameTask = draft.task === activeTask
+
+    if (!sameProject || !sameChapter || !sameTask) {
+      return
+    }
+
+    setGeneration((prev) => ({
+      ...prev,
+      input: draft.input,
+      result: '',
+    }))
+    writeToolboxInputDraft(null)
+    toast.success('已从编辑器带入当前选区原文')
+  }, [activeTask, chapterId, projectId])
 
   const runtimeSettingsQuery = useQuery({
     queryKey: ['ai-runtime-settings'],
