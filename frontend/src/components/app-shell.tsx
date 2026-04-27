@@ -5,6 +5,8 @@ import {
   BookCopy,
   ChevronRight,
   Home,
+  Maximize2,
+  Minimize2,
   PanelLeftClose,
   PanelLeftOpen,
   PanelRightClose,
@@ -65,8 +67,10 @@ export function AppShell() {
   const [isProjectTreeOpen, setIsProjectTreeOpen] = useState(true)
   const [isUtilityOpen, setIsUtilityOpen] = useState(false)
   const [activeUtilityTab, setActiveUtilityTab] = useState<UtilityTabKey>('characters')
+  const [isZenMode, setIsZenMode] = useState(false)
 
   const isProjectScoped = Boolean(projectId) && location.pathname.startsWith(`/projects/${projectId}`)
+  const isEditorRoute = isProjectScoped && location.pathname.includes('/editor/')
 
   const projectQuery = useQuery<ProjectDetail, Error>({
     queryKey: ['project', projectId],
@@ -79,10 +83,26 @@ export function AppShell() {
     if (!isProjectScoped) {
       setIsProjectTreeOpen(false)
       setIsUtilityOpen(false)
+      setIsZenMode(false)
     } else {
       setIsProjectTreeOpen(true)
     }
   }, [isProjectScoped])
+
+  useEffect(() => {
+    if (!isEditorRoute && isZenMode) {
+      setIsZenMode(false)
+    }
+  }, [isEditorRoute, isZenMode])
+
+  useEffect(() => {
+    if (!isZenMode) {
+      return
+    }
+
+    setIsProjectTreeOpen(false)
+    setIsUtilityOpen(false)
+  }, [isZenMode])
 
   useEffect(() => {
     function handleKeydown(event: KeyboardEvent) {
@@ -91,12 +111,12 @@ export function AppShell() {
       }
 
       const key = event.key.toLowerCase()
-      if (key === 'b' && isProjectScoped) {
+      if (key === 'b' && isProjectScoped && !isZenMode) {
         event.preventDefault()
         setIsProjectTreeOpen((prev) => !prev)
       }
 
-      if (key === 'j' && isProjectScoped) {
+      if (key === 'j' && isProjectScoped && !isZenMode) {
         event.preventDefault()
         setIsUtilityOpen((prev) => !prev)
       }
@@ -104,7 +124,7 @@ export function AppShell() {
 
     window.addEventListener('keydown', handleKeydown)
     return () => window.removeEventListener('keydown', handleKeydown)
-  }, [isProjectScoped])
+  }, [isProjectScoped, isZenMode])
 
   const pageMeta = useMemo(() => {
     const project = projectQuery.data
@@ -273,7 +293,7 @@ export function AppShell() {
         </div>
       </aside>
 
-      {isProjectScoped && isProjectTreeOpen ? (
+      {isProjectScoped && isProjectTreeOpen && !isZenMode ? (
         <aside className="hidden w-60 shrink-0 border-r border-white/5 bg-[#111113] md:flex md:flex-col">
           <div className="border-b border-white/5 px-4 py-4">
             <div className="text-[11px] uppercase tracking-[0.22em] text-[#52525B]">Project</div>
@@ -324,7 +344,7 @@ export function AppShell() {
           <header className="sticky top-0 z-20 border-b border-white/5 bg-[#18181B]/95 backdrop-blur">
             <div className="flex items-center justify-between gap-4 px-5 py-4">
               <div className="flex min-w-0 items-center gap-3">
-                {isProjectScoped ? (
+                {isProjectScoped && !isZenMode ? (
                   <button
                     type="button"
                     className="inline-flex size-9 items-center justify-center rounded-md border border-white/8 bg-white/5 text-[#A1A1AA] transition hover:text-white"
@@ -344,17 +364,34 @@ export function AppShell() {
               <div className="flex items-center gap-2">
                 {isProjectScoped ? (
                   <>
+                    {isEditorRoute ? (
+                      <button
+                        type="button"
+                        className="hidden h-9 items-center gap-2 rounded-md border border-white/8 bg-white/5 px-3 text-sm text-[#A1A1AA] transition hover:text-white md:inline-flex"
+                        onClick={() => setIsZenMode((prev) => !prev)}
+                      >
+                        {isZenMode ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
+                        {isZenMode ? '退出专注' : '进入专注'}
+                      </button>
+                    ) : null}
                     <button
                       type="button"
                       className="hidden h-9 items-center gap-2 rounded-md border border-white/8 bg-white/5 px-3 text-sm text-[#A1A1AA] transition hover:text-white md:inline-flex"
                       onClick={() => setIsUtilityOpen((prev) => !prev)}
+                      disabled={isZenMode}
                     >
                       {isUtilityOpen ? <PanelRightClose className="size-4" /> : <PanelRightOpen className="size-4" />}
                       参考抽屉
                     </button>
-                    <div className="hidden rounded-md border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-200 xl:block">
-                      Ctrl+B 侧栏 · Ctrl+J 抽屉
-                    </div>
+                    {!isZenMode ? (
+                      <div className="hidden rounded-md border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-200 xl:block">
+                        Ctrl+B 侧栏 · Ctrl+J 抽屉
+                      </div>
+                    ) : (
+                      <div className="hidden rounded-md border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-200 xl:block">
+                        专注模式已启用
+                      </div>
+                    )}
                   </>
                 ) : null}
               </div>
@@ -366,7 +403,7 @@ export function AppShell() {
           </main>
         </div>
 
-        {isProjectScoped && isUtilityOpen ? (
+        {isProjectScoped && isUtilityOpen && !isZenMode ? (
           <aside className="hidden w-[300px] shrink-0 border-l border-white/5 bg-[#111113] xl:flex xl:flex-col">
             <div className="border-b border-white/5 px-4 py-4">
               <div className="flex items-center gap-2">
