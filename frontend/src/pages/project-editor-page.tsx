@@ -89,6 +89,15 @@ interface SelectionContextState {
   action: SelectionAction
 }
 
+type GenerationSource = 'editor-selection' | 'editor-chapter' | 'toolbox'
+
+interface GenerationOriginState {
+  source: GenerationSource
+  task: ToolboxTaskType | SelectionAction | null
+  mode: ToolboxDraftApplyMode | 'replace-selection' | 'append-after-selection' | 'append-chapter' | null
+  label: string
+}
+
 interface ProviderConfigFormState {
   provider: string
   modelId: string
@@ -110,6 +119,19 @@ interface ToolboxResultDraft {
   sourceInput: string
   createdAt: string
   mode: ToolboxDraftApplyMode
+}
+
+function getSelectionActionLabel(action: SelectionAction) {
+  switch (action) {
+    case 'polish':
+      return 'AI 润色'
+    case 'expand':
+      return '扩写'
+    case 'rewrite':
+      return '改写'
+    case 'consistency':
+      return '一致性检查'
+  }
 }
 
 function getChapterById(project: ProjectDetail | undefined, chapterId: string | undefined) {
@@ -236,6 +258,7 @@ export function ProjectEditorPage() {
   const [drafts, setDrafts] = useState<Record<string, EditorFormState>>({})
   const [dirtyChapterIds, setDirtyChapterIds] = useState<Record<string, boolean>>({})
   const [selectionContext, setSelectionContext] = useState<SelectionContextState | null>(null)
+  const [generationOrigin, setGenerationOrigin] = useState<GenerationOriginState | null>(null)
   const [generation, setGeneration] = useState<GenerationState>({
     instruction: defaultGenerationInstruction,
     provider: 'openai',
@@ -451,6 +474,12 @@ export function ProjectEditorPage() {
     scheduleAutosave(chapter.id, next)
     writeEditorUtilityContext(null)
     setGeneration((prev) => ({ ...prev, result: draft.result.trim(), isGenerating: false }))
+    setGenerationOrigin({
+      source: 'toolbox',
+      task: draft.task,
+      mode: draft.mode,
+      label: draft.mode === 'replace' ? '工具箱结果已覆盖当前草稿' : '工具箱结果已追加到当前正文',
+    })
     clearToolboxDraft()
     searchParams.delete('fromToolbox')
     setSearchParams(searchParams, { replace: true })
@@ -494,6 +523,7 @@ export function ProjectEditorPage() {
       result: '',
     }))
     setSelectionContext(null)
+    setGenerationOrigin(null)
     writeEditorUtilityContext(null)
   }
 
@@ -515,6 +545,12 @@ export function ProjectEditorPage() {
         updatedAt: new Date().toISOString(),
       })
     }
+    setGenerationOrigin({
+      source: 'editor-selection',
+      task: action,
+      mode: action === 'expand' ? 'append-after-selection' : action === 'consistency' ? null : 'replace-selection',
+      label: `当前结果将按“${getSelectionActionLabel(action)}”模式优先回写`,
+    })
     toast.success(
       `已切换到选区${
         action === 'expand' ? '扩写' : action === 'rewrite' ? '改写' : action === 'polish' ? '润色' : '一致性检查'
@@ -562,6 +598,15 @@ export function ProjectEditorPage() {
     if (!sourceText) {
       toast.error('请先输入章节正文，再发起 AI 续写')
       return
+    }
+
+    if (!selectionContext) {
+      setGenerationOrigin({
+        source: 'editor-chapter',
+        task: 'continue',
+        mode: 'append-chapter',
+        label: '当前结果会按章节级续写方式追加到正文',
+      })
     }
 
     clearAutosaveTimer()
@@ -647,6 +692,7 @@ export function ProjectEditorPage() {
       if (applied) {
         setGeneration((prev) => ({ ...prev, result: '', isGenerating: false }))
         setSelectionContext(null)
+        setGenerationOrigin(null)
         writeEditorUtilityContext(null)
         toast.success(selectionContext.action === 'expand' ? '已在选区后插入扩写结果' : '已替换当前选区')
         return
@@ -659,6 +705,7 @@ export function ProjectEditorPage() {
 
     setGeneration((prev) => ({ ...prev, result: '', isGenerating: false }))
     setSelectionContext(null)
+    setGenerationOrigin(null)
     if (!chapter?.id) {
       return
     }
@@ -1375,6 +1422,37 @@ export function ProjectEditorPage() {
                 ]}
               />
             </div>
+
+            <AiPanelInfoCard
+              title="结果来源"
+              description="统一说明这次候选结果的来源，以及接受后会怎么写回当前章节。"
+              tone={generationOrigin?.source === 'toolbox' ? 'success' : 'default'}
+              items={[
+                generationOrigin
+                  ? `来源：${
+                      generationOrigin.source === 'toolbox'
+                        ? 'AI 工具箱'
+                        : generationOrigin.source === 'editor-selection'
+                          ? '正文选区'
+                          : '章节级续写'
+                    }`
+                  : '来源：等待下一次 AI 任务',
+                generationOrigin?.label || '当前还没有活动中的回写策略',
+                generationOrigin?.mode
+                  ? `写回方式：${
+                      generationOrigin.mode === 'replace'
+                        ? '覆盖当前草稿'
+                        : generationOrigin.mode === 'append'
+                          ? '追加到当前正文'
+                          : generationOrigin.mode === 'replace-selection'
+                            ? '替换当前选区'
+                            : generationOrigin.mode === 'append-after-selection'
+                              ? '插入到选区后'
+                              : '追加到当前正文'
+                    }`
+                  : '写回方式：当前以结果预览为主',
+              ]}
+            />
 
             <Separator className="bg-white/10" />
 
