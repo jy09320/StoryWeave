@@ -4,6 +4,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { Bot, ChevronLeft, FileText, History, LoaderCircle, Save, Sparkles, WandSparkles } from 'lucide-react'
 import { toast } from 'sonner'
 
+import { RichTextEditor } from '@/components/editor/rich-text-editor'
 import { EmptyState } from '@/components/empty-state'
 import { LoadingState } from '@/components/loading-state'
 import { StatusBadge } from '@/components/status-badge'
@@ -66,6 +67,7 @@ const CHAPTER_STATUS_OPTIONS: Array<{ label: string; value: ChapterStatus }> = [
 interface EditorFormState {
   title: string
   status: ChapterStatus
+  contentHtml: string
   plainText: string
   notes: string
 }
@@ -115,6 +117,7 @@ function buildEditorForm(chapter: Chapter | null): EditorFormState {
     return {
       title: '',
       status: 'draft',
+      contentHtml: plainTextToHtml(''),
       plainText: '',
       notes: '',
     }
@@ -123,6 +126,7 @@ function buildEditorForm(chapter: Chapter | null): EditorFormState {
   return {
     title: chapter.title,
     status: (chapter.status as ChapterStatus) ?? 'draft',
+    contentHtml: normalizeChapterContent(chapter.content, chapter.plain_text),
     plainText: chapter.plain_text ?? '',
     notes: chapter.notes ?? '',
   }
@@ -130,6 +134,39 @@ function buildEditorForm(chapter: Chapter | null): EditorFormState {
 
 function countWords(text: string) {
   return text.replace(/\s+/g, '').length
+}
+
+function escapeHtml(text: string) {
+  return text
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;')
+}
+
+function plainTextToHtml(text: string) {
+  const normalized = text.replace(/\r\n/g, '\n').trim()
+  if (!normalized) {
+    return '<p></p>'
+  }
+
+  return normalized
+    .split(/\n{2,}/)
+    .map((paragraph) => `<p>${escapeHtml(paragraph).replace(/\n/g, '<br />')}</p>`)
+    .join('')
+}
+
+function isLikelyHtml(value: string | null | undefined) {
+  return Boolean(value && /<\/?[a-z][\s\S]*>/i.test(value))
+}
+
+function normalizeChapterContent(content: string | null | undefined, plainText: string | null | undefined) {
+  if (isLikelyHtml(content)) {
+    return content as string
+  }
+
+  return plainTextToHtml(plainText ?? content ?? '')
 }
 
 export function ProjectEditorPage() {
@@ -230,7 +267,7 @@ export function ProjectEditorPage() {
         title: payload.title.trim(),
         status: payload.status,
         plain_text: payload.plainText,
-        content: payload.plainText,
+        content: payload.contentHtml,
         notes: payload.notes.trim() || null,
       })
     },
@@ -332,7 +369,25 @@ export function ProjectEditorPage() {
           ? `${activeForm.plainText.trimEnd()}\n\n${draft.result.trim()}`
           : draft.result.trim())
 
-    updateFormField('plainText', nextPlainText)
+    if (!chapter?.id) {
+      return
+    }
+
+    const next = {
+      ...(drafts[chapter.id] ?? buildEditorForm(chapter)),
+      contentHtml: plainTextToHtml(nextPlainText),
+      plainText: nextPlainText,
+    }
+
+    setDrafts((prev) => ({
+      ...prev,
+      [chapter.id]: next,
+    }))
+    setDirtyChapterIds((prev) => ({
+      ...prev,
+      [chapter.id]: true,
+    }))
+    scheduleAutosave(chapter.id, next)
     setGeneration((prev) => ({ ...prev, result: draft.result.trim(), isGenerating: false }))
     clearToolboxDraft()
     searchParams.delete('fromToolbox')
@@ -344,8 +399,27 @@ export function ProjectEditorPage() {
     updateFormField('title', event.target.value)
   }
 
-  function handlePlainTextChange(event: ChangeEvent<HTMLTextAreaElement>) {
-    updateFormField('plainText', event.target.value)
+  function handleEditorChange(payload: { html: string; plainText: string }) {
+    if (!chapter?.id) {
+      return
+    }
+
+    const baseForm = drafts[chapter.id] ?? buildEditorForm(chapter)
+    const next = {
+      ...baseForm,
+      contentHtml: payload.html,
+      plainText: payload.plainText,
+    }
+
+    setDrafts((prev) => ({
+      ...prev,
+      [chapter.id]: next,
+    }))
+    setDirtyChapterIds((prev) => ({
+      ...prev,
+      [chapter.id]: true,
+    }))
+    scheduleAutosave(chapter.id, next)
   }
 
   function handleNotesChange(event: ChangeEvent<HTMLTextAreaElement>) {
@@ -482,13 +556,49 @@ export function ProjectEditorPage() {
       : generation.result.trim()
 
     setGeneration((prev) => ({ ...prev, result: '', isGenerating: false }))
-    updateFormField('plainText', mergedText)
+    if (!chapter?.id) {
+      return
+    }
+
+    const next = {
+      ...(drafts[chapter.id] ?? buildEditorForm(chapter)),
+      contentHtml: plainTextToHtml(mergedText),
+      plainText: mergedText,
+    }
+
+    setDrafts((prev) => ({
+      ...prev,
+      [chapter.id]: next,
+    }))
+    setDirtyChapterIds((prev) => ({
+      ...prev,
+      [chapter.id]: true,
+    }))
+    scheduleAutosave(chapter.id, next)
     toast.success('已追加到正文')
   }
 
   function handleRestoreVersion(version: ChapterVersion) {
     const restoredText = version.plain_text ?? version.content
-    updateFormField('plainText', restoredText)
+    if (!chapter?.id) {
+      return
+    }
+
+    const next = {
+      ...(drafts[chapter.id] ?? buildEditorForm(chapter)),
+      contentHtml: normalizeChapterContent(version.content, version.plain_text),
+      plainText: restoredText,
+    }
+
+    setDrafts((prev) => ({
+      ...prev,
+      [chapter.id]: next,
+    }))
+    setDirtyChapterIds((prev) => ({
+      ...prev,
+      [chapter.id]: true,
+    }))
+    scheduleAutosave(chapter.id, next)
     setIsVersionDialogOpen(false)
     toast.success('历史版本内容已恢复到正文，可继续编辑或保存')
   }
@@ -701,7 +811,7 @@ export function ProjectEditorPage() {
                   <span>{projectQuery.data.title}</span>
                 </div>
                 <CardTitle className="text-2xl text-white">章节编辑器</CardTitle>
-                <CardDescription>当前编辑器已支持基础写作、AI 续写与版本恢复；也可以从统一 AI 工具箱发起任务，再把结果带回这里继续收口。</CardDescription>
+                <CardDescription>先把正文心流收拢到中心区域，AI 配置和结果放在右侧，不再与正文抢同一层级。</CardDescription>
               </div>
               <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
                 <StatusBadge status={chapter.status} />
@@ -715,43 +825,48 @@ export function ProjectEditorPage() {
             </div>
           </CardHeader>
           <CardContent className="space-y-5">
-            <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_220px]">
+            <div className="mx-auto grid w-full max-w-4xl gap-5">
+              <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_220px]">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-200" htmlFor="chapter-title">
+                    章节标题
+                  </label>
+                  <Input
+                    id="chapter-title"
+                    value={activeForm.title}
+                    onChange={handleTitleChange}
+                    maxLength={200}
+                    className="border-white/8 bg-[#111113] text-lg font-semibold"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-200">章节状态</label>
+                  <Select value={activeForm.status} onValueChange={handleStatusChange}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="选择章节状态" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {CHAPTER_STATUS_OPTIONS.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
               <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-200" htmlFor="chapter-title">
-                  章节标题
+                <label className="text-sm font-medium text-slate-200" htmlFor="chapter-content">
+                  正文内容
                 </label>
-                <Input id="chapter-title" value={activeForm.title} onChange={handleTitleChange} maxLength={200} />
+                <RichTextEditor
+                  value={activeForm.contentHtml}
+                  onChange={handleEditorChange}
+                  placeholder="从这一行开始写标题后的正文。右侧的 AI 面板和参考抽屉会作为辅助层存在，不再挤占主写作区。"
+                />
               </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-200">章节状态</label>
-                <Select value={activeForm.status} onValueChange={handleStatusChange}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="选择章节状态" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {CHAPTER_STATUS_OPTIONS.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-200" htmlFor="chapter-content">
-                正文内容
-              </label>
-              <Textarea
-                id="chapter-content"
-                value={activeForm.plainText}
-                onChange={handlePlainTextChange}
-                rows={20}
-                placeholder="在这里开始撰写章节正文，后续将升级为正式富文本编辑器。"
-                className="min-h-[520px] leading-7"
-              />
             </div>
 
             <div className="space-y-2">
@@ -808,7 +923,7 @@ export function ProjectEditorPage() {
         </Card>
       </section>
 
-      <aside className="space-y-4">
+      <aside className="space-y-4 xl:sticky xl:top-4 xl:self-start">
         <Card className="border border-white/10 bg-white/6">
           <CardHeader className="space-y-4">
             <div>

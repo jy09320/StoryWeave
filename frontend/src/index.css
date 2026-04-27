@@ -155,3 +155,29 @@
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
 }
+
+.storyweave-editor {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.storyweave-editor p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  color: rgb(82 82 91);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+.storyweave-editor p {
+  margin: 0;
+}
+
+.storyweave-editor p + p {
+  margin-top: 1em;
+}
+
+.storyweave-editor {
+  max-width: 780px;
+  margin: 0 auto;
+}

@@ -10,7 +10,9 @@ import { AIToolboxPage } from '@/pages/ai-toolbox-page'
 import { CharactersPage } from '@/pages/characters-page'
 import { DashboardPage } from '@/pages/dashboard-page'
 import { ProjectEditorPage } from '@/pages/project-editor-page'
+import { ProjectWorldPage } from '@/pages/project-world-page'
 import { ProjectWorkspacePage } from '@/pages/project-workspace-page'
+import { SettingsPage } from '@/pages/settings-page'
 
 const router = createBrowserRouter([
   {
@@ -34,8 +36,16 @@ const router = createBrowserRouter([
         element: <ProjectEditorPage />,
       },
       {
+        path: '/projects/:projectId/world',
+        element: <ProjectWorldPage />,
+      },
+      {
         path: '/ai-toolbox',
         element: <AIToolboxPage />,
+      },
+      {
+        path: '/settings',
+        element: <SettingsPage />,
       },
       {
         path: '*',

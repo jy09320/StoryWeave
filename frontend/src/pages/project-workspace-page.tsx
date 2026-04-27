@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { Link, useParams } from 'react-router-dom'
 import {
@@ -8,7 +8,6 @@ import {
   ChevronRight,
   FilePlus2,
   PenSquare,
-  Sparkles,
   Trash2,
   UserPlus,
   Users2,
@@ -64,6 +63,7 @@ import type {
   ProjectCharacter,
   ProjectCharacterUpdatePayload,
   ProjectDetail,
+  WorldSetting,
   WorldSettingPayload,
 } from '@/types/api'
 
@@ -124,6 +124,40 @@ function buildCharacterLinkUpdatePayload(editState: CharacterLinkEditState): Pro
   }
 }
 
+function buildWorldSettingDraft(worldSetting: WorldSetting | null | undefined): WorldSettingDraftState {
+  if (!worldSetting) {
+    return defaultWorldSettingDraft
+  }
+
+  return {
+    title: worldSetting.title ?? '',
+    overview: worldSetting.overview ?? '',
+    rules: worldSetting.rules ?? '',
+    factions: worldSetting.factions ?? '',
+    locations: worldSetting.locations ?? '',
+    timeline: worldSetting.timeline ?? '',
+    extra_notes: worldSetting.extra_notes ?? '',
+  }
+}
+
+function buildActivityMap(chapters: Chapter[]) {
+  const today = new Date()
+  return Array.from({ length: 21 }, (_, index) => {
+    const date = new Date(today)
+    date.setDate(today.getDate() - (20 - index))
+    const key = date.toISOString().slice(0, 10)
+    const updatedChapters = chapters.filter((chapter) => chapter.updated_at.slice(0, 10) === key)
+    const totalWords = updatedChapters.reduce((sum, chapter) => sum + chapter.word_count, 0)
+
+    return {
+      key,
+      label: `${date.getMonth() + 1}/${date.getDate()}`,
+      count: updatedChapters.length,
+      words: totalWords,
+    }
+  })
+}
+
 export function ProjectWorkspacePage() {
   const { projectId } = useParams<{ projectId: string }>()
   const [selectedChapterId, setSelectedChapterId] = useState<string | null>(null)
@@ -159,6 +193,13 @@ export function ProjectWorkspacePage() {
 
   const projectCharacters = useMemo(() => projectQuery.data?.project_characters ?? [], [projectQuery.data?.project_characters])
   const worldSetting = projectQuery.data?.world_setting ?? null
+
+  useEffect(() => {
+    if (projectQuery.data) {
+      setWorldSettingDraft(buildWorldSettingDraft(projectQuery.data.world_setting))
+    }
+  }, [projectQuery.data])
+
   const availableCharacters = useMemo(() => {
     const linkedIds = new Set(projectCharacters.map((item) => item.character_id))
     return (charactersQuery.data ?? []).filter((character) => !linkedIds.has(character.id))
@@ -413,6 +454,8 @@ export function ProjectWorkspacePage() {
   }
 
   const project = projectQuery.data
+  const activityMap = buildActivityMap(chapters)
+  const activeDays = activityMap.filter((item) => item.count > 0).length
 
   return (
     <div className="space-y-6">
@@ -446,103 +489,82 @@ export function ProjectWorkspacePage() {
 
         <Card className="border border-white/10 bg-white/6 shadow-lg shadow-black/5">
           <CardHeader>
-            <CardTitle className="text-xl text-white">当前工作重点</CardTitle>
-            <CardDescription>把结构导航、角色资产、世界观设定与 AI 辅助分层表达，避免信息都挤在章节列表里。</CardDescription>
+            <CardTitle className="text-xl text-white">创作活跃度</CardTitle>
+            <CardDescription>先用最近 21 天的章节更新时间形成轻量图谱，为后续项目大盘的成就反馈打基础。</CardDescription>
           </CardHeader>
-          <CardContent className="grid gap-3">
-            <WorkspaceFocusCard
-              title="结构导航"
-              description="围绕章节树快速切换、排序与进入编辑器。"
-              icon={<BookOpen className="size-4 text-emerald-300" />}
-            />
-            <WorkspaceFocusCard
-              title="角色绑定"
-              description="把全局角色库挂到项目里，后续作为剧情推进与 AI 上下文基础。"
-              icon={<Users2 className="size-4 text-sky-300" />}
-            />
-            <WorkspaceFocusCard
-              title="世界观设定"
-              description="整理规则、势力、地点与时间线，为一致性检查准备基础信息。"
-              icon={<Globe2 className="size-4 text-amber-300" />}
-            />
-            <WorkspaceFocusCard
-              title="AI 辅助入口"
-              description="已可跳转到工具箱执行续写、改写与设定检查任务。"
-              icon={<Sparkles className="size-4 text-violet-300" />}
-            />
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-7 gap-2">
+              {activityMap.map((item) => (
+                <div key={item.key} className="space-y-1">
+                  <div
+                    title={`${item.label} · ${item.count} 个章节更新 · ${item.words} 字`}
+                    className={[
+                      'h-10 rounded-sm border border-white/5',
+                      item.count === 0
+                        ? 'bg-white/4'
+                        : item.words > 3000
+                          ? 'bg-emerald-400/70'
+                          : item.words > 1000
+                            ? 'bg-emerald-400/45'
+                            : 'bg-emerald-400/25',
+                    ].join(' ')}
+                  />
+                  <div className="text-center text-[10px] text-slate-500">{item.label}</div>
+                </div>
+              ))}
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-3">
+              <WorkspaceFocusCard
+                title="活跃天数"
+                description={`最近 21 天内有 ${activeDays} 天发生过章节更新。`}
+                icon={<BookOpen className="size-4 text-emerald-300" />}
+              />
+              <WorkspaceFocusCard
+                title="角色资产"
+                description="项目角色已进入工作台和右侧参考抽屉，后续作为 Mention 与 AI 上下文基础。"
+                icon={<Users2 className="size-4 text-sky-300" />}
+              />
+              <WorkspaceFocusCard
+                title="设定入口"
+                description="世界观与 AI 工具已从章节区剥离，避免核心结构和辅助工具混在一起。"
+                icon={<Globe2 className="size-4 text-amber-300" />}
+              />
+            </div>
           </CardContent>
         </Card>
       </section>
 
-      <div className="grid gap-6 xl:grid-cols-[280px_minmax(0,1fr)_320px]">
-        <aside className="space-y-4">
-          <Card className="border border-white/10 bg-white/6">
-            <CardHeader>
-              <CardTitle className="text-lg text-white">结构导航</CardTitle>
-              <CardDescription>当前先聚焦章节树，同时把角色和世界观入口显式暴露出来。</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3 text-sm text-slate-300">
-              <div className="rounded-2xl border border-primary/20 bg-primary/8 p-3">
-                <div className="text-sm font-medium text-white">章节管理</div>
-                <p className="mt-1 text-xs leading-5 text-slate-400">按章节组织当前作品主线，是本阶段的核心工作入口。</p>
-              </div>
-              <div className="grid gap-2">
-                <Link
-                  to={`/characters`}
-                  className="inline-flex h-9 w-full items-center justify-center rounded-lg border border-white/10 bg-transparent px-3 text-sm font-medium text-white transition hover:bg-white/10"
-                >
-                  打开全局角色库
-                </Link>
-                <Link
-                  to={`/ai-toolbox?task=continue&projectId=${project.id}${selectedChapter ? `&chapterId=${selectedChapter.id}` : ''}`}
-                  className="inline-flex h-9 w-full items-center justify-center rounded-lg border border-primary/20 bg-primary/10 px-3 text-sm font-medium text-white transition hover:bg-primary/20"
-                >
-                  进入 AI 续写任务
-                </Link>
-                <Link
-                  to={`/ai-toolbox?task=consistency&projectId=${project.id}${selectedChapter ? `&chapterId=${selectedChapter.id}` : ''}`}
-                  className="inline-flex h-9 w-full items-center justify-center rounded-lg border border-white/10 bg-transparent px-3 text-sm font-medium text-white transition hover:bg-white/10"
-                >
-                  进入设定检查任务
-                </Link>
-                <Link
-                  to="/"
-                  className="inline-flex h-9 w-full items-center justify-center rounded-lg border border-white/10 bg-transparent px-3 text-sm font-medium text-white transition hover:bg-white/10"
-                >
-                  返回项目面板
-                </Link>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="border border-white/10 bg-white/6">
-            <CardHeader>
-              <CardTitle className="text-lg text-white">新增章节</CardTitle>
-              <CardDescription>先建立章节结构，再进入编辑页面补全正文与 AI 生成内容。</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <form className="space-y-3" onSubmit={handleCreateChapter}>
-                <Input
-                  value={newChapter.title}
-                  onChange={(event) => setNewChapter({ title: event.target.value })}
-                  placeholder="例如：第一章 · 雪夜重逢"
-                  maxLength={200}
-                />
-                <Button type="submit" className="w-full" disabled={createChapterMutation.isPending}>
-                  <FilePlus2 className="size-4" />
-                  {createChapterMutation.isPending ? '创建中...' : '创建章节'}
-                </Button>
-              </form>
-            </CardContent>
-          </Card>
-        </aside>
-
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
         <section className="space-y-4">
+          <Card className="border border-white/10 bg-white/6">
+            <CardHeader>
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                <div>
+                  <CardTitle className="text-xl text-white">快速创建章节</CardTitle>
+                  <CardDescription>壳层已经接管项目大纲，这里聚焦创建、排序和进入编辑器。</CardDescription>
+                </div>
+                <form className="flex w-full max-w-md gap-2" onSubmit={handleCreateChapter}>
+                  <Input
+                    value={newChapter.title}
+                    onChange={(event) => setNewChapter({ title: event.target.value })}
+                    placeholder="例如：第一章 · 雪夜重逢"
+                    maxLength={200}
+                  />
+                  <Button type="submit" disabled={createChapterMutation.isPending}>
+                    <FilePlus2 className="size-4" />
+                    {createChapterMutation.isPending ? '创建中...' : '新建'}
+                  </Button>
+                </form>
+              </div>
+            </CardHeader>
+          </Card>
+
           <Card className="border border-white/10 bg-white/6">
             <CardHeader>
               <div className="flex items-center justify-between gap-4">
                 <div>
-                  <CardTitle className="text-xl text-white">章节结构</CardTitle>
+                  <CardTitle className="text-xl text-white">章节列表</CardTitle>
                   <CardDescription>从这里选择当前要推进的章节，并完成排序、删除和进入编辑器等操作。</CardDescription>
                 </div>
                 <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/10 px-3 py-1 text-xs text-slate-400">
@@ -555,7 +577,7 @@ export function ProjectWorkspacePage() {
               {chapters.length === 0 ? (
                 <EmptyState title="这个项目还没有章节" description="先在左侧创建章节，随后即可进入编辑工作流。" />
               ) : (
-                <div className="space-y-3">
+                <div className="space-y-2">
                   {chapters.map((chapter, index) => {
                     const isSelected = selectedChapter?.id === chapter.id
 
@@ -565,26 +587,26 @@ export function ProjectWorkspacePage() {
                         type="button"
                         onClick={() => setSelectedChapterId(chapter.id)}
                         className={[
-                          'w-full rounded-3xl border p-4 text-left transition',
+                          'w-full rounded-md border px-4 py-3 text-left transition',
                           isSelected
                             ? 'border-primary/50 bg-primary/10 shadow-lg shadow-primary/10'
                             : 'border-white/10 bg-black/10 hover:border-white/20 hover:bg-white/6',
                         ].join(' ')}
                       >
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="space-y-2">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="min-w-0 space-y-1">
                             <div className="flex flex-wrap items-center gap-2">
                               <span className="rounded-full border border-white/10 px-2 py-0.5 text-xs text-slate-400">
                                 第 {chapter.order_index} 章
                               </span>
                               <StatusBadge status={chapter.status} className="py-0.5" />
                             </div>
-                            <h3 className="text-base font-medium text-white">{chapter.title}</h3>
+                            <h3 className="truncate text-base font-medium text-white">{chapter.title}</h3>
                             <p className="text-xs text-slate-400">
                               {chapter.word_count} 字 · 最近更新 {formatDate(chapter.updated_at)}
                             </p>
                           </div>
-                          <div className="flex items-center gap-2">
+                          <div className="flex shrink-0 items-center gap-2">
                             <Button
                               type="button"
                               variant="outline"
@@ -701,7 +723,7 @@ export function ProjectWorkspacePage() {
           </Card>
         </section>
 
-        <aside className="space-y-4">
+        <aside className="space-y-4 xl:sticky xl:top-4 xl:self-start">
           <Card className="border border-white/10 bg-white/6">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg text-white">
@@ -860,6 +882,13 @@ export function ProjectWorkspacePage() {
                   </p>
                 </div>
               </div>
+
+              <Link
+                to={`/projects/${project.id}/world`}
+                className="inline-flex h-9 w-full items-center justify-center rounded-lg border border-white/10 bg-transparent px-3 text-sm font-medium text-white transition hover:bg-white/10"
+              >
+                进入完整世界观编辑页
+              </Link>
 
               <form className="space-y-3" onSubmit={handleSaveWorldSetting}>
                 <div className="space-y-2">
