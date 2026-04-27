@@ -56,6 +56,13 @@ const actionLabelMap = {
   consistency: '一致性检查',
 } as const
 
+const utilityTaskActions = [
+  { action: 'polish', label: '润色', task: 'rewrite' },
+  { action: 'expand', label: '扩写', task: 'continue' },
+  { action: 'rewrite', label: '改写', task: 'rewrite' },
+  { action: 'consistency', label: '检查', task: 'consistency' },
+] as const
+
 const worldSectionMeta = [
   { key: 'overview', label: '概览', emptyLabel: '暂无概览' },
   { key: 'rules', label: '规则', emptyLabel: '暂无规则' },
@@ -560,29 +567,56 @@ export function AppShell() {
                       <div className="mt-2 line-clamp-4 text-sm leading-6 text-[#E4E4E7]">
                         {scopedEditorUtilityContext.selectedText}
                       </div>
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        <NavLink
-                          to={`/ai-toolbox?task=${actionToToolboxTask[scopedEditorUtilityContext.action]}&projectId=${projectId}${chapterId ? `&chapterId=${chapterId}` : ''}`}
-                          onClick={() =>
-                            writeToolboxInputDraft({
-                              task: actionToToolboxTask[scopedEditorUtilityContext.action],
-                              projectId: projectId || null,
-                              chapterId: chapterId || null,
-                              input: scopedEditorUtilityContext.selectedText,
-                              createdAt: new Date().toISOString(),
-                            })
-                          }
-                          className="inline-flex h-8 items-center justify-center rounded-md border border-amber-500/20 bg-amber-500/10 px-3 text-xs text-amber-100 transition hover:bg-amber-500/20"
-                        >
-                          带到工具箱
-                        </NavLink>
-                        <button
-                          type="button"
-                          onClick={() => setIsUtilityOpen(false)}
-                          className="inline-flex h-8 items-center justify-center rounded-md border border-white/10 px-3 text-xs text-[#A1A1AA] transition hover:text-white"
-                        >
-                          收起抽屉
-                        </button>
+                      <div className="mt-3 grid gap-2">
+                        <div className="grid grid-cols-2 gap-2">
+                          {utilityTaskActions.map((item) => (
+                            <NavLink
+                              key={item.action}
+                              to={`/ai-toolbox?task=${item.task}&projectId=${projectId}${chapterId ? `&chapterId=${chapterId}` : ''}`}
+                              onClick={() =>
+                                writeToolboxInputDraft({
+                                  task: item.task,
+                                  projectId: projectId || null,
+                                  chapterId: chapterId || null,
+                                  input: scopedEditorUtilityContext.selectedText,
+                                  createdAt: new Date().toISOString(),
+                                })
+                              }
+                              className={clsx(
+                                'inline-flex h-8 items-center justify-center rounded-md border px-3 text-xs transition',
+                                scopedEditorUtilityContext.action === item.action
+                                  ? 'border-amber-500/20 bg-amber-500/10 text-amber-100 hover:bg-amber-500/20'
+                                  : 'border-white/10 text-[#A1A1AA] hover:border-white/20 hover:text-white',
+                              )}
+                            >
+                              {item.label}
+                            </NavLink>
+                          ))}
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <NavLink
+                            to={`/ai-toolbox?task=${actionToToolboxTask[scopedEditorUtilityContext.action]}&projectId=${projectId}${chapterId ? `&chapterId=${chapterId}` : ''}`}
+                            onClick={() =>
+                              writeToolboxInputDraft({
+                                task: actionToToolboxTask[scopedEditorUtilityContext.action],
+                                projectId: projectId || null,
+                                chapterId: chapterId || null,
+                                input: scopedEditorUtilityContext.selectedText,
+                                createdAt: new Date().toISOString(),
+                              })
+                            }
+                            className="inline-flex h-8 items-center justify-center rounded-md border border-amber-500/20 bg-amber-500/10 px-3 text-xs text-amber-100 transition hover:bg-amber-500/20"
+                          >
+                            按当前动作打开
+                          </NavLink>
+                          <button
+                            type="button"
+                            onClick={() => setIsUtilityOpen(false)}
+                            className="inline-flex h-8 items-center justify-center rounded-md border border-white/10 px-3 text-xs text-[#A1A1AA] transition hover:text-white"
+                          >
+                            收起抽屉
+                          </button>
+                        </div>
                       </div>
                     </div>
                   ) : (
