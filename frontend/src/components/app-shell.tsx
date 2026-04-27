@@ -620,7 +620,36 @@ export function AppShell() {
                       </div>
                     </div>
                   ) : (
-                    <SidebarHint>选中文本后，右侧会自动带入当前选区，方便直接发起改写、扩写或一致性检查。</SidebarHint>
+                    <div className="space-y-3 rounded-md border border-white/8 bg-white/4 p-3">
+                      <SidebarHint>选中文本后，右侧会自动带入当前选区；未选区时，也可以直接按章节级任务进入工具箱。</SidebarHint>
+                      <div className="grid grid-cols-2 gap-2">
+                        <NavLink
+                          to={`/ai-toolbox?task=continue&projectId=${projectId}${chapterId ? `&chapterId=${chapterId}` : ''}`}
+                          className="inline-flex h-8 items-center justify-center rounded-md border border-white/10 px-3 text-xs text-[#A1A1AA] transition hover:border-white/20 hover:text-white"
+                        >
+                          章节续写
+                        </NavLink>
+                        <NavLink
+                          to={`/ai-toolbox?task=rewrite&projectId=${projectId}${chapterId ? `&chapterId=${chapterId}` : ''}`}
+                          className="inline-flex h-8 items-center justify-center rounded-md border border-white/10 px-3 text-xs text-[#A1A1AA] transition hover:border-white/20 hover:text-white"
+                        >
+                          全文改写
+                        </NavLink>
+                        <NavLink
+                          to={`/ai-toolbox?task=consistency&projectId=${projectId}${chapterId ? `&chapterId=${chapterId}` : ''}`}
+                          className="inline-flex h-8 items-center justify-center rounded-md border border-white/10 px-3 text-xs text-[#A1A1AA] transition hover:border-white/20 hover:text-white"
+                        >
+                          设定检查
+                        </NavLink>
+                        <button
+                          type="button"
+                          onClick={() => setIsUtilityOpen(false)}
+                          className="inline-flex h-8 items-center justify-center rounded-md border border-white/10 px-3 text-xs text-[#A1A1AA] transition hover:border-white/20 hover:text-white"
+                        >
+                          收起抽屉
+                        </button>
+                      </div>
+                    </div>
                   )}
                   <ProjectTreeLink
                     to={`/ai-toolbox?task=continue&projectId=${projectId}${chapterId ? `&chapterId=${chapterId}` : ''}`}
