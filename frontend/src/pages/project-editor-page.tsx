@@ -34,6 +34,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { writeEditorUtilityContext, type EditorUtilityAction } from '@/lib/editor-utility-context'
 import { formatDate } from '@/lib/format'
 import { queryClient } from '@/lib/query-client'
 import {
@@ -81,7 +82,7 @@ interface GenerationState {
   requestId: number
 }
 
-type SelectionAction = 'polish' | 'expand' | 'rewrite' | 'consistency'
+type SelectionAction = EditorUtilityAction
 
 interface SelectionContextState {
   text: string
@@ -448,6 +449,7 @@ export function ProjectEditorPage() {
       [chapter.id]: true,
     }))
     scheduleAutosave(chapter.id, next)
+    writeEditorUtilityContext(null)
     setGeneration((prev) => ({ ...prev, result: draft.result.trim(), isGenerating: false }))
     clearToolboxDraft()
     searchParams.delete('fromToolbox')
@@ -492,6 +494,7 @@ export function ProjectEditorPage() {
       result: '',
     }))
     setSelectionContext(null)
+    writeEditorUtilityContext(null)
   }
 
   function handleBubbleAction(action: SelectionAction, selectedText: string) {
@@ -501,6 +504,17 @@ export function ProjectEditorPage() {
       result: '',
       instruction: buildSelectionInstruction(action, selectedText),
     }))
+    if (projectId && chapter?.id) {
+      writeEditorUtilityContext({
+        projectId,
+        projectTitle: projectQuery.data?.title ?? null,
+        chapterId: chapter.id,
+        chapterTitle: chapter.title ?? null,
+        action,
+        selectedText,
+        updatedAt: new Date().toISOString(),
+      })
+    }
     toast.success(
       `已切换到选区${
         action === 'expand' ? '扩写' : action === 'rewrite' ? '改写' : action === 'polish' ? '润色' : '一致性检查'
@@ -633,6 +647,7 @@ export function ProjectEditorPage() {
       if (applied) {
         setGeneration((prev) => ({ ...prev, result: '', isGenerating: false }))
         setSelectionContext(null)
+        writeEditorUtilityContext(null)
         toast.success(selectionContext.action === 'expand' ? '已在选区后插入扩写结果' : '已替换当前选区')
         return
       }
@@ -643,6 +658,7 @@ export function ProjectEditorPage() {
       : generation.result.trim()
 
     setGeneration((prev) => ({ ...prev, result: '', isGenerating: false }))
+    setSelectionContext(null)
     if (!chapter?.id) {
       return
     }
@@ -747,6 +763,29 @@ export function ProjectEditorPage() {
   const generationProvider = generation.provider || defaultGenerationProvider
   const generationModelId = generation.modelId || defaultGenerationModelId
   const selectedModelId = generationModelId || defaultGenerationModelId
+
+  useEffect(() => {
+    if (!selectionContext || !projectId || !chapter?.id) {
+      writeEditorUtilityContext(null)
+      return
+    }
+
+    writeEditorUtilityContext({
+      projectId,
+      projectTitle: projectQuery.data?.title ?? null,
+      chapterId: chapter.id,
+      chapterTitle: chapter.title ?? null,
+      action: selectionContext.action,
+      selectedText: selectionContext.text,
+      updatedAt: new Date().toISOString(),
+    })
+  }, [chapter?.id, chapter?.title, projectId, projectQuery.data?.title, selectionContext])
+
+  useEffect(() => {
+    return () => {
+      writeEditorUtilityContext(null)
+    }
+  }, [])
 
   useEffect(() => {
     if (!chapter?.id || searchParams.get('fromToolbox') !== '1') {

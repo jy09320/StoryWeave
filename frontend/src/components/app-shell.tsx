@@ -17,6 +17,11 @@ import {
 } from 'lucide-react'
 import { NavLink, Outlet, useLocation, useParams } from 'react-router-dom'
 
+import {
+  EDITOR_UTILITY_CONTEXT_EVENT,
+  readEditorUtilityContext,
+  type EditorUtilityContext,
+} from '@/lib/editor-utility-context'
 import { formatDate } from '@/lib/format'
 import { getProject } from '@/services/projects'
 import type { ProjectDetail } from '@/types/api'
@@ -35,6 +40,20 @@ const utilityTabs: Array<{ key: UtilityTabKey; label: string }> = [
   { key: 'world', label: '设定' },
   { key: 'ai', label: 'AI' },
 ]
+
+const actionToToolboxTask = {
+  polish: 'rewrite',
+  expand: 'continue',
+  rewrite: 'rewrite',
+  consistency: 'consistency',
+} as const
+
+const actionLabelMap = {
+  polish: 'AI 润色',
+  expand: '扩写',
+  rewrite: '改写',
+  consistency: '一致性检查',
+} as const
 
 const worldSectionMeta = [
   { key: 'overview', label: '概览', emptyLabel: '暂无概览' },
@@ -68,6 +87,9 @@ export function AppShell() {
   const [isUtilityOpen, setIsUtilityOpen] = useState(false)
   const [activeUtilityTab, setActiveUtilityTab] = useState<UtilityTabKey>('characters')
   const [isZenMode, setIsZenMode] = useState(false)
+  const [editorUtilityContext, setEditorUtilityContext] = useState<EditorUtilityContext | null>(() =>
+    typeof window === 'undefined' ? null : readEditorUtilityContext(),
+  )
 
   const isProjectScoped = Boolean(projectId) && location.pathname.startsWith(`/projects/${projectId}`)
   const isEditorRoute = isProjectScoped && location.pathname.includes('/editor/')
@@ -103,6 +125,41 @@ export function AppShell() {
     setIsProjectTreeOpen(false)
     setIsUtilityOpen(false)
   }, [isZenMode])
+
+  useEffect(() => {
+    function syncUtilityContext() {
+      const nextContext = readEditorUtilityContext()
+      setEditorUtilityContext(nextContext)
+
+      if (!nextContext || nextContext.projectId !== projectId || nextContext.chapterId !== chapterId || isZenMode) {
+        return
+      }
+
+      setActiveUtilityTab('ai')
+      setIsUtilityOpen(true)
+    }
+
+    function handleCustomEvent(event: Event) {
+      const customEvent = event as CustomEvent<EditorUtilityContext | null>
+      const nextContext = customEvent.detail ?? null
+      setEditorUtilityContext(nextContext)
+
+      if (!nextContext || nextContext.projectId !== projectId || nextContext.chapterId !== chapterId || isZenMode) {
+        return
+      }
+
+      setActiveUtilityTab('ai')
+      setIsUtilityOpen(true)
+    }
+
+    syncUtilityContext()
+    window.addEventListener('storage', syncUtilityContext)
+    window.addEventListener(EDITOR_UTILITY_CONTEXT_EVENT, handleCustomEvent as EventListener)
+    return () => {
+      window.removeEventListener('storage', syncUtilityContext)
+      window.removeEventListener(EDITOR_UTILITY_CONTEXT_EVENT, handleCustomEvent as EventListener)
+    }
+  }, [chapterId, isZenMode, projectId])
 
   useEffect(() => {
     function handleKeydown(event: KeyboardEvent) {
@@ -255,6 +312,10 @@ export function AppShell() {
   const chapterContextHint = activeChapter
     ? `当前章节：${activeChapter.title}${contextKeywords.length > 0 ? ` · 命中 ${contextKeywords.length} 个上下文词` : ''}`
     : '当前未锁定章节，右侧抽屉以项目级信息为主'
+  const scopedEditorUtilityContext =
+    editorUtilityContext?.projectId === projectId && editorUtilityContext?.chapterId === chapterId
+      ? editorUtilityContext
+      : null
 
   return (
     <div className="flex h-screen bg-[#18181B] text-[#E4E4E7] selection:bg-amber-500/30 selection:text-white">
@@ -484,6 +545,39 @@ export function AppShell() {
               {activeUtilityTab === 'ai' ? (
                 <div className="space-y-3">
                   <SectionLabel>AI 任务台</SectionLabel>
+                  {scopedEditorUtilityContext ? (
+                    <div className="rounded-md border border-amber-500/20 bg-amber-500/8 p-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <div className="text-sm font-medium text-white">当前选区</div>
+                        <span className="rounded-full border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 text-[11px] text-amber-200">
+                          {actionLabelMap[scopedEditorUtilityContext.action]}
+                        </span>
+                      </div>
+                      <div className="mt-2 text-xs leading-6 text-[#A1A1AA]">
+                        {scopedEditorUtilityContext.chapterTitle || '当前章节'}
+                      </div>
+                      <div className="mt-2 line-clamp-4 text-sm leading-6 text-[#E4E4E7]">
+                        {scopedEditorUtilityContext.selectedText}
+                      </div>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <NavLink
+                          to={`/ai-toolbox?task=${actionToToolboxTask[scopedEditorUtilityContext.action]}&projectId=${projectId}${chapterId ? `&chapterId=${chapterId}` : ''}`}
+                          className="inline-flex h-8 items-center justify-center rounded-md border border-amber-500/20 bg-amber-500/10 px-3 text-xs text-amber-100 transition hover:bg-amber-500/20"
+                        >
+                          带到工具箱
+                        </NavLink>
+                        <button
+                          type="button"
+                          onClick={() => setIsUtilityOpen(false)}
+                          className="inline-flex h-8 items-center justify-center rounded-md border border-white/10 px-3 text-xs text-[#A1A1AA] transition hover:text-white"
+                        >
+                          收起抽屉
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <SidebarHint>选中文本后，右侧会自动带入当前选区，方便直接发起改写、扩写或一致性检查。</SidebarHint>
+                  )}
                   <ProjectTreeLink
                     to={`/ai-toolbox?task=continue&projectId=${projectId}${chapterId ? `&chapterId=${chapterId}` : ''}`}
                     label="续写任务"
