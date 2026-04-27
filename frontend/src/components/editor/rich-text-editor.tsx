@@ -46,6 +46,10 @@ const slashCommands: Array<{ key: SlashCommandKey; label: string; description: s
   { key: 'rewrite', label: '改写', description: '把当前章节作为整体改写任务送到 AI 面板' },
 ]
 
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
 export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorProps>(function RichTextEditor(
   {
     title,
@@ -261,6 +265,81 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
     }),
     [editor],
   )
+
+  useEffect(() => {
+    if (!editor || mentionItems.length === 0) {
+      return
+    }
+
+    const mentionMark = editor.state.schema.marks.characterMention
+    if (!mentionMark) {
+      return
+    }
+
+    const sortedMentionItems = [...mentionItems]
+      .filter((item) => item.label.trim().length >= 2)
+      .sort((left, right) => right.label.length - left.label.length)
+
+    const transaction = editor.state.tr
+    let changed = false
+
+    editor.state.doc.descendants((node, pos) => {
+      if (!node.isText || !node.text) {
+        return true
+      }
+
+      const text = node.text
+      const existingMentionRanges = node.marks
+        .filter((mark) => mark.type.name === 'characterMention')
+        .map(() => ({ from: pos, to: pos + text.length }))
+
+      for (const item of sortedMentionItems) {
+        const regex = new RegExp(`(^|[^\\u4e00-\\u9fa5A-Za-z0-9])(${escapeRegExp(item.label)})(?=$|[^\\u4e00-\\u9fa5A-Za-z0-9])`, 'g')
+        let match: RegExpExecArray | null
+
+        while ((match = regex.exec(text)) !== null) {
+          const leading = match[1] ?? ''
+          const label = match[2] ?? ''
+          const start = pos + match.index + leading.length
+          const end = start + label.length
+
+          const alreadyMentioned =
+            existingMentionRanges.some((range) => start >= range.from && end <= range.to) ||
+            node.marks.some(
+              (mark) =>
+                mark.type.name === 'characterMention' &&
+                mark.attrs.characterId === item.id &&
+                mark.attrs.label === item.label,
+            )
+
+          if (alreadyMentioned) {
+            continue
+          }
+
+          const tooltipParts = [item.personality, item.projectSummary].filter(Boolean)
+          transaction.addMark(
+            start,
+            end,
+            mentionMark.create({
+              characterId: item.id,
+              label: item.label,
+              personality: item.personality ?? null,
+              projectSummary: item.projectSummary ?? null,
+              tooltip: tooltipParts.join(' · ') || item.label,
+              description: item.description ?? null,
+            }),
+          )
+          changed = true
+        }
+      }
+
+      return true
+    })
+
+    if (changed) {
+      editor.view.dispatch(transaction)
+    }
+  }, [editor, mentionItems, value])
 
   if (!editor) {
     return (
