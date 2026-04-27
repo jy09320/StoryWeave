@@ -34,6 +34,31 @@ const utilityTabs: Array<{ key: UtilityTabKey; label: string }> = [
   { key: 'ai', label: 'AI' },
 ]
 
+const worldSectionMeta = [
+  { key: 'overview', label: '概览', emptyLabel: '暂无概览' },
+  { key: 'rules', label: '规则', emptyLabel: '暂无规则' },
+  { key: 'factions', label: '势力', emptyLabel: '暂无势力摘要' },
+  { key: 'locations', label: '地点', emptyLabel: '暂无地点摘要' },
+  { key: 'timeline', label: '时间线', emptyLabel: '暂无时间线摘要' },
+  { key: 'extra_notes', label: '补充', emptyLabel: '暂无补充说明' },
+] as const
+
+type WorldSectionKey = (typeof worldSectionMeta)[number]['key']
+
+function normalizeForSearch(value: string) {
+  return value.toLowerCase()
+}
+
+function extractContextTokens(value: string) {
+  const matches = value.match(/[\u4e00-\u9fa5]{2,}|[a-z0-9]{2,}/gi) ?? []
+  return Array.from(new Set(matches.map((item) => normalizeForSearch(item.trim())).filter(Boolean))).slice(0, 24)
+}
+
+function getKeywordMatches(source: string, keywords: string[]) {
+  const normalizedSource = normalizeForSearch(source)
+  return keywords.filter((keyword) => keyword.length >= 2 && normalizedSource.includes(keyword))
+}
+
 export function AppShell() {
   const location = useLocation()
   const { projectId, chapterId } = useParams<{ projectId?: string; chapterId?: string }>()
@@ -154,6 +179,62 @@ export function AppShell() {
   const projectChapters = project?.chapters ?? []
   const projectCharacters = project?.project_characters ?? []
   const worldSetting = project?.world_setting ?? null
+  const activeChapter = projectChapters.find((item) => item.id === chapterId) ?? null
+  const contextText = useMemo(
+    () =>
+      [
+        activeChapter?.title ?? '',
+        activeChapter?.summary ?? '',
+        activeChapter?.plain_text ?? '',
+      ]
+        .filter(Boolean)
+        .join('\n'),
+    [activeChapter],
+  )
+  const contextKeywords = useMemo(() => extractContextTokens(contextText), [contextText])
+  const contextualCharacters = useMemo(
+    () =>
+      [...projectCharacters]
+        .map((item) => {
+          const matches = getKeywordMatches(
+            [item.character.name, item.role_label, item.summary, item.character.personality, item.character.description]
+              .filter(Boolean)
+              .join('\n'),
+            contextKeywords,
+          )
+          const nameMatched =
+            activeChapter?.plain_text?.includes(item.character.name) || activeChapter?.title?.includes(item.character.name)
+
+          return {
+            item,
+            matches: matches.slice(0, 3),
+            score: (nameMatched ? 4 : 0) + matches.length,
+          }
+        })
+        .sort((left, right) => right.score - left.score || left.item.sort_order - right.item.sort_order),
+    [activeChapter?.plain_text, activeChapter?.title, contextKeywords, projectCharacters],
+  )
+  const contextualWorldSections = useMemo(
+    () =>
+      worldSectionMeta
+        .map((section, index) => {
+          const value = worldSetting?.[section.key as WorldSectionKey] ?? ''
+          const matches = getKeywordMatches(value, contextKeywords)
+
+          return {
+            ...section,
+            value,
+            matches: matches.slice(0, 4),
+            score: matches.length,
+            order: index,
+          }
+        })
+        .sort((left, right) => right.score - left.score || left.order - right.order),
+    [contextKeywords, worldSetting],
+  )
+  const chapterContextHint = activeChapter
+    ? `当前章节：${activeChapter.title}${contextKeywords.length > 0 ? ` · 命中 ${contextKeywords.length} 个上下文词` : ''}`
+    : '当前未锁定章节，右侧抽屉以项目级信息为主'
 
   return (
     <div className="flex h-screen bg-[#18181B] text-[#E4E4E7] selection:bg-amber-500/30 selection:text-white">
@@ -311,13 +392,33 @@ export function AppShell() {
               {activeUtilityTab === 'characters' ? (
                 <div className="space-y-3">
                   <SectionLabel>角色速查</SectionLabel>
-                  {projectCharacters.length > 0 ? (
-                    projectCharacters.map((item) => (
+                  <SidebarHint>{chapterContextHint}</SidebarHint>
+                  {contextualCharacters.length > 0 ? (
+                    contextualCharacters.slice(0, 6).map(({ item, matches, score }) => (
                       <div key={item.id} className="rounded-md border border-white/8 bg-white/4 p-3">
-                        <div className="text-sm font-medium text-white">{item.character.name}</div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <div className="text-sm font-medium text-white">{item.character.name}</div>
+                          {score > 0 ? (
+                            <span className="rounded-full border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 text-[11px] text-amber-200">
+                              当前章命中
+                            </span>
+                          ) : null}
+                        </div>
                         <div className="mt-1 text-xs text-[#A1A1AA]">
                           {item.role_label || item.summary || item.character.personality || '暂无项目摘要'}
                         </div>
+                        {matches.length > 0 ? (
+                          <div className="mt-2 flex flex-wrap gap-1.5">
+                            {matches.map((keyword) => (
+                              <span
+                                key={`${item.id}-${keyword}`}
+                                className="rounded-full border border-white/8 px-2 py-0.5 text-[11px] text-[#A1A1AA]"
+                              >
+                                {keyword}
+                              </span>
+                            ))}
+                          </div>
+                        ) : null}
                       </div>
                     ))
                   ) : (
@@ -329,9 +430,17 @@ export function AppShell() {
               {activeUtilityTab === 'world' ? (
                 <div className="space-y-3">
                   <SectionLabel>世界观词条</SectionLabel>
+                  <SidebarHint>{chapterContextHint}</SidebarHint>
                   <UtilityInfoCard title="标题" value={worldSetting?.title || '尚未填写'} />
-                  <UtilityInfoCard title="概览" value={worldSetting?.overview || '暂无概览'} />
-                  <UtilityInfoCard title="规则" value={worldSetting?.rules || '暂无规则'} />
+                  {contextualWorldSections.map((section) => (
+                    <UtilityInfoCard
+                      key={section.key}
+                      title={section.label}
+                      value={section.value || section.emptyLabel}
+                      emphasis={section.score > 0}
+                      keywords={section.matches}
+                    />
+                  ))}
                 </div>
               ) : null}
 
@@ -421,11 +530,35 @@ function ProjectTreeStatic({ label, meta }: { label: string; meta?: string }) {
   )
 }
 
-function UtilityInfoCard({ title, value }: { title: string; value: string }) {
+function UtilityInfoCard({
+  title,
+  value,
+  emphasis = false,
+  keywords = [],
+}: {
+  title: string
+  value: string
+  emphasis?: boolean
+  keywords?: string[]
+}) {
   return (
-    <div className="rounded-md border border-white/8 bg-white/4 p-3">
+    <div
+      className={clsx(
+        'rounded-md border p-3',
+        emphasis ? 'border-amber-500/20 bg-amber-500/8' : 'border-white/8 bg-white/4',
+      )}
+    >
       <div className="text-xs uppercase tracking-[0.18em] text-[#52525B]">{title}</div>
       <div className="mt-2 text-sm leading-6 text-[#E4E4E7]">{value}</div>
+      {keywords.length > 0 ? (
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {keywords.map((keyword) => (
+            <span key={`${title}-${keyword}`} className="rounded-full border border-white/8 px-2 py-0.5 text-[11px] text-[#A1A1AA]">
+              {keyword}
+            </span>
+          ))}
+        </div>
+      ) : null}
     </div>
   )
 }
