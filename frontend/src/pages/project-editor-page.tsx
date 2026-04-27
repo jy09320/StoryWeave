@@ -1135,30 +1135,6 @@ export function ProjectEditorPage() {
           </CardFooter>
         </Card>
 
-        <Card className="border border-primary/20 bg-primary/5">
-          <CardContent className="flex flex-col gap-3 py-5 sm:flex-row sm:items-center sm:justify-between">
-            <div className="space-y-1">
-              <div className="text-sm font-medium text-white">需要切换到 AI 工具箱任务流？</div>
-              <p className="text-sm leading-6 text-slate-300">
-                可前往统一的 AI 工具箱执行续写、改写与设定检查任务，生成结果后再直接带回当前章节继续保存。
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Link
-                to={`/ai-toolbox?task=continue&projectId=${projectId}&chapterId=${chapterId}`}
-                className="inline-flex h-9 shrink-0 items-center justify-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground transition hover:opacity-90"
-              >
-                打开续写任务
-              </Link>
-              <Link
-                to={`/ai-toolbox?task=rewrite&projectId=${projectId}&chapterId=${chapterId}`}
-                className="inline-flex h-9 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-transparent px-4 text-sm font-medium text-white transition hover:bg-white/10"
-              >
-                打开改写任务
-              </Link>
-            </div>
-          </CardContent>
-        </Card>
       </section>
 
       <aside className="space-y-4 xl:sticky xl:top-4 xl:self-start">
@@ -1191,6 +1167,35 @@ export function ProjectEditorPage() {
                   ]}
                 />
               ) : null}
+
+              <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4">
+                <div className="space-y-2">
+                  <div className="text-sm font-medium text-white">统一 AI 工具箱入口</div>
+                  <p className="text-xs leading-6 text-slate-300">
+                    当任务需要完整历史、结果回看或更大工作区时，从这里切到 AI 工具箱；生成结果后仍可直接带回当前章节。
+                  </p>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Link
+                    to={`/ai-toolbox?task=continue&projectId=${projectId}&chapterId=${chapterId}`}
+                    className="inline-flex h-8 items-center justify-center rounded-md bg-primary px-3 text-xs font-medium text-primary-foreground transition hover:opacity-90"
+                  >
+                    续写任务
+                  </Link>
+                  <Link
+                    to={`/ai-toolbox?task=rewrite&projectId=${projectId}&chapterId=${chapterId}`}
+                    className="inline-flex h-8 items-center justify-center rounded-md border border-white/10 px-3 text-xs text-white transition hover:bg-white/10"
+                  >
+                    改写任务
+                  </Link>
+                  <Link
+                    to={`/ai-toolbox?task=consistency&projectId=${projectId}&chapterId=${chapterId}`}
+                    className="inline-flex h-8 items-center justify-center rounded-md border border-white/10 px-3 text-xs text-white transition hover:bg-white/10"
+                  >
+                    设定检查
+                  </Link>
+                </div>
+              </div>
 
               <AiPanelInfoCard
                 title="后端当前运行配置"
