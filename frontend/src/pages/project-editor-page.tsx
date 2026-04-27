@@ -4,7 +4,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { Bot, ChevronLeft, FileText, History, LoaderCircle, Save, Sparkles, WandSparkles } from 'lucide-react'
 import { toast } from 'sonner'
 
-import { RichTextEditor } from '@/components/editor/rich-text-editor'
+import { RichTextEditor, type RichTextEditorHandle } from '@/components/editor/rich-text-editor'
 import { EmptyState } from '@/components/empty-state'
 import { LoadingState } from '@/components/loading-state'
 import { StatusBadge } from '@/components/status-badge'
@@ -79,6 +79,13 @@ interface GenerationState {
   result: string
   isGenerating: boolean
   requestId: number
+}
+
+type SelectionAction = 'polish' | 'expand' | 'rewrite' | 'consistency'
+
+interface SelectionContextState {
+  text: string
+  action: SelectionAction
 }
 
 interface ProviderConfigFormState {
@@ -169,12 +176,53 @@ function normalizeChapterContent(content: string | null | undefined, plainText: 
   return plainTextToHtml(plainText ?? content ?? '')
 }
 
+function buildSelectionInstruction(action: SelectionAction, selectedText: string) {
+  const quotedText = `「${selectedText}」`
+
+  switch (action) {
+    case 'polish':
+      return `请润色这段文字，保持原意和人物口吻，不要脱离当前章节语境：${quotedText}`
+    case 'expand':
+      return `请围绕这段文字继续扩写，补足细节、情绪和动作，但保持与当前章节一致：${quotedText}`
+    case 'rewrite':
+      return `请改写这段文字，提升表达与节奏，但不要偏离当前剧情信息：${quotedText}`
+    case 'consistency':
+      return `请检查这段文字是否与当前角色设定、语气和世界观一致，并指出问题或给出更稳妥的改写建议：${quotedText}`
+  }
+}
+
+function buildDiffLines(originalText: string, nextText: string) {
+  const originalLines = originalText.split('\n')
+  const nextLines = nextText.split('\n')
+  const maxLength = Math.max(originalLines.length, nextLines.length)
+
+  return Array.from({ length: maxLength }, (_, index) => {
+    const original = originalLines[index] ?? ''
+    const next = nextLines[index] ?? ''
+
+    if (original === next) {
+      return { type: 'same' as const, original, next }
+    }
+
+    if (!original) {
+      return { type: 'added' as const, original, next }
+    }
+
+    if (!next) {
+      return { type: 'removed' as const, original, next }
+    }
+
+    return { type: 'changed' as const, original, next }
+  })
+}
+
 export function ProjectEditorPage() {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const { projectId, chapterId } = useParams<{ projectId: string; chapterId: string }>()
   const autosaveTimerRef = useRef<number | null>(null)
   const allowNextNavigationRef = useRef(false)
+  const editorRef = useRef<RichTextEditorHandle | null>(null)
 
   useEffect(() => {
     return () => {
@@ -186,6 +234,7 @@ export function ProjectEditorPage() {
 
   const [drafts, setDrafts] = useState<Record<string, EditorFormState>>({})
   const [dirtyChapterIds, setDirtyChapterIds] = useState<Record<string, boolean>>({})
+  const [selectionContext, setSelectionContext] = useState<SelectionContextState | null>(null)
   const [generation, setGeneration] = useState<GenerationState>({
     instruction: defaultGenerationInstruction,
     provider: 'openai',
@@ -251,6 +300,17 @@ export function ProjectEditorPage() {
   const chapter = useMemo(
     () => getChapterById(projectQuery.data, chapterId),
     [projectQuery.data, chapterId],
+  )
+  const mentionItems = useMemo(
+    () =>
+      (projectQuery.data?.project_characters ?? []).map((item) => ({
+        id: item.character.id,
+        label: item.character.name,
+        personality: item.character.personality,
+        projectSummary: item.summary ?? item.role_label ?? item.character.description,
+        description: item.character.description,
+      })),
+    [projectQuery.data?.project_characters],
   )
   const defaultGenerationProvider = projectQuery.data?.default_model_provider ?? 'openai'
   const defaultGenerationModelId = projectQuery.data?.default_model_id ?? 'gpt-4o'
@@ -395,10 +455,6 @@ export function ProjectEditorPage() {
     toast.success(draft.mode === 'replace' ? '工具箱结果已覆盖到当前草稿' : '工具箱结果已追加到当前正文草稿')
   }
 
-  function handleTitleChange(event: ChangeEvent<HTMLInputElement>) {
-    updateFormField('title', event.target.value)
-  }
-
   function handleEditorChange(payload: { html: string; plainText: string }) {
     if (!chapter?.id) {
       return
@@ -435,6 +491,21 @@ export function ProjectEditorPage() {
       ...prev,
       result: '',
     }))
+    setSelectionContext(null)
+  }
+
+  function handleBubbleAction(action: SelectionAction, selectedText: string) {
+    setSelectionContext({ action, text: selectedText })
+    setGeneration((prev) => ({
+      ...prev,
+      result: '',
+      instruction: buildSelectionInstruction(action, selectedText),
+    }))
+    toast.success(
+      `已切换到选区${
+        action === 'expand' ? '扩写' : action === 'rewrite' ? '改写' : action === 'polish' ? '润色' : '一致性检查'
+      }模式`,
+    )
   }
 
   function handleStopGeneration() {
@@ -472,7 +543,9 @@ export function ProjectEditorPage() {
       return
     }
 
-    if (!activeForm.plainText.trim()) {
+    const sourceText = selectionContext?.text?.trim() || activeForm.plainText.trim()
+
+    if (!sourceText) {
       toast.error('请先输入章节正文，再发起 AI 续写')
       return
     }
@@ -491,7 +564,7 @@ export function ProjectEditorPage() {
         const payload: AIGeneratePayload = {
           project_id: projectId,
           chapter_id: chapterId,
-          text: activeForm.plainText,
+          text: sourceText,
           instruction: generation.instruction,
           model_provider: generationProvider,
           model_id: modelId,
@@ -549,6 +622,20 @@ export function ProjectEditorPage() {
   function handleAcceptGeneratedText() {
     if (!generation.result.trim()) {
       return
+    }
+
+    if (selectionContext && selectionContext.action !== 'consistency') {
+      const applied = editorRef.current?.applyGeneratedText({
+        text: generation.result.trim(),
+        mode: selectionContext.action === 'expand' ? 'append-after-selection' : 'replace-selection',
+      })
+
+      if (applied) {
+        setGeneration((prev) => ({ ...prev, result: '', isGenerating: false }))
+        setSelectionContext(null)
+        toast.success(selectionContext.action === 'expand' ? '已在选区后插入扩写结果' : '已替换当前选区')
+        return
+      }
     }
 
     const mergedText = activeForm.plainText.trim()
@@ -746,6 +833,35 @@ export function ProjectEditorPage() {
     }
   }, [shouldBlockNavigation])
 
+  useEffect(() => {
+    function handleResultHotkeys(event: KeyboardEvent) {
+      if (generation.isGenerating || !generation.result.trim()) {
+        return
+      }
+
+      const target = event.target
+      const isTypingField =
+        target instanceof HTMLElement &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.isContentEditable)
+
+      if (event.key === 'Tab' && !isTypingField) {
+        event.preventDefault()
+        handleAcceptGeneratedText()
+      }
+
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        handleDiscardGeneratedText()
+        toast.info('已放弃当前 AI 结果')
+      }
+    }
+
+    window.addEventListener('keydown', handleResultHotkeys)
+    return () => window.removeEventListener('keydown', handleResultHotkeys)
+  }, [generation.isGenerating, generation.result, selectionContext, activeForm.plainText, chapter?.id, drafts])
+
   if (!projectId || !chapterId) {
     return (
       <EmptyState
@@ -828,16 +944,10 @@ export function ProjectEditorPage() {
             <div className="mx-auto grid w-full max-w-4xl gap-5">
               <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_220px]">
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-200" htmlFor="chapter-title">
-                    章节标题
-                  </label>
-                  <Input
-                    id="chapter-title"
-                    value={activeForm.title}
-                    onChange={handleTitleChange}
-                    maxLength={200}
-                    className="border-white/8 bg-[#111113] text-lg font-semibold"
-                  />
+                  <label className="text-sm font-medium text-slate-200">章节状态</label>
+                  <div className="rounded-md border border-dashed border-white/8 bg-white/4 px-4 py-3 text-sm leading-6 text-slate-400">
+                    标题与正文已收进同一写作表面。按标题处回车可直接进入正文，后续再继续下沉为真正的 Tiptap 标题节点。
+                  </div>
                 </div>
 
                 <div className="space-y-2">
@@ -859,10 +969,52 @@ export function ProjectEditorPage() {
 
               <div className="space-y-2">
                 <label className="text-sm font-medium text-slate-200" htmlFor="chapter-content">
-                  正文内容
+                  写作区
                 </label>
                 <RichTextEditor
+                  ref={editorRef}
+                  title={activeForm.title}
+                  onTitleChange={(nextTitle) => updateFormField('title', nextTitle)}
+                  titlePlaceholder="在这里写章节标题"
                   value={activeForm.contentHtml}
+                  mentionItems={mentionItems}
+                  onSelectionChange={({ text }) => {
+                    setSelectionContext((prev) => (prev ? { ...prev, text } : prev))
+                  }}
+                  onBubbleAction={handleBubbleAction}
+                  onSlashCommand={(command) => {
+                    if (command === 'continue') {
+                      setSelectionContext(null)
+                      setGeneration((prev) => ({
+                        ...prev,
+                        result: '',
+                        instruction: '请基于当前章节正文继续写下去，保持风格一致并自然承接最近一段内容。',
+                      }))
+                      toast.success('已切换到章节续写模式')
+                      return
+                    }
+
+                    if (command === 'consistency') {
+                      setSelectionContext(null)
+                      setGeneration((prev) => ({
+                        ...prev,
+                        result: '',
+                        instruction: '请检查当前章节是否与项目角色设定、口吻和世界观规则一致，并指出明显冲突。',
+                      }))
+                      toast.success('已切换到设定检查模式')
+                      return
+                    }
+
+                    if (command === 'rewrite') {
+                      setSelectionContext(null)
+                      setGeneration((prev) => ({
+                        ...prev,
+                        result: '',
+                        instruction: '请基于当前章节整体内容进行改写，优化表达、节奏和可读性，但不要偏离既有剧情信息。',
+                      }))
+                      toast.success('已切换到章节改写模式')
+                    }
+                  }}
                   onChange={handleEditorChange}
                   placeholder="从这一行开始写标题后的正文。右侧的 AI 面板和参考抽屉会作为辅助层存在，不再挤占主写作区。"
                 />
@@ -935,6 +1087,25 @@ export function ProjectEditorPage() {
             </div>
 
             <div className="grid gap-3">
+              {selectionContext ? (
+                <AiPanelInfoCard
+                  title="当前选区模式"
+                  description="你刚刚从正文选区触发了一个内联 AI 动作。生成结果会优先按该模式回写。"
+                  items={[
+                    `动作：${
+                      selectionContext.action === 'polish'
+                        ? 'AI 润色'
+                        : selectionContext.action === 'expand'
+                          ? '扩写'
+                          : selectionContext.action === 'rewrite'
+                            ? '改写'
+                            : '一致性检查'
+                    }`,
+                    `选中文本：${selectionContext.text.slice(0, 80)}${selectionContext.text.length > 80 ? '...' : ''}`,
+                  ]}
+                />
+              ) : null}
+
               <AiPanelInfoCard
                 title="后端当前运行配置"
                 tone="success"
@@ -1093,7 +1264,48 @@ export function ProjectEditorPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="min-h-[260px] rounded-2xl border border-white/10 bg-black/10 p-4 text-sm leading-7 text-slate-200 whitespace-pre-wrap">
-              {generation.result || 'AI 续写结果会显示在这里。'}
+              {selectionContext && generation.result.trim() ? (
+                <div className="space-y-4 whitespace-normal">
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="rounded-xl border border-white/8 bg-white/4 p-3">
+                      <div className="mb-2 text-xs uppercase tracking-[0.18em] text-slate-500">原文</div>
+                      <div className="whitespace-pre-wrap text-sm leading-6 text-slate-300">{selectionContext.text}</div>
+                    </div>
+                    <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/8 p-3">
+                      <div className="mb-2 text-xs uppercase tracking-[0.18em] text-emerald-300">候选结果</div>
+                      <div className="whitespace-pre-wrap text-sm leading-6 text-emerald-50">{generation.result}</div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-white/8 bg-[#0F0F11]">
+                    <div className="border-b border-white/6 px-3 py-2 text-xs uppercase tracking-[0.18em] text-slate-500">
+                      差异预览
+                    </div>
+                    <div className="space-y-1 p-3">
+                      {buildDiffLines(selectionContext.text, generation.result).map((line, index) => (
+                        <div
+                          key={`${line.type}-${index}`}
+                          className={[
+                            'grid gap-2 rounded-md px-2 py-1.5 text-xs leading-5 sm:grid-cols-2',
+                            line.type === 'same'
+                              ? 'text-slate-500'
+                              : line.type === 'added'
+                                ? 'bg-emerald-500/10 text-emerald-100'
+                                : line.type === 'removed'
+                                  ? 'bg-rose-500/10 text-rose-100'
+                                  : 'bg-amber-500/10 text-amber-100',
+                          ].join(' ')}
+                        >
+                          <div className="whitespace-pre-wrap">{line.original || ' '}</div>
+                          <div className="whitespace-pre-wrap">{line.next || ' '}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                generation.result || 'AI 续写结果会显示在这里。'
+              )}
             </div>
 
             <div className="grid gap-3 sm:grid-cols-2">
@@ -1102,13 +1314,26 @@ export function ProjectEditorPage() {
                 description={generation.isGenerating ? '模型正在持续输出中。' : '等待你发起下一次生成。'}
                 items={[
                   generation.isGenerating ? '生成状态：进行中' : '生成状态：空闲',
-                  generation.result.trim() ? '已有结果：可追加到正文' : '已有结果：暂无',
+                  generation.result.trim()
+                    ? selectionContext
+                      ? '已有结果：可按选区模式回写'
+                      : '已有结果：可追加到正文'
+                    : '已有结果：暂无',
                 ]}
               />
               <AiPanelInfoCard
                 title="后续动作"
-                description="接受结果会把内容追加到正文；丢弃只清空本次生成结果，不影响正文。"
-                items={['动作 1：追加到正文', '动作 2：丢弃结果', '动作 3：调整指令后重新生成']}
+                description="接受结果会按当前模式写回正文；丢弃只清空本次生成结果，不影响正文。"
+                items={[
+                  selectionContext
+                    ? `动作 1：${
+                        selectionContext.action === 'expand' ? '插入到选区后' : selectionContext.action === 'consistency' ? '保留为检查结果' : '替换当前选区'
+                      }`
+                    : '动作 1：追加到正文',
+                  '动作 2：丢弃结果',
+                  '动作 3：调整指令后重新生成',
+                  '快捷键：Tab 接受，Esc 放弃',
+                ]}
               />
             </div>
 
