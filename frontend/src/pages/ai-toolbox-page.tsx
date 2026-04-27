@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
   ArrowRight,
@@ -76,6 +76,7 @@ const TASK_OPTIONS = [
 ] as const
 
 const TOOLBOX_RESULT_DRAFT_KEY = 'storyweave.toolbox-result-draft'
+const TOOLBOX_HISTORY_KEY = 'storyweave.toolbox-history'
 
 type ToolboxTaskType = (typeof TASK_OPTIONS)[number]['value']
 
@@ -99,6 +100,20 @@ interface GenerationState {
   isGenerating: boolean
   requestId: number
 }
+
+interface GenerationHistoryItem {
+  id: string
+  task: ToolboxTaskType
+  projectId: string
+  projectTitle: string | null
+  chapterId: string | null
+  chapterTitle: string | null
+  input: string
+  result: string
+  createdAt: string
+}
+
+type SendBackMode = ToolboxDraftApplyMode | null
 
 const FALLBACK_MODEL_BY_PROVIDER: Record<string, string> = {
   openai: 'gpt-4o',
@@ -126,6 +141,31 @@ function buildContextText(project: ProjectDetail | undefined, chapter: Chapter |
   return parts.join('\n')
 }
 
+function buildDiffLines(originalText: string, nextText: string) {
+  const originalLines = originalText.split('\n')
+  const nextLines = nextText.split('\n')
+  const maxLength = Math.max(originalLines.length, nextLines.length)
+
+  return Array.from({ length: maxLength }, (_, index) => {
+    const original = originalLines[index] ?? ''
+    const next = nextLines[index] ?? ''
+
+    if (original === next) {
+      return { type: 'same' as const, original, next }
+    }
+
+    if (!original) {
+      return { type: 'added' as const, original, next }
+    }
+
+    if (!next) {
+      return { type: 'removed' as const, original, next }
+    }
+
+    return { type: 'changed' as const, original, next }
+  })
+}
+
 export function AIToolboxPage() {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -136,6 +176,8 @@ export function AIToolboxPage() {
   const [activeTask, setActiveTask] = useState<ToolboxTaskType>(initialTask)
   const [availableModels, setAvailableModels] = useState<AIModelOption[]>([])
   const [isLoadingModels, setIsLoadingModels] = useState(false)
+  const [history, setHistory] = useState<GenerationHistoryItem[]>([])
+  const [recommendedSendMode, setRecommendedSendMode] = useState<SendBackMode>(null)
   const [generation, setGeneration] = useState<GenerationState>({
     instruction: getTaskMeta(initialTask).defaultInstruction,
     provider: 'openai',
@@ -145,6 +187,26 @@ export function AIToolboxPage() {
     isGenerating: false,
     requestId: 0,
   })
+
+  useEffect(() => {
+    const raw = window.sessionStorage.getItem(TOOLBOX_HISTORY_KEY)
+    if (!raw) {
+      return
+    }
+
+    try {
+      const parsed = JSON.parse(raw) as GenerationHistoryItem[]
+      if (Array.isArray(parsed)) {
+        setHistory(parsed)
+      }
+    } catch {
+      window.sessionStorage.removeItem(TOOLBOX_HISTORY_KEY)
+    }
+  }, [])
+
+  useEffect(() => {
+    window.sessionStorage.setItem(TOOLBOX_HISTORY_KEY, JSON.stringify(history))
+  }, [history])
 
   const runtimeSettingsQuery = useQuery({
     queryKey: ['ai-runtime-settings'],
@@ -180,6 +242,7 @@ export function AIToolboxPage() {
     const meta = getTaskMeta(task)
     setActiveTask(task)
     syncSearchParams(task)
+    setRecommendedSendMode(task === 'continue' ? 'append' : 'replace')
     setGeneration((prev) => ({
       ...prev,
       instruction: meta.defaultInstruction,
@@ -309,11 +372,29 @@ export function AIToolboxPage() {
           return prev
         }
 
+        if (prev.result.trim()) {
+          setHistory((current) => [
+            {
+              id: `${Date.now()}`,
+              task: activeTask,
+              projectId,
+              projectTitle: projectQuery.data?.title ?? null,
+              chapterId: selectedChapter?.id ?? null,
+              chapterTitle: selectedChapter?.title ?? null,
+              input,
+              result: prev.result,
+              createdAt: new Date().toISOString(),
+            },
+            ...current,
+          ].slice(0, 8))
+        }
+
         return {
           ...prev,
           isGenerating: false,
         }
       })
+      setRecommendedSendMode(activeTask === 'continue' ? 'append' : 'replace')
     } catch (error) {
       setGeneration((prev) => {
         if (prev.requestId !== requestId) {
@@ -327,6 +408,11 @@ export function AIToolboxPage() {
       })
       toast.error(error instanceof Error ? error.message : 'AI 任务执行失败')
     }
+  }
+
+  async function handleCopyHistoryResult(result: string) {
+    await navigator.clipboard.writeText(result)
+    toast.success('历史结果已复制到剪贴板')
   }
 
   if (runtimeSettingsQuery.isLoading) {
@@ -401,7 +487,7 @@ export function AIToolboxPage() {
         </Card>
       </section>
 
-      <section className="grid gap-6 xl:grid-cols-[320px_minmax(0,1fr)]">
+      <section className="grid gap-6 xl:grid-cols-[320px_minmax(0,1fr)_300px]">
         <aside className="space-y-4">
           <Card className="border border-white/10 bg-white/6 shadow-lg shadow-black/5">
             <CardHeader>
@@ -598,11 +684,54 @@ export function AIToolboxPage() {
           <Card className="border border-white/10 bg-white/6 shadow-lg shadow-black/5">
             <CardHeader>
               <CardTitle className="text-xl text-white">{taskMeta.resultTitle}</CardTitle>
-              <CardDescription>生成结果可直接复制，或带回章节编辑器作为草稿继续处理。</CardDescription>
+              <CardDescription>结果以原文、候选结果和差异预览组织，便于继续处理或带回编辑器。</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="min-h-[260px] rounded-2xl border border-white/10 bg-black/10 p-4 text-sm leading-7 text-slate-200 whitespace-pre-wrap">
-                {generation.result || '当前任务结果会显示在这里。'}
+              <div className="min-h-[260px] rounded-2xl border border-white/10 bg-black/10 p-4 text-sm leading-7 text-slate-200">
+                {generation.result.trim() ? (
+                  <div className="space-y-4 whitespace-normal">
+                    <div className="grid gap-3 lg:grid-cols-2">
+                      <div className="rounded-xl border border-white/8 bg-white/4 p-3">
+                        <div className="mb-2 text-xs uppercase tracking-[0.18em] text-slate-500">原文</div>
+                        <div className="whitespace-pre-wrap text-sm leading-6 text-slate-300">
+                          {generation.input.trim() || '本次任务原文为空'}
+                        </div>
+                      </div>
+                      <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/8 p-3">
+                        <div className="mb-2 text-xs uppercase tracking-[0.18em] text-emerald-300">候选结果</div>
+                        <div className="whitespace-pre-wrap text-sm leading-6 text-emerald-50">{generation.result}</div>
+                      </div>
+                    </div>
+
+                    <div className="rounded-xl border border-white/8 bg-[#0F0F11]">
+                      <div className="border-b border-white/6 px-3 py-2 text-xs uppercase tracking-[0.18em] text-slate-500">
+                        差异预览
+                      </div>
+                      <div className="space-y-1 p-3">
+                        {buildDiffLines(generation.input.trim(), generation.result).map((line, index) => (
+                          <div
+                            key={`${line.type}-${index}`}
+                            className={[
+                              'grid gap-2 rounded-md px-2 py-1.5 text-xs leading-5 sm:grid-cols-2',
+                              line.type === 'same'
+                                ? 'text-slate-500'
+                                : line.type === 'added'
+                                  ? 'bg-emerald-500/10 text-emerald-100'
+                                  : line.type === 'removed'
+                                    ? 'bg-rose-500/10 text-rose-100'
+                                    : 'bg-amber-500/10 text-amber-100',
+                            ].join(' ')}
+                          >
+                            <div className="whitespace-pre-wrap">{line.original || ' '}</div>
+                            <div className="whitespace-pre-wrap">{line.next || ' '}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="whitespace-pre-wrap">当前任务结果会显示在这里。</div>
+                )}
               </div>
               <div className="flex flex-wrap gap-3">
                 <Button
@@ -622,6 +751,38 @@ export function AIToolboxPage() {
                 </Button>
                 {selectedChapter && projectId ? (
                   <>
+                    <div className="grid w-full gap-3 xl:grid-cols-2">
+                      <div
+                        className={[
+                          'rounded-2xl border p-4 text-sm',
+                          recommendedSendMode === 'append'
+                            ? 'border-primary/30 bg-primary/10'
+                            : 'border-white/10 bg-black/10',
+                        ].join(' ')}
+                      >
+                        <div className="text-sm font-medium text-white">追加到正文</div>
+                        <div className="mt-2 text-xs leading-6 text-slate-400">
+                          目标章节：{selectedChapter.title}
+                          <br />
+                          适合续写、补段落、扩写场景，不会直接覆盖当前草稿。
+                        </div>
+                      </div>
+                      <div
+                        className={[
+                          'rounded-2xl border p-4 text-sm',
+                          recommendedSendMode === 'replace'
+                            ? 'border-primary/30 bg-primary/10'
+                            : 'border-white/10 bg-black/10',
+                        ].join(' ')}
+                      >
+                        <div className="text-sm font-medium text-white">覆盖当前草稿</div>
+                        <div className="mt-2 text-xs leading-6 text-slate-400">
+                          目标章节：{selectedChapter.title}
+                          <br />
+                          适合改写与重写任务，会把当前结果作为新的正文草稿带回编辑器。
+                        </div>
+                      </div>
+                    </div>
                     <Button variant="outline" onClick={() => handleSendToEditor('append')} disabled={!generation.result.trim()}>
                       带回编辑器并追加
                     </Button>
@@ -635,6 +796,108 @@ export function AIToolboxPage() {
             </CardContent>
           </Card>
         </section>
+
+        <aside className="space-y-4">
+          <Card className="border border-white/10 bg-white/6 shadow-lg shadow-black/5">
+            <CardHeader>
+              <CardTitle className="text-xl text-white">生成历史</CardTitle>
+              <CardDescription>保留最近几次任务结果，方便回看、复用和再次带回编辑器。</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {history.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-white/10 bg-black/10 px-4 py-5 text-sm leading-6 text-slate-400">
+                  还没有历史记录。执行一次任务后，这里会保留最近结果。
+                </div>
+              ) : (
+                <>
+                  <div className="flex justify-end">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setHistory([])
+                        window.sessionStorage.removeItem(TOOLBOX_HISTORY_KEY)
+                        toast.success('工具箱历史已清空')
+                      }}
+                    >
+                      清空历史
+                    </Button>
+                  </div>
+                  {history.map((item) => (
+                    <div
+                      key={item.id}
+                      className="rounded-2xl border border-white/10 bg-black/10 p-4 transition hover:border-white/20 hover:bg-white/6"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActiveTask(item.task)
+                          syncSearchParams(item.task)
+                          setRecommendedSendMode(item.task === 'continue' ? 'append' : 'replace')
+                          setGeneration((prev) => ({
+                            ...prev,
+                            input: item.input,
+                            result: item.result,
+                            instruction: getTaskMeta(item.task).defaultInstruction,
+                            isGenerating: false,
+                          }))
+                        }}
+                        className="block w-full text-left"
+                      >
+                        <div className="text-xs text-slate-500">{formatDate(item.createdAt)}</div>
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                          <div className="text-sm font-medium text-white">{getTaskMeta(item.task).label}</div>
+                          {item.chapterTitle ? (
+                            <span className="rounded-full border border-white/10 px-2 py-0.5 text-[11px] text-slate-400">
+                              {item.chapterTitle}
+                            </span>
+                          ) : null}
+                        </div>
+                        <div className="mt-2 line-clamp-2 text-xs leading-5 text-slate-400">{item.result}</div>
+                      </button>
+
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={async () => {
+                            await handleCopyHistoryResult(item.result)
+                          }}
+                        >
+                          复制
+                        </Button>
+                        {item.projectId && item.chapterId ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              window.sessionStorage.setItem(
+                                TOOLBOX_RESULT_DRAFT_KEY,
+                                JSON.stringify({
+                                  projectId: item.projectId,
+                                  chapterId: item.chapterId,
+                                  task: item.task,
+                                  result: item.result,
+                                  sourceInput: item.input,
+                                  createdAt: item.createdAt,
+                                  mode: item.task === 'continue' ? 'append' : 'replace',
+                                }),
+                              )
+                              toast.success('历史结果已带回对应编辑器')
+                              navigate(`/projects/${item.projectId}/editor/${item.chapterId}?fromToolbox=1`)
+                            }}
+                          >
+                            带回编辑器
+                          </Button>
+                        ) : null}
+                      </div>
+                    </div>
+                  ))}
+                </>
+              )}
+            </CardContent>
+          </Card>
+        </aside>
       </section>
 
       <EmptyState
