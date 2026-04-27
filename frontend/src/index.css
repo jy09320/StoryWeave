@@ -181,3 +181,8 @@
   max-width: 780px;
   margin: 0 auto;
 }
+
+.storyweave-mention {
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
