@@ -134,6 +134,30 @@ function getSelectionActionLabel(action: SelectionAction) {
   }
 }
 
+function getAcceptButtonLabel(origin: GenerationOriginState | null, selection: SelectionContextState | null) {
+  if (origin?.mode === 'replace') {
+    return '覆盖当前草稿'
+  }
+
+  if (origin?.mode === 'append') {
+    return '追加到当前正文'
+  }
+
+  if (origin?.mode === 'replace-selection') {
+    return '替换当前选区'
+  }
+
+  if (origin?.mode === 'append-after-selection') {
+    return '插入到选区后'
+  }
+
+  if (selection?.action === 'consistency') {
+    return '保留检查结果'
+  }
+
+  return '追加到正文'
+}
+
 function getChapterById(project: ProjectDetail | undefined, chapterId: string | undefined) {
   if (!project || !chapterId) {
     return null
@@ -1463,7 +1487,7 @@ export function ProjectEditorPage() {
 
             <div className="flex flex-wrap gap-3">
               <Button onClick={handleAcceptGeneratedText} disabled={!generation.result.trim() || generation.isGenerating}>
-                追加到正文
+                {getAcceptButtonLabel(generationOrigin, selectionContext)}
               </Button>
               <Button variant="outline" onClick={handleDiscardGeneratedText} disabled={!generation.result.trim() && !generation.isGenerating}>
                 丢弃结果
