@@ -1267,6 +1267,7 @@ export function ProjectEditorPage() {
             </div>
           </CardHeader>
           <CardContent className="space-y-5">
+            <section className="space-y-3">
             <div className="text-xs uppercase tracking-[0.2em] text-slate-500">任务配置</div>
             <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4 space-y-4">
               <div className="flex items-center gap-2 text-sm font-medium text-white">
@@ -1369,6 +1370,7 @@ export function ProjectEditorPage() {
                 </Button>
               </div>
             </div>
+            </section>
           </CardContent>
         </Card>
 
