@@ -252,7 +252,7 @@ export function DashboardPage() {
 
   return (
     <div className="space-y-6 pb-10">
-      <section className="grid gap-4 xl:grid-cols-[minmax(0,1.7fr)_320px]">
+      <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
         <div className="rounded-md border border-white/8 bg-[#161618]/92 p-5">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div className="space-y-3">
@@ -379,7 +379,7 @@ export function DashboardPage() {
                         工作台
                       </Link>
                       <Link
-                        to={`/ai-toolbox?task=continue&projectId=${project.id}`}
+                        to={`/projects/${project.id}`}
                         className="inline-flex h-9 w-full items-center justify-center rounded-md bg-amber-500 px-3 text-sm font-medium text-black transition hover:opacity-90 sm:w-auto"
                       >
                         继续写作
