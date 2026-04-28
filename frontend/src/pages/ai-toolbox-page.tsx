@@ -44,6 +44,11 @@ const TASK_OPTIONS = [
     resultTitle: '续写结果',
     status: '已接入基础续写能力',
     items: ['章节续写', '场景扩写', '段落补全'],
+    presets: [
+      '延续当前段落的节奏继续写下去',
+      '补一段承上启下的过渡场景',
+      '扩写冲突爆发前的情绪铺垫',
+    ],
     helper: '优先适合已经有章节正文草稿的场景。生成结果可先在这里预览，再回到编辑器继续处理。',
   },
   {
@@ -58,6 +63,11 @@ const TASK_OPTIONS = [
     resultTitle: '改写结果',
     status: '先复用通用生成链路落地',
     items: ['对白增强', '语气调整', '文风统一'],
+    presets: [
+      '把这段对白改得更克制、更有潜台词',
+      '压缩重复表达，让节奏更利落',
+      '统一成更冷静的叙述语气',
+    ],
     helper: '适合对已有正文、片段或对白做二次加工，不会自动回写到章节正文。',
   },
   {
@@ -72,6 +82,11 @@ const TASK_OPTIONS = [
     resultTitle: '检查结果',
     status: '先基于项目/章节上下文给出分析结果',
     items: ['角色设定检查', '世界观冲突检查', '时间线提醒'],
+    presets: [
+      '检查角色口吻和既有设定是否冲突',
+      '检查世界观规则与当前情节是否冲突',
+      '检查时间线、动机和因果是否闭合',
+    ],
     helper: '适合在章节推进前后快速做风险检查，当前阶段以分析报告形式呈现。',
   },
 ] as const
@@ -619,6 +634,36 @@ export function AIToolboxPage() {
                   <WandSparkles className="size-4 text-primary" />
                   AI 任务配置
                 </div>
+                <div className="space-y-3 rounded-xl border border-white/10 bg-black/10 p-3">
+                  <div className="space-y-1">
+                    <div className="text-sm font-medium text-white">常用意图</div>
+                    <div className="text-xs leading-5 text-slate-400">
+                      面向直接开工的作者。先点一个最接近的任务意图，再按需细改下面的指令。
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {taskMeta.presets.map((preset) => {
+                      const isActive = generation.instruction.trim() === preset
+
+                      return (
+                        <button
+                          key={preset}
+                          type="button"
+                          className={[
+                            'rounded-full border px-3 py-1.5 text-xs transition',
+                            isActive
+                              ? 'border-primary bg-primary/20 text-white'
+                              : 'border-white/10 bg-black/10 text-slate-300 hover:border-white/20 hover:text-white',
+                          ].join(' ')}
+                          onClick={() => setGeneration((prev) => ({ ...prev, instruction: preset, result: '' }))}
+                        >
+                          {preset}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+
                 <div className="rounded-xl border border-white/10 bg-black/10 p-3">
                   <button
                     type="button"
