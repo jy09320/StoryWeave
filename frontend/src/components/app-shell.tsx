@@ -603,7 +603,7 @@ export function AppShell() {
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={handleLoadModels}
+                onClick={handleOpenModelDialog}
                 disabled={isLoadingModels || !hasSavedRuntimeKey || runtimeSettingsQuery.isLoading}
                 className="inline-flex h-8 items-center justify-center rounded-full border border-[#d1d5db] bg-white px-3 text-[11px] text-[#4b5563] transition hover:border-[#9ca3af] hover:text-[#111827] disabled:cursor-not-allowed disabled:opacity-50"
               >

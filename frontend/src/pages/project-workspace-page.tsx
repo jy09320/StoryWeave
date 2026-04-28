@@ -391,22 +391,22 @@ export function ProjectWorkspacePage() {
   return (
     <div className="space-y-6">
       <section className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
-        <Card className="border border-white/8 bg-[#161618]/92 shadow-lg shadow-black/10">
+        <Card className="border border-border bg-card/95 shadow-[0_16px_36px_rgba(148,163,184,0.16)]">
           <CardHeader className="gap-4">
             <CardDescription className="text-primary/80">项目工作台</CardDescription>
             <div className="space-y-3">
-              <CardTitle className="text-3xl text-white">{project.title}</CardTitle>
-              <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
+              <CardTitle className="text-3xl text-foreground">{project.title}</CardTitle>
+              <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                 <StatusBadge status={project.status} />
-                <span className="rounded-full border border-white/10 px-2.5 py-1">{formatProjectType(project.type)}</span>
+                <span className="rounded-full border border-border px-2.5 py-1">{formatProjectType(project.type)}</span>
                 <span>最近更新 {formatDate(project.updated_at)}</span>
               </div>
             </div>
             {project.description?.trim() ? (
-              <CardDescription className="max-w-3xl text-sm leading-7 text-slate-300">{project.description.trim()}</CardDescription>
+              <CardDescription className="max-w-3xl text-sm leading-7 text-muted-foreground">{project.description.trim()}</CardDescription>
             ) : null}
           </CardHeader>
-          <CardFooter className="flex flex-wrap items-center gap-3 border-white/10 bg-white/[0.03]">
+          <CardFooter className="flex flex-wrap items-center gap-3 border-border bg-muted/35">
             <WorkspaceMetricCard label="章节数量" value={`${chapters.length}`} />
             <WorkspaceMetricCard label="累计字数" value={`${totalWords}`} />
             <WorkspaceMetricCard label="角色数量" value={`${projectCharacters.length}`} />
@@ -414,9 +414,9 @@ export function ProjectWorkspacePage() {
           </CardFooter>
         </Card>
 
-        <Card className="border border-white/8 bg-[#161618]/92 shadow-lg shadow-black/10">
+        <Card className="border border-border bg-card/95 shadow-[0_16px_36px_rgba(148,163,184,0.16)]">
           <CardHeader>
-            <CardTitle className="text-xl text-white">创作活跃度</CardTitle>
+            <CardTitle className="text-xl text-foreground">创作活跃度</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-7 gap-2">
@@ -425,9 +425,9 @@ export function ProjectWorkspacePage() {
                   <div
                     title={`${item.label} · ${item.count} 个章节更新 · ${item.words} 字`}
                     className={[
-                      'h-10 rounded-sm border border-white/5',
+                          'h-10 rounded-sm border border-border/50',
                       item.count === 0
-                        ? 'bg-white/[0.03]'
+                        ? 'bg-muted/35'
                         : item.words > 3000
                           ? 'bg-emerald-400/70'
                           : item.words > 1000
@@ -435,7 +435,7 @@ export function ProjectWorkspacePage() {
                             : 'bg-emerald-400/25',
                     ].join(' ')}
                   />
-                  <div className="text-center text-[10px] text-slate-500">{item.label}</div>
+                  <div className="text-center text-[10px] text-muted-foreground">{item.label}</div>
                 </div>
               ))}
             </div>
@@ -444,17 +444,17 @@ export function ProjectWorkspacePage() {
               <WorkspaceFocusCard
                 title="活跃天数"
                 description={`${activeDays} / 21 天`}
-                icon={<BookOpen className="size-4 text-amber-300" />}
+                icon={<BookOpen className="size-4 text-primary" />}
               />
               <WorkspaceFocusCard
                 title="角色资产"
                 description={projectCharacters.length ? `已绑定 ${projectCharacters.length} 个角色` : '还没有绑定角色'}
-                icon={<Users2 className="size-4 text-slate-200" />}
+                icon={<Users2 className="size-4 text-muted-foreground" />}
               />
               <WorkspaceFocusCard
                 title="设定入口"
                 description={worldSetting?.title?.trim() || '进入世界观页维护词条与规则'}
-                icon={<Globe2 className="size-4 text-amber-300" />}
+                icon={<Globe2 className="size-4 text-primary" />}
               />
             </div>
           </CardContent>
@@ -463,11 +463,11 @@ export function ProjectWorkspacePage() {
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
         <section className="space-y-4">
-          <Card className="border border-white/8 bg-[#161618]/92">
+          <Card className="border border-border bg-card/95">
             <CardHeader>
               <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                 <div>
-                  <CardTitle className="text-xl text-white">快速创建章节</CardTitle>
+                  <CardTitle className="text-xl text-foreground">快速创建章节</CardTitle>
                 </div>
                 <form className="flex w-full max-w-md flex-col gap-2 sm:flex-row" onSubmit={handleCreateChapter}>
                   <Input
@@ -485,13 +485,13 @@ export function ProjectWorkspacePage() {
             </CardHeader>
           </Card>
 
-          <Card className="border border-white/8 bg-[#161618]/92">
+          <Card className="border border-border bg-card/95">
             <CardHeader>
               <div className="flex items-center justify-between gap-4">
                 <div>
-                  <CardTitle className="text-xl text-white">章节列表</CardTitle>
+                  <CardTitle className="text-xl text-foreground">章节列表</CardTitle>
                 </div>
-                <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-xs text-slate-400">
+                <div className="inline-flex items-center gap-2 rounded-full border border-border bg-background px-3 py-1 text-xs text-muted-foreground">
                   <ArrowUpDown className="size-3.5 text-primary" />
                   工作台主导航
                 </div>
@@ -514,19 +514,19 @@ export function ProjectWorkspacePage() {
                           'w-full rounded-md border px-4 py-3 text-left transition',
                           isSelected
                             ? 'border-primary/50 bg-primary/10 shadow-lg shadow-primary/10'
-                            : 'border-white/10 bg-white/[0.03] hover:border-white/20 hover:bg-white/[0.06]',
+                            : 'border-border bg-background/90 hover:border-primary/20 hover:bg-muted/35',
                         ].join(' ')}
                       >
                         <div className="flex items-center justify-between gap-3">
                           <div className="min-w-0 space-y-1">
                             <div className="flex flex-wrap items-center gap-2">
-                              <span className="rounded-full border border-white/10 px-2 py-0.5 text-xs text-slate-400">
+                              <span className="rounded-full border border-border px-2 py-0.5 text-xs text-muted-foreground">
                                 第 {chapter.order_index} 章
                               </span>
                               <StatusBadge status={chapter.status} className="py-0.5" />
                             </div>
-                            <h3 className="truncate text-base font-medium text-white">{chapter.title}</h3>
-                            <p className="text-xs text-slate-400">
+                            <h3 className="truncate text-base font-medium text-foreground">{chapter.title}</h3>
+                            <p className="text-xs text-muted-foreground">
                               {chapter.word_count} 字 · 最近更新 {formatDate(chapter.updated_at)}
                             </p>
                           </div>
@@ -580,10 +580,10 @@ export function ProjectWorkspacePage() {
             </CardContent>
           </Card>
 
-          <Card className="border border-white/8 bg-[#161618]/92">
+          <Card className="border border-border bg-card/95">
             <CardHeader>
-              <CardTitle className="text-xl text-white">当前选章</CardTitle>
-              <CardDescription className="text-slate-400">先决定写哪一章，再进入编辑器处理正文。</CardDescription>
+              <CardTitle className="text-xl text-foreground">当前选章</CardTitle>
+              <CardDescription className="text-muted-foreground">先决定写哪一章，再进入编辑器处理正文。</CardDescription>
             </CardHeader>
             <CardContent>
               {!selectedChapter ? (
@@ -594,21 +594,21 @@ export function ProjectWorkspacePage() {
               ) : (
                 <div className="space-y-5">
                   <div className="flex flex-wrap items-center gap-3">
-                    <span className="rounded-full border border-white/10 px-3 py-1 text-xs text-slate-400">
+                    <span className="rounded-full border border-border px-3 py-1 text-xs text-muted-foreground">
                       第 {selectedChapter.order_index} 章
                     </span>
                     <StatusBadge status={selectedChapter.status} />
-                    <span className="text-xs text-slate-500">最近更新 {formatDate(selectedChapter.updated_at)}</span>
+                    <span className="text-xs text-muted-foreground">最近更新 {formatDate(selectedChapter.updated_at)}</span>
                   </div>
 
                   <div>
-                    <h3 className="text-2xl font-semibold text-white">{selectedChapter.title}</h3>
-                    <p className="mt-3 line-clamp-3 text-sm leading-7 text-slate-300">
+                    <h3 className="text-2xl font-semibold text-foreground">{selectedChapter.title}</h3>
+                    <p className="mt-3 line-clamp-3 text-sm leading-7 text-muted-foreground">
                       {selectedChapter.summary?.trim() || '当前章节还没有摘要。'}
                     </p>
                   </div>
 
-                  <Separator className="bg-white/10" />
+                  <Separator className="bg-border" />
 
                   <div className="grid gap-4 md:grid-cols-3">
                     <MetaCard label="当前字数" value={`${selectedChapter.word_count}`} />
@@ -633,7 +633,7 @@ export function ProjectWorkspacePage() {
                     </Link>
                     <Link
                       to={`/ai-toolbox?task=continue&projectId=${project.id}&chapterId=${selectedChapter.id}`}
-                      className="inline-flex h-8 w-full items-center justify-center rounded-lg border border-white/10 bg-transparent px-3 text-sm font-medium text-white transition hover:bg-white/10 sm:w-auto"
+                      className="inline-flex h-8 w-full items-center justify-center rounded-lg border border-border bg-background px-3 text-sm font-medium text-foreground transition hover:bg-muted sm:w-auto"
                     >
                       续写任务
                     </Link>
@@ -658,22 +658,22 @@ export function ProjectWorkspacePage() {
         </section>
 
         <aside className="space-y-4 xl:sticky xl:top-4 xl:self-start">
-          <Card className="border border-white/8 bg-[#161618]/92">
+          <Card className="border border-border bg-card/95">
             <CardHeader>
-              <CardTitle className="text-lg text-white">当前项目步骤</CardTitle>
-              <CardDescription className="text-slate-400">工作台负责选章和整理，正文编辑回到编辑器完成。</CardDescription>
+              <CardTitle className="text-lg text-foreground">当前项目步骤</CardTitle>
+              <CardDescription className="text-muted-foreground">工作台负责选章和整理，正文编辑回到编辑器完成。</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
               {latestUpdatedChapter ? (
-                <div className="rounded-md border border-white/8 bg-white/[0.03] p-4">
-                  <div className="text-xs text-slate-500">最近推进</div>
-                  <div className="mt-1 text-sm font-medium text-white">{latestUpdatedChapter.title}</div>
-                  <div className="mt-2 text-xs text-slate-400">
+                <div className="rounded-md border border-border bg-muted/35 p-4">
+                  <div className="text-xs text-muted-foreground">最近推进</div>
+                  <div className="mt-1 text-sm font-medium text-foreground">{latestUpdatedChapter.title}</div>
+                  <div className="mt-2 text-xs text-muted-foreground">
                     第 {latestUpdatedChapter.order_index} 章 · {latestUpdatedChapter.word_count} 字 · {formatDate(latestUpdatedChapter.updated_at)}
                   </div>
                 </div>
               ) : (
-                <div className="rounded-md border border-dashed border-white/8 bg-white/[0.03] px-4 py-4 text-sm text-slate-400">
+                <div className="rounded-md border border-dashed border-border bg-muted/35 px-4 py-4 text-sm text-muted-foreground">
                   先创建一个章节，再开始推进写作。
                 </div>
               )}
@@ -691,7 +691,7 @@ export function ProjectWorkspacePage() {
                 {latestUpdatedChapter && selectedChapter?.id !== latestUpdatedChapter.id ? (
                   <Link
                     to={`/projects/${project.id}/editor/${latestUpdatedChapter.id}`}
-                    className="inline-flex h-10 items-center justify-center rounded-md border border-white/10 bg-white/[0.03] px-4 text-sm text-white transition hover:bg-white/10"
+                    className="inline-flex h-10 items-center justify-center rounded-md border border-border bg-background px-4 text-sm text-foreground transition hover:bg-muted"
                   >
                     回到最近推进章节
                   </Link>
@@ -700,33 +700,33 @@ export function ProjectWorkspacePage() {
             </CardContent>
           </Card>
 
-          <Card className="border border-white/8 bg-[#161618]/92">
+          <Card className="border border-border bg-card/95">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-lg text-white">
-                <Users2 className="size-5 text-amber-300" />
+              <CardTitle className="flex items-center gap-2 text-lg text-foreground">
+                <Users2 className="size-5 text-primary" />
                 项目角色
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               {projectCharacters.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.03] px-4 py-5 text-sm leading-6 text-slate-400">
+                <div className="rounded-2xl border border-dashed border-border bg-muted/35 px-4 py-5 text-sm leading-6 text-muted-foreground">
                   当前项目还没有绑定角色。
                 </div>
               ) : (
                 <div className="space-y-3">
                   {projectCharacters.map((item) => (
-                    <div key={item.id} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                    <div key={item.id} className="rounded-2xl border border-border bg-background/90 p-4">
                       <div className="flex items-start justify-between gap-3">
                         <div className="space-y-2">
                           <div className="flex flex-wrap items-center gap-2">
-                            <div className="text-sm font-medium text-white">{item.character.name}</div>
+                            <div className="text-sm font-medium text-foreground">{item.character.name}</div>
                             {item.role_label ? (
-                              <span className="rounded-full border border-white/10 px-2 py-0.5 text-xs text-slate-300">
+                              <span className="rounded-full border border-border px-2 py-0.5 text-xs text-muted-foreground">
                                 {item.role_label}
                               </span>
                             ) : null}
                           </div>
-                          <p className="text-xs leading-5 text-slate-400">
+                          <p className="text-xs leading-5 text-muted-foreground">
                             {item.summary?.trim() || item.character.description?.trim() || '暂无项目内角色说明'}
                           </p>
                         </div>
@@ -758,7 +758,7 @@ export function ProjectWorkspacePage() {
                 </div>
               )}
 
-              <Separator className="bg-white/10" />
+              <Separator className="bg-border" />
 
               {charactersQuery.isLoading ? (
                 <LoadingState label="正在加载角色库选项..." className="py-6" />
@@ -767,13 +767,13 @@ export function ProjectWorkspacePage() {
                   角色库加载失败，暂时无法绑定角色。
                 </div>
               ) : availableCharacters.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.03] px-4 py-5 text-sm leading-6 text-slate-400">
+                <div className="rounded-2xl border border-dashed border-border bg-muted/35 px-4 py-5 text-sm leading-6 text-muted-foreground">
                   没有可追加的角色。
                 </div>
               ) : (
                 <form className="space-y-3" onSubmit={handleAttachCharacter}>
                   <div className="space-y-2">
-                    <label className="text-sm font-medium text-slate-200">选择角色</label>
+                    <label className="text-sm font-medium text-foreground/85">选择角色</label>
                     <select
                       value={characterLinkDraft.characterId}
                       onChange={(event) =>
@@ -782,7 +782,7 @@ export function ProjectWorkspacePage() {
                           characterId: event.target.value,
                         }))
                       }
-                      className="flex h-10 w-full rounded-md border border-white/10 bg-slate-950 px-3 py-2 text-sm text-white outline-none transition placeholder:text-slate-500 focus-visible:border-primary"
+                      className="flex h-10 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus-visible:border-primary"
                     >
                       <option value="">请选择角色</option>
                       {availableCharacters.map((character) => (
@@ -793,7 +793,7 @@ export function ProjectWorkspacePage() {
                     </select>
                   </div>
                   <div className="space-y-2">
-                    <label className="text-sm font-medium text-slate-200">项目内定位</label>
+                    <label className="text-sm font-medium text-foreground/85">项目内定位</label>
                     <Input
                       value={characterLinkDraft.roleLabel}
                       onChange={(event) =>
@@ -806,7 +806,7 @@ export function ProjectWorkspacePage() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-sm font-medium text-slate-200">项目内备注</label>
+                    <label className="text-sm font-medium text-foreground/85">项目内备注</label>
                     <Textarea
                       value={characterLinkDraft.summary}
                       onChange={(event) =>
@@ -828,28 +828,28 @@ export function ProjectWorkspacePage() {
             </CardContent>
           </Card>
 
-          <Card className="border border-white/8 bg-[#161618]/92">
+          <Card className="border border-border bg-card/95">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-lg text-white">
-                <Globe2 className="size-5 text-amber-300" />
+              <CardTitle className="flex items-center gap-2 text-lg text-foreground">
+                <Globe2 className="size-5 text-primary" />
                 世界观摘要
               </CardTitle>
-              <CardDescription className="text-slate-400">这里保留速览与跳转，详细设定维护回到专页处理。</CardDescription>
+              <CardDescription className="text-muted-foreground">这里保留速览与跳转，详细设定维护回到专页处理。</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm text-slate-300">
-                <div className="font-medium text-white">当前摘要</div>
-                <div className="mt-3 space-y-3 text-sm leading-6 text-slate-400">
+              <div className="rounded-2xl border border-border bg-muted/35 p-4 text-sm text-foreground/85">
+                <div className="font-medium text-foreground">当前摘要</div>
+                <div className="mt-3 space-y-3 text-sm leading-6 text-muted-foreground">
                   <p>
-                    <span className="text-slate-500">标题：</span>
+                    <span className="text-muted-foreground">标题：</span>
                     {worldSetting?.title || '尚未设置'}
                   </p>
                   <p>
-                    <span className="text-slate-500">概览：</span>
+                    <span className="text-muted-foreground">概览：</span>
                     {worldSetting?.overview?.trim() || '尚未填写世界观概览'}
                   </p>
                   <p>
-                    <span className="text-slate-500">规则：</span>
+                    <span className="text-muted-foreground">规则：</span>
                     {worldSetting?.rules?.trim() || '尚未填写世界规则'}
                   </p>
                 </div>
@@ -857,13 +857,13 @@ export function ProjectWorkspacePage() {
 
               <Link
                 to={`/projects/${project.id}/world`}
-                className="inline-flex h-9 w-full items-center justify-center rounded-lg border border-white/10 bg-transparent px-3 text-sm font-medium text-white transition hover:bg-white/10"
+                className="inline-flex h-9 w-full items-center justify-center rounded-lg border border-border bg-background px-3 text-sm font-medium text-foreground transition hover:bg-muted"
               >
                 进入完整世界观编辑页
               </Link>
               <Link
                 to={`/ai-toolbox?task=consistency&projectId=${project.id}${selectedChapter ? `&chapterId=${selectedChapter.id}` : ''}`}
-                className="inline-flex h-9 w-full items-center justify-center rounded-lg border border-white/10 bg-white/[0.03] px-3 text-sm font-medium text-white transition hover:bg-white/10"
+                className="inline-flex h-9 w-full items-center justify-center rounded-lg border border-border bg-muted/35 px-3 text-sm font-medium text-foreground transition hover:bg-muted"
               >
                 用当前设定做一致性检查
               </Link>
@@ -881,7 +881,7 @@ export function ProjectWorkspacePage() {
           }
         }}
       >
-        <DialogContent className="max-w-xl border-white/10 bg-slate-950/95">
+        <DialogContent className="max-w-xl">
           <DialogHeader>
             <DialogTitle>编辑项目角色定位</DialogTitle>
             <DialogDescription>
@@ -891,12 +891,12 @@ export function ProjectWorkspacePage() {
 
           {editingProjectCharacter ? (
             <form className="space-y-4" onSubmit={handleUpdateProjectCharacter}>
-              <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-slate-300">
-                当前角色：<span className="font-medium text-white">{editingProjectCharacter.character.name}</span>
+              <div className="rounded-2xl border border-border bg-muted/35 px-4 py-3 text-sm text-foreground/85">
+                当前角色：<span className="font-medium text-foreground">{editingProjectCharacter.character.name}</span>
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-200">项目内定位</label>
+                <label className="text-sm font-medium text-foreground/85">项目内定位</label>
                 <Input
                   value={characterLinkEditDraft.roleLabel}
                   onChange={(event) =>
@@ -910,7 +910,7 @@ export function ProjectWorkspacePage() {
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-200">项目内备注</label>
+                <label className="text-sm font-medium text-foreground/85">项目内备注</label>
                 <Textarea
                   value={characterLinkEditDraft.summary}
                   onChange={(event) =>
@@ -949,10 +949,10 @@ export function ProjectWorkspacePage() {
 
 function WorkspaceMetricCard({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
-    <div className="min-w-[148px] rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3">
-      <div className="text-xs uppercase tracking-[0.2em] text-slate-500">{label}</div>
-      <div className="mt-2 text-xl font-semibold text-white">{value}</div>
-      {hint ? <div className="mt-1 text-xs leading-5 text-slate-400">{hint}</div> : null}
+    <div className="min-w-[148px] rounded-2xl border border-border bg-muted/35 px-4 py-3">
+      <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">{label}</div>
+      <div className="mt-2 text-xl font-semibold text-foreground">{value}</div>
+      {hint ? <div className="mt-1 text-xs leading-5 text-muted-foreground">{hint}</div> : null}
     </div>
   )
 }
@@ -967,12 +967,12 @@ function WorkspaceFocusCard({
   icon: React.ReactNode
 }) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+    <div className="rounded-2xl border border-border bg-muted/35 p-4">
       <div className="flex items-center gap-3">
-        <div className="rounded-xl border border-white/10 bg-white/[0.04] p-2">{icon}</div>
+        <div className="rounded-xl border border-border bg-background p-2">{icon}</div>
         <div className={description ? 'space-y-1' : ''}>
-          <div className="text-sm font-medium text-white">{title}</div>
-          {description ? <p className="text-sm leading-6 text-slate-300">{description}</p> : null}
+          <div className="text-sm font-medium text-foreground">{title}</div>
+          {description ? <p className="text-sm leading-6 text-muted-foreground">{description}</p> : null}
         </div>
       </div>
     </div>
@@ -981,9 +981,9 @@ function WorkspaceFocusCard({
 
 function MetaCard({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-      <div className="text-xs uppercase tracking-[0.2em] text-slate-500">{label}</div>
-      <div className="mt-2 text-sm leading-6 text-white">{value}</div>
+    <div className="rounded-2xl border border-border bg-muted/35 p-4">
+      <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">{label}</div>
+      <div className="mt-2 text-sm leading-6 text-foreground">{value}</div>
     </div>
   )
 }

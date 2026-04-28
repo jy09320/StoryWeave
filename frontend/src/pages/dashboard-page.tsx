@@ -266,27 +266,27 @@ export function DashboardPage() {
   return (
     <div className="space-y-6 pb-10">
       <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
-        <div className="rounded-md border border-white/8 bg-[#161618]/92 p-5">
+        <div className="rounded-md border border-border bg-card/95 p-5 shadow-[0_16px_36px_rgba(148,163,184,0.16)]">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div className="space-y-3">
-              <div className="text-[11px] uppercase tracking-[0.22em] text-[#52525B]">Continue Writing</div>
+              <div className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">Continue Writing</div>
               {continueTarget ? (
                 <>
                   <div className="space-y-2">
-                    <div className="text-2xl font-semibold text-white">
+                    <div className="text-2xl font-semibold text-foreground">
                       {continueTarget.chapter?.title || continueTarget.project.title}
                     </div>
-                    <div className="text-sm text-[#A1A1AA]">{continueTarget.project.title}</div>
+                    <div className="text-sm text-muted-foreground">{continueTarget.project.title}</div>
                   </div>
-                  <div className="flex flex-wrap items-center gap-2 text-xs text-[#A1A1AA]">
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                     <StatusBadge status={continueTarget.project.status} />
-                    <Badge variant="outline" className="border-white/10 bg-white/[0.035] text-[#A1A1AA]">
+                    <Badge variant="outline" className="border-border bg-background text-muted-foreground">
                       {formatProjectType(continueTarget.project.type)}
                     </Badge>
                     {continueTarget.chapter ? <span>第 {continueTarget.chapter.order_index} 章</span> : null}
                     <span>最近更新 {formatDate(continueTarget.chapter?.updated_at || continueTarget.project.updated_at)}</span>
                   </div>
-                  <p className="max-w-3xl text-sm leading-7 text-[#A1A1AA]">
+                  <p className="max-w-3xl text-sm leading-7 text-muted-foreground">
                     {continueTarget.chapter?.summary?.trim() ||
                       continueTarget.chapter?.notes?.trim() ||
                       continueTarget.project.description?.trim() ||
@@ -295,8 +295,8 @@ export function DashboardPage() {
                 </>
               ) : (
                 <>
-                  <div className="text-2xl font-semibold text-white">还没有最近写作记录</div>
-                  <p className="max-w-2xl text-sm leading-7 text-[#A1A1AA]">先创建一个项目，再建立第一章。</p>
+                  <div className="text-2xl font-semibold text-foreground">还没有最近写作记录</div>
+                  <p className="max-w-2xl text-sm leading-7 text-muted-foreground">先创建一个项目，再建立第一章。</p>
                 </>
               )}
             </div>
@@ -316,7 +316,7 @@ export function DashboardPage() {
                   </Link>
                   <Link
                     to={`/projects/${continueTarget.project.id}`}
-                    className="inline-flex h-10 w-full items-center justify-center rounded-md border border-white/10 bg-white/[0.035] px-4 text-sm text-white transition hover:bg-white/10 sm:w-auto"
+                    className="inline-flex h-10 w-full items-center justify-center rounded-md border border-border bg-background px-4 text-sm text-foreground transition hover:bg-muted sm:w-auto"
                   >
                     打开项目工作台
                   </Link>
@@ -337,7 +337,7 @@ export function DashboardPage() {
           <MetricPanel label="已完成" value={projectStats.completed} />
           <button
             type="button"
-            className="inline-flex h-11 items-center justify-center rounded-md border border-dashed border-white/10 bg-white/[0.03] text-sm text-[#E4E4E7] transition hover:bg-white/[0.07]"
+            className="inline-flex h-11 items-center justify-center rounded-md border border-dashed border-border bg-muted/35 text-sm text-foreground transition hover:bg-muted"
             onClick={() => setIsCreateOpen(true)}
           >
             <Plus className="mr-2 size-4" />
@@ -347,9 +347,9 @@ export function DashboardPage() {
       </section>
 
       <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
-        <div className="rounded-md border border-white/8 bg-[#161618]/92">
-          <div className="flex items-center justify-between border-b border-white/5 px-5 py-4">
-            <div className="text-sm font-medium text-white">其他项目</div>
+        <div className="rounded-md border border-border bg-card/95">
+          <div className="flex items-center justify-between border-b border-border/70 px-5 py-4">
+            <div className="text-sm font-medium text-foreground">其他项目</div>
           </div>
 
           {projects.length === 0 ? (
@@ -366,21 +366,21 @@ export function DashboardPage() {
               />
             </div>
           ) : (
-            <div className="divide-y divide-white/5">
+            <div className="divide-y divide-border/70">
               {otherProjects.map((project) => (
                 <div key={project.id} className="grid gap-4 px-5 py-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
                   <div className="min-w-0 space-y-2">
                     <div className="flex flex-wrap items-center gap-2">
-                      <div className="truncate text-base font-medium text-white">{project.title}</div>
+                      <div className="truncate text-base font-medium text-foreground">{project.title}</div>
                       <StatusBadge status={project.status} />
-                      <Badge variant="outline" className="border-white/10 bg-white/[0.035] text-[#A1A1AA]">
+                      <Badge variant="outline" className="border-border bg-background text-muted-foreground">
                         {formatProjectType(project.type)}
                       </Badge>
                     </div>
-                    <div className="line-clamp-2 text-sm leading-6 text-[#A1A1AA]">
+                    <div className="line-clamp-2 text-sm leading-6 text-muted-foreground">
                       {project.description?.trim() || '暂无项目简介'}
                     </div>
-                    <div className="flex flex-wrap items-center gap-4 text-xs text-[#52525B]">
+                    <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
                       <span>更新时间 {formatDate(project.updated_at)}</span>
                       <span>{project.source_work || '原创项目'}</span>
                     </div>
@@ -395,7 +395,7 @@ export function DashboardPage() {
                     </Button>
                     <Link
                       to={`/projects/${project.id}`}
-                      className="inline-flex h-9 w-full items-center justify-center rounded-md bg-white/[0.035] px-3 text-sm text-white transition hover:bg-white/10 sm:w-auto"
+                      className="inline-flex h-9 w-full items-center justify-center rounded-md bg-muted/45 px-3 text-sm text-foreground transition hover:bg-muted sm:w-auto"
                     >
                       工作台
                     </Link>
@@ -413,9 +413,9 @@ export function DashboardPage() {
         </div>
 
         <div className="space-y-4">
-          <div className="rounded-md border border-white/8 bg-[#161618]/92">
-            <div className="border-b border-white/5 px-5 py-4">
-              <div className="text-sm font-medium text-white">待续章节</div>
+          <div className="rounded-md border border-border bg-card/95">
+            <div className="border-b border-border/70 px-5 py-4">
+              <div className="text-sm font-medium text-foreground">待续章节</div>
             </div>
             <div className="space-y-3 p-4">
               {recentProjects.length === 0 ? (
@@ -431,20 +431,20 @@ export function DashboardPage() {
                   <Link
                     key={chapter.id}
                     to={`/projects/${project.id}/editor/${chapter.id}`}
-                    className="block rounded-md border border-white/8 bg-white/[0.03] p-4 transition hover:bg-white/[0.06]"
+                    className="block rounded-md border border-border bg-background/90 p-4 transition hover:bg-muted/35"
                   >
-                    <div className="flex flex-wrap items-center gap-2 text-xs text-[#52525B]">
-                      <Badge variant="outline" className="border-white/10 bg-white/[0.035] text-[#A1A1AA]">
+                    <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                      <Badge variant="outline" className="border-border bg-background text-muted-foreground">
                         {project.title}
                       </Badge>
                       <span>第 {chapter.order_index} 章</span>
                       <span>{formatDate(chapter.updated_at)}</span>
                     </div>
-                    <div className="mt-2 text-sm font-medium text-white">{chapter.title}</div>
-                    <div className="mt-1 line-clamp-2 text-sm leading-6 text-[#A1A1AA]">
+                    <div className="mt-2 text-sm font-medium text-foreground">{chapter.title}</div>
+                    <div className="mt-1 line-clamp-2 text-sm leading-6 text-muted-foreground">
                       {chapter.summary?.trim() || chapter.notes?.trim() || '暂无章节摘要。'}
                     </div>
-                    <div className="mt-3 inline-flex items-center gap-1 text-xs text-amber-200">
+                    <div className="mt-3 inline-flex items-center gap-1 text-xs text-primary">
                       继续这一章
                       <ArrowRight className="size-3.5" />
                     </div>
@@ -454,8 +454,8 @@ export function DashboardPage() {
             </div>
           </div>
 
-          <div className="rounded-md border border-white/8 bg-[#161618]/92 p-4">
-            <div className="text-sm font-medium text-white">接下来做什么</div>
+          <div className="rounded-md border border-border bg-card/95 p-4">
+            <div className="text-sm font-medium text-foreground">接下来做什么</div>
             <div className="mt-4 grid gap-2">
               <QuickActionButton
                 label="从最近章节继续写"
@@ -527,16 +527,16 @@ export function DashboardPage() {
 
 function MetricPanel({ label, value, hint }: { label: string; value: number; hint?: string }) {
   return (
-    <div className="rounded-md border border-white/8 bg-[#161618]/92 px-4 py-4">
-      <div className="text-[11px] uppercase tracking-[0.22em] text-[#52525B]">{label}</div>
-      <div className="mt-2 text-2xl font-semibold text-white">{value}</div>
-      {hint ? <div className="mt-1 text-xs text-[#A1A1AA]">{hint}</div> : null}
+    <div className="rounded-md border border-border bg-card/95 px-4 py-4">
+      <div className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">{label}</div>
+      <div className="mt-2 text-2xl font-semibold text-foreground">{value}</div>
+      {hint ? <div className="mt-1 text-xs text-muted-foreground">{hint}</div> : null}
     </div>
   )
 }
 
 function SidebarNotice({ children }: { children: ReactNode }) {
-  return <div className="rounded-md border border-dashed border-white/8 bg-white/[0.03] px-4 py-4 text-sm leading-6 text-[#A1A1AA]">{children}</div>
+  return <div className="rounded-md border border-dashed border-border bg-muted/35 px-4 py-4 text-sm leading-6 text-muted-foreground">{children}</div>
 }
 
 function QuickActionButton({
@@ -554,16 +554,16 @@ function QuickActionButton({
     <button
       type="button"
       onClick={onClick}
-      className="inline-flex h-12 items-center justify-between rounded-md border border-white/8 bg-white/[0.03] px-3 text-sm text-white transition hover:bg-white/[0.07]"
+      className="inline-flex h-12 items-center justify-between rounded-md border border-border bg-background/90 px-3 text-sm text-foreground transition hover:bg-muted"
     >
       <span className="inline-flex min-w-0 items-center gap-2">
         <span className="shrink-0">{icon}</span>
         <span className="min-w-0 text-left">
           <span className="block truncate">{label}</span>
-          {description ? <span className="block truncate text-xs text-[#52525B]">{description}</span> : null}
+          {description ? <span className="block truncate text-xs text-muted-foreground">{description}</span> : null}
         </span>
       </span>
-      <Clock3 className="size-4 shrink-0 text-[#52525B]" />
+      <Clock3 className="size-4 shrink-0 text-muted-foreground" />
     </button>
   )
 }
@@ -596,7 +596,7 @@ function ProjectDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       {trigger ? <DialogTrigger asChild>{trigger}</DialogTrigger> : null}
-      <DialogContent className="max-w-2xl border-white/10 bg-slate-950/98">
+      <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>{description}</DialogDescription>
@@ -604,7 +604,7 @@ function ProjectDialog({
 
         <form className="space-y-5" onSubmit={onSubmit}>
           <div className="space-y-2">
-            <label className="text-sm font-medium text-slate-200" htmlFor="project-title">
+            <label className="text-sm font-medium text-foreground/85" htmlFor="project-title">
               项目标题
             </label>
             <Input
@@ -618,7 +618,7 @@ function ProjectDialog({
 
           <div className="grid gap-5 sm:grid-cols-2">
             <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-200">项目类型</label>
+              <label className="text-sm font-medium text-foreground/85">项目类型</label>
               <Select
                 value={form.type}
                 onValueChange={(value) => onChange((prev) => ({ ...prev, type: value as ProjectType }))}
@@ -637,7 +637,7 @@ function ProjectDialog({
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-200">项目状态</label>
+              <label className="text-sm font-medium text-foreground/85">项目状态</label>
               <Select
                 value={form.status}
                 onValueChange={(value) => onChange((prev) => ({ ...prev, status: value as ProjectStatus }))}
@@ -657,7 +657,7 @@ function ProjectDialog({
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm font-medium text-slate-200" htmlFor="project-source-work">
+            <label className="text-sm font-medium text-foreground/85" htmlFor="project-source-work">
               来源作品
             </label>
             <Input
@@ -670,7 +670,7 @@ function ProjectDialog({
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm font-medium text-slate-200" htmlFor="project-description">
+            <label className="text-sm font-medium text-foreground/85" htmlFor="project-description">
               项目简介
             </label>
             <Textarea
