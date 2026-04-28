@@ -341,9 +341,10 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
     }
   }, [editor, mentionItems, value])
 
-  if (!editor) {
-    return (
-      <div
+  const isEditorReady = Boolean(editor)
+
+  const loadingFallback = !isEditorReady ? (
+    <div
         className={cn(
           'min-h-[520px] rounded-lg border border-white/10 bg-black/10 px-4 py-4 text-sm text-slate-500',
           className,
@@ -351,8 +352,7 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
       >
         正在初始化编辑器...
       </div>
-    )
-  }
+  ) : null
 
   const filteredMentionItems = mentionItems
     .filter((item) => item.label.toLowerCase().includes(mentionState.query.toLowerCase()))
@@ -485,7 +485,7 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
     slashState.visible,
   ])
 
-  return (
+  return loadingFallback ?? (
     <div
       ref={containerRef}
       className={cn('relative rounded-md border border-white/8 bg-[#111113]', className)}
@@ -536,8 +536,8 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
               className="rounded-md px-2.5 py-1.5 text-xs text-[#E4E4E7] transition hover:bg-white/8"
               onMouseDown={(event) => event.preventDefault()}
               onClick={() => {
-                const { from, to } = editor.state.selection
-                const selectedText = editor.state.doc.textBetween(from, to, '\n').trim()
+                const { from, to } = editor!.state.selection
+                const selectedText = editor!.state.doc.textBetween(from, to, '\n').trim()
                 if (selectedText) {
                   onBubbleAction?.(action.key, selectedText)
                 }
@@ -636,7 +636,7 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
             onKeyDown={(event) => {
               if (event.key === 'Enter') {
                 event.preventDefault()
-                editor.commands.focus('start')
+                editor!.commands.focus('start')
               }
             }}
             placeholder={titlePlaceholder ?? '输入章节标题'}
