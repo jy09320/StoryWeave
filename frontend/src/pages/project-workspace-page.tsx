@@ -460,7 +460,7 @@ export function ProjectWorkspacePage() {
   return (
     <div className="space-y-6">
       <section className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
-        <Card className="border border-white/10 bg-white/6 shadow-lg shadow-black/5">
+        <Card className="border border-white/8 bg-[#161618]/92 shadow-lg shadow-black/10">
           <CardHeader className="gap-4">
             <CardDescription className="text-primary/80">项目工作台</CardDescription>
             <div className="space-y-3">
@@ -471,26 +471,24 @@ export function ProjectWorkspacePage() {
                 <span>最近更新 {formatDate(project.updated_at)}</span>
               </div>
             </div>
-            <CardDescription className="max-w-3xl text-sm leading-7 text-slate-300">
-              {project.description?.trim() || '暂无项目简介。当前工作台优先承接项目结构、章节推进与 AI 写作入口，后续继续扩展角色、世界观与一致性控制。'}
-            </CardDescription>
+            {project.description?.trim() ? (
+              <CardDescription className="max-w-3xl text-sm leading-7 text-slate-300">{project.description.trim()}</CardDescription>
+            ) : null}
           </CardHeader>
-          <CardFooter className="flex flex-wrap items-center gap-3 border-white/10 bg-white/4">
-            <WorkspaceMetricCard label="章节数量" value={`${chapters.length}`} hint="已纳入当前项目结构" />
+          <CardFooter className="flex flex-wrap items-center gap-3 border-white/10 bg-white/[0.03]">
+            <WorkspaceMetricCard label="章节数量" value={`${chapters.length}`} />
             <WorkspaceMetricCard
               label="累计字数"
               value={`${chapters.reduce((sum, chapter) => sum + chapter.word_count, 0)}`}
-              hint="按章节统计已写正文"
             />
-            <WorkspaceMetricCard label="角色数量" value={`${projectCharacters.length}`} hint="已绑定到当前项目的角色" />
-            <WorkspaceMetricCard label="来源作品" value={project.source_work || '原创项目'} hint="用于标记创作背景" />
+            <WorkspaceMetricCard label="角色数量" value={`${projectCharacters.length}`} />
+            <WorkspaceMetricCard label="来源作品" value={project.source_work || '原创项目'} />
           </CardFooter>
         </Card>
 
-        <Card className="border border-white/10 bg-white/6 shadow-lg shadow-black/5">
+        <Card className="border border-white/8 bg-[#161618]/92 shadow-lg shadow-black/10">
           <CardHeader>
             <CardTitle className="text-xl text-white">创作活跃度</CardTitle>
-            <CardDescription>先用最近 21 天的章节更新时间形成轻量图谱，为后续项目大盘的成就反馈打基础。</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-7 gap-2">
@@ -501,7 +499,7 @@ export function ProjectWorkspacePage() {
                     className={[
                       'h-10 rounded-sm border border-white/5',
                       item.count === 0
-                        ? 'bg-white/4'
+                        ? 'bg-white/[0.03]'
                         : item.words > 3000
                           ? 'bg-emerald-400/70'
                           : item.words > 1000
@@ -517,17 +515,15 @@ export function ProjectWorkspacePage() {
             <div className="grid gap-3 md:grid-cols-3">
               <WorkspaceFocusCard
                 title="活跃天数"
-                description={`最近 21 天内有 ${activeDays} 天发生过章节更新。`}
-                icon={<BookOpen className="size-4 text-emerald-300" />}
+                description={`${activeDays} / 21 天`}
+                icon={<BookOpen className="size-4 text-amber-300" />}
               />
               <WorkspaceFocusCard
                 title="角色资产"
-                description="项目角色已进入工作台和右侧参考抽屉，后续作为 Mention 与 AI 上下文基础。"
-                icon={<Users2 className="size-4 text-sky-300" />}
+                icon={<Users2 className="size-4 text-slate-200" />}
               />
               <WorkspaceFocusCard
                 title="设定入口"
-                description="世界观与 AI 工具已从章节区剥离，避免核心结构和辅助工具混在一起。"
                 icon={<Globe2 className="size-4 text-amber-300" />}
               />
             </div>
@@ -537,12 +533,11 @@ export function ProjectWorkspacePage() {
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
         <section className="space-y-4">
-          <Card className="border border-white/10 bg-white/6">
+          <Card className="border border-white/8 bg-[#161618]/92">
             <CardHeader>
               <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                 <div>
                   <CardTitle className="text-xl text-white">快速创建章节</CardTitle>
-                  <CardDescription>壳层已经接管项目大纲，这里聚焦创建、排序和进入编辑器。</CardDescription>
                 </div>
                 <form className="flex w-full max-w-md gap-2" onSubmit={handleCreateChapter}>
                   <Input
@@ -560,14 +555,13 @@ export function ProjectWorkspacePage() {
             </CardHeader>
           </Card>
 
-          <Card className="border border-white/10 bg-white/6">
+          <Card className="border border-white/8 bg-[#161618]/92">
             <CardHeader>
               <div className="flex items-center justify-between gap-4">
                 <div>
                   <CardTitle className="text-xl text-white">章节列表</CardTitle>
-                  <CardDescription>从这里选择当前要推进的章节，并完成排序、删除和进入编辑器等操作。</CardDescription>
                 </div>
-                <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/10 px-3 py-1 text-xs text-slate-400">
+                <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-xs text-slate-400">
                   <ArrowUpDown className="size-3.5 text-primary" />
                   工作台主导航
                 </div>
@@ -575,7 +569,7 @@ export function ProjectWorkspacePage() {
             </CardHeader>
             <CardContent>
               {chapters.length === 0 ? (
-                <EmptyState title="这个项目还没有章节" description="先在左侧创建章节，随后即可进入编辑工作流。" />
+                <EmptyState title="这个项目还没有章节" description="先创建一个章节。" />
               ) : (
                 <div className="space-y-2">
                   {chapters.map((chapter, index) => {
@@ -590,7 +584,7 @@ export function ProjectWorkspacePage() {
                           'w-full rounded-md border px-4 py-3 text-left transition',
                           isSelected
                             ? 'border-primary/50 bg-primary/10 shadow-lg shadow-primary/10'
-                            : 'border-white/10 bg-black/10 hover:border-white/20 hover:bg-white/6',
+                            : 'border-white/10 bg-white/[0.03] hover:border-white/20 hover:bg-white/[0.06]',
                         ].join(' ')}
                       >
                         <div className="flex items-center justify-between gap-3">
@@ -653,16 +647,15 @@ export function ProjectWorkspacePage() {
             </CardContent>
           </Card>
 
-          <Card className="border border-white/10 bg-white/6">
+          <Card className="border border-white/8 bg-[#161618]/92">
             <CardHeader>
               <CardTitle className="text-xl text-white">章节摘要面板</CardTitle>
-              <CardDescription>展示当前选中章节的基础信息，并提供进入编辑器的入口。</CardDescription>
             </CardHeader>
             <CardContent>
               {!selectedChapter ? (
                 <EmptyState
                   title="尚未选中章节"
-                  description="从上方章节列表中选择一个章节，即可查看其摘要信息。"
+                  description="选择一个章节。"
                 />
               ) : (
                 <div className="space-y-5">
@@ -677,7 +670,7 @@ export function ProjectWorkspacePage() {
                   <div>
                     <h3 className="text-2xl font-semibold text-white">{selectedChapter.title}</h3>
                     <p className="mt-3 text-sm leading-7 text-slate-300">
-                      {selectedChapter.summary?.trim() || '当前章节还没有摘要，后续可在 AI 生成或保存流程中自动补充。'}
+                      {selectedChapter.summary?.trim() || '当前章节还没有摘要。'}
                     </p>
                   </div>
 
@@ -724,23 +717,22 @@ export function ProjectWorkspacePage() {
         </section>
 
         <aside className="space-y-4 xl:sticky xl:top-4 xl:self-start">
-          <Card className="border border-white/10 bg-white/6">
+          <Card className="border border-white/8 bg-[#161618]/92">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg text-white">
-                <Users2 className="size-5 text-sky-300" />
+                <Users2 className="size-5 text-amber-300" />
                 项目角色
               </CardTitle>
-              <CardDescription>把全局角色库中的人物挂接到当前项目，方便后续 AI 与设定检查引用。</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               {projectCharacters.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-white/10 bg-black/10 px-4 py-5 text-sm leading-6 text-slate-400">
-                  当前项目还没有绑定角色。先在下方添加，后续这里会成为项目人物关系的主入口。
+                <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.03] px-4 py-5 text-sm leading-6 text-slate-400">
+                  当前项目还没有绑定角色。
                 </div>
               ) : (
                 <div className="space-y-3">
                   {projectCharacters.map((item) => (
-                    <div key={item.id} className="rounded-2xl border border-white/10 bg-black/10 p-4">
+                    <div key={item.id} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
                       <div className="flex items-start justify-between gap-3">
                         <div className="space-y-2">
                           <div className="flex flex-wrap items-center gap-2">
@@ -792,8 +784,8 @@ export function ProjectWorkspacePage() {
                   角色库加载失败，暂时无法绑定角色。
                 </div>
               ) : availableCharacters.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-white/10 bg-black/10 px-4 py-5 text-sm leading-6 text-slate-400">
-                  没有可追加的角色。你可以先去 [`CharactersPage`](frontend/src/pages/characters-page.tsx:86) 创建更多角色。
+                <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.03] px-4 py-5 text-sm leading-6 text-slate-400">
+                  没有可追加的角色。
                 </div>
               ) : (
                 <form className="space-y-3" onSubmit={handleAttachCharacter}>
@@ -853,16 +845,15 @@ export function ProjectWorkspacePage() {
             </CardContent>
           </Card>
 
-          <Card className="border border-white/10 bg-white/6">
+          <Card className="border border-white/8 bg-[#161618]/92">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg text-white">
                 <Globe2 className="size-5 text-amber-300" />
                 世界观摘要
               </CardTitle>
-              <CardDescription>先在工作台里沉淀标题、概览和核心规则，后续再扩展为更完整的设定面板。</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="rounded-2xl border border-white/10 bg-black/10 p-4 text-sm text-slate-300">
+              <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm text-slate-300">
                 <div className="flex items-center gap-2 text-white">
                   <PencilLine className="size-4 text-amber-300" />
                   <span className="font-medium">当前摘要</span>
@@ -966,13 +957,13 @@ export function ProjectWorkspacePage() {
           <DialogHeader>
             <DialogTitle>编辑项目角色定位</DialogTitle>
             <DialogDescription>
-              更新角色在当前项目中的定位与备注，后续 AI 上下文会优先消费这里的项目内信息。
+              更新角色在当前项目中的定位与备注。
             </DialogDescription>
           </DialogHeader>
 
           {editingProjectCharacter ? (
             <form className="space-y-4" onSubmit={handleUpdateProjectCharacter}>
-              <div className="rounded-2xl border border-white/10 bg-black/10 px-4 py-3 text-sm text-slate-300">
+              <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-slate-300">
                 当前角色：<span className="font-medium text-white">{editingProjectCharacter.character.name}</span>
               </div>
 
@@ -1028,12 +1019,12 @@ export function ProjectWorkspacePage() {
   )
 }
 
-function WorkspaceMetricCard({ label, value, hint }: { label: string; value: string; hint: string }) {
+function WorkspaceMetricCard({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
-    <div className="min-w-[148px] rounded-2xl border border-white/10 bg-black/10 px-4 py-3">
+    <div className="min-w-[148px] rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3">
       <div className="text-xs uppercase tracking-[0.2em] text-slate-500">{label}</div>
       <div className="mt-2 text-xl font-semibold text-white">{value}</div>
-      <div className="mt-1 text-xs leading-5 text-slate-400">{hint}</div>
+      {hint ? <div className="mt-1 text-xs leading-5 text-slate-400">{hint}</div> : null}
     </div>
   )
 }
@@ -1044,16 +1035,16 @@ function WorkspaceFocusCard({
   icon,
 }: {
   title: string
-  description: string
+  description?: string
   icon: React.ReactNode
 }) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-black/10 p-4">
-      <div className="flex items-start gap-3">
-        <div className="rounded-xl border border-white/10 bg-white/8 p-2">{icon}</div>
-        <div className="space-y-1">
+    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+      <div className="flex items-center gap-3">
+        <div className="rounded-xl border border-white/10 bg-white/[0.04] p-2">{icon}</div>
+        <div className={description ? 'space-y-1' : ''}>
           <div className="text-sm font-medium text-white">{title}</div>
-          <p className="text-sm leading-6 text-slate-300">{description}</p>
+          {description ? <p className="text-sm leading-6 text-slate-300">{description}</p> : null}
         </div>
       </div>
     </div>
@@ -1062,7 +1053,7 @@ function WorkspaceFocusCard({
 
 function MetaCard({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-black/10 p-4">
+    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
       <div className="text-xs uppercase tracking-[0.2em] text-slate-500">{label}</div>
       <div className="mt-2 text-sm leading-6 text-white">{value}</div>
     </div>

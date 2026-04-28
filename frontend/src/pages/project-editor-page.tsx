@@ -1024,7 +1024,7 @@ export function ProjectEditorPage() {
   return (
     <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
       <section className="space-y-4">
-        <Card className="border border-white/10 bg-white/6">
+        <Card className="border border-white/8 bg-[#161618]/92">
           <CardHeader className="gap-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="space-y-2">
@@ -1037,7 +1037,6 @@ export function ProjectEditorPage() {
                   <span>{projectQuery.data.title}</span>
                 </div>
                 <CardTitle className="text-2xl text-white">章节编辑器</CardTitle>
-                <CardDescription>先把正文心流收拢到中心区域，AI 配置和结果放在右侧，不再与正文抢同一层级。</CardDescription>
               </div>
               <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
                 <StatusBadge status={chapter.status} />
@@ -1055,8 +1054,8 @@ export function ProjectEditorPage() {
               <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_220px]">
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-slate-200">章节状态</label>
-                  <div className="rounded-md border border-dashed border-white/8 bg-white/4 px-4 py-3 text-sm leading-6 text-slate-400">
-                    标题与正文已收进同一写作表面。按标题处回车可直接进入正文，后续再继续下沉为真正的 Tiptap 标题节点。
+                  <div className="rounded-md border border-dashed border-white/8 bg-white/[0.03] px-4 py-3 text-sm leading-6 text-slate-400">
+                    标题回车后可直接进入正文。
                   </div>
                 </div>
 
@@ -1136,9 +1135,7 @@ export function ProjectEditorPage() {
                     <div className="space-y-1">
                       <div className="text-xs uppercase tracking-[0.2em] text-emerald-300">内联候选块</div>
                       <div className="text-sm font-medium text-white">当前选区的 AI 候选结果已就绪</div>
-                      <p className="text-xs leading-6 text-slate-300">
-                        这里直接承接刚刚的选区级操作。你可以先在正文附近对比，再决定接受、丢弃，或去右侧工作台继续调整。
-                      </p>
+                      <p className="text-xs leading-6 text-slate-300">对比后决定接受或丢弃。</p>
                     </div>
                     <div className="flex flex-wrap gap-2">
                       <Button
@@ -1160,7 +1157,7 @@ export function ProjectEditorPage() {
                   </div>
 
                   <div className="grid gap-3 lg:grid-cols-2">
-                    <div className="rounded-xl border border-white/8 bg-black/10 p-3">
+                    <div className="rounded-xl border border-white/8 bg-white/[0.03] p-3">
                       <div className="mb-2 text-xs uppercase tracking-[0.18em] text-slate-500">原文片段</div>
                       <div className="whitespace-pre-wrap text-sm leading-6 text-slate-300">{selectionContext.text}</div>
                     </div>
@@ -1170,7 +1167,7 @@ export function ProjectEditorPage() {
                     </div>
                   </div>
 
-                  <div className="rounded-xl border border-white/8 bg-[#0F0F11] p-3">
+                  <div className="rounded-xl border border-white/8 bg-[#111113] p-3">
                     <div className="mb-2 text-xs uppercase tracking-[0.18em] text-slate-500">近邻差异</div>
                     <div className="space-y-1">
                       {buildDiffLines(selectionContext.text, generation.result)
@@ -1212,7 +1209,7 @@ export function ProjectEditorPage() {
               />
             </div>
           </CardContent>
-          <CardFooter className="flex flex-wrap items-center justify-between gap-3 border-white/10 bg-white/4">
+          <CardFooter className="flex flex-wrap items-center justify-between gap-3 border-white/10 bg-white/[0.03]">
             <div className="text-xs text-slate-400">
               {saveChapterMutation.isPending
                 ? '正在保存...'
@@ -1230,21 +1227,20 @@ export function ProjectEditorPage() {
       </section>
 
       <aside className="space-y-4 xl:sticky xl:top-4 xl:self-start">
-        <Card className="border border-white/10 bg-white/6">
+        <Card className="border border-white/8 bg-[#161618]/92">
           <CardHeader className="space-y-4">
             <div>
               <CardTitle className="flex items-center gap-2 text-lg text-white">
                 <Sparkles className="size-5 text-primary" />
                 AI 写作工作台
               </CardTitle>
-              <CardDescription>把运行时配置、任务配置、生成结果与后续动作分层组织，降低认知切换成本。</CardDescription>
             </div>
 
             <div className="grid gap-3">
               {selectionContext ? (
                 <AiPanelInfoCard
                   title="当前选区模式"
-                  description="你刚刚从正文选区触发了一个内联 AI 动作。生成结果会优先按该模式回写。"
+                  description=""
                   items={[
                     `动作：${
                       selectionContext.action === 'polish'
@@ -1266,7 +1262,7 @@ export function ProjectEditorPage() {
                 <div className="space-y-2">
                   <div className="text-sm font-medium text-white">统一 AI 工具箱入口</div>
                   <p className="text-xs leading-6 text-slate-300">
-                    当任务需要完整历史、结果回看或更大工作区时，从这里切到 AI 工具箱；生成结果后仍可直接带回当前章节。
+                    需要更大工作区时可切到 AI 工具箱。
                   </p>
                 </div>
                 <div className="mt-3 flex flex-wrap gap-2">
@@ -1297,7 +1293,7 @@ export function ProjectEditorPage() {
               <AiPanelInfoCard
                 title="后端当前运行配置"
                 tone="success"
-                description="这里显示系统当前默认生效的 AI 运行时配置，只有保存运行时默认值后才会更新。"
+                description=""
                 items={[
                   `提供商：${runtimeSettings?.provider ?? '-'}`,
                   `默认模型：${runtimeSettings?.model_id ?? '-'}`,
@@ -1307,7 +1303,7 @@ export function ProjectEditorPage() {
               />
               <AiPanelInfoCard
                 title="本次任务使用配置"
-                description="点击开始生成时，请求会使用这里的提供商与模型；切换模型只影响下一次任务。"
+                description=""
                 items={[`提供商：${generationProvider}`, `模型：${selectedModelId || '未填写'}`]}
               />
               </section>
@@ -1382,10 +1378,10 @@ export function ProjectEditorPage() {
                     placeholder="支持手动输入任意模型名，例如 openai/gpt-5.4"
                   />
                   <div className="text-xs leading-5 text-slate-400">
-                    这里只影响下一次点击“开始 AI 续写”的请求，不会自动改动上方后端默认配置。
+                    只影响下一次生成。
                   </div>
                   {availableModels.length > 0 ? (
-                    <div className="rounded-xl border border-white/10 bg-black/10 p-3 text-xs text-slate-300">
+                    <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-xs text-slate-300">
                       <div className="mb-2">点击下方模型，直接设为“本次续写模型”：</div>
                       <div className="flex flex-wrap gap-2">
                         {availableModels.slice(0, 20).map((model) => {
@@ -1413,7 +1409,7 @@ export function ProjectEditorPage() {
                     </div>
                   ) : (
                     <div className="rounded-xl border border-dashed border-white/10 bg-black/5 p-3 text-xs leading-5 text-slate-400">
-                      还没有加载模型列表。点击上方“获取可选模型”后，可直接点选模型用于下一次续写。
+                      还没有加载模型列表。
                     </div>
                   )}
                 </div>
@@ -1446,22 +1442,21 @@ export function ProjectEditorPage() {
           </CardContent>
         </Card>
 
-        <Card className="border border-white/10 bg-white/6">
+        <Card className="border border-white/8 bg-[#161618]/92">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg text-white">
               <FileText className="size-5 text-primary" />
               结果与处理
             </CardTitle>
-            <CardDescription>先预览生成结果，再决定接受、丢弃或继续生成下一版。</CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
             <section className="space-y-3">
               <div className="text-xs uppercase tracking-[0.2em] text-slate-500">结果预览</div>
-              <div className="min-h-[260px] rounded-2xl border border-white/10 bg-black/10 p-4 text-sm leading-7 text-slate-200 whitespace-pre-wrap">
+              <div className="min-h-[260px] rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm leading-7 text-slate-200 whitespace-pre-wrap">
                 {selectionContext && generation.result.trim() ? (
                   <div className="space-y-4 whitespace-normal">
                     <div className="grid gap-3 sm:grid-cols-2">
-                      <div className="rounded-xl border border-white/8 bg-white/4 p-3">
+                      <div className="rounded-xl border border-white/8 bg-white/[0.03] p-3">
                         <div className="mb-2 text-xs uppercase tracking-[0.18em] text-slate-500">原文</div>
                         <div className="whitespace-pre-wrap text-sm leading-6 text-slate-300">{selectionContext.text}</div>
                       </div>
@@ -1471,7 +1466,7 @@ export function ProjectEditorPage() {
                       </div>
                     </div>
 
-                    <div className="rounded-xl border border-white/8 bg-[#0F0F11]">
+                    <div className="rounded-xl border border-white/8 bg-[#111113]">
                       <div className="border-b border-white/6 px-3 py-2 text-xs uppercase tracking-[0.18em] text-slate-500">
                         差异预览
                       </div>
@@ -1498,7 +1493,7 @@ export function ProjectEditorPage() {
                     </div>
                   </div>
                 ) : (
-                  generation.result || 'AI 续写结果会显示在这里。'
+                  generation.result || '暂无结果'
                 )}
               </div>
             </section>
@@ -1508,7 +1503,7 @@ export function ProjectEditorPage() {
               <div className="grid gap-3 sm:grid-cols-2">
                 <AiPanelInfoCard
                   title="当前状态"
-                  description={generation.isGenerating ? '模型正在持续输出中。' : '等待你发起下一次生成。'}
+                  description=""
                   items={[
                     generation.isGenerating ? '生成状态：进行中' : '生成状态：空闲',
                     generation.result.trim()
@@ -1519,8 +1514,8 @@ export function ProjectEditorPage() {
                   ]}
                 />
                 <AiPanelInfoCard
-                  title="后续动作"
-                  description="接受结果会按当前模式写回正文；丢弃只清空本次生成结果，不影响正文。"
+                  title="操作"
+                  description=""
                   items={[
                     selectionContext
                       ? `动作 1：${
@@ -1539,7 +1534,7 @@ export function ProjectEditorPage() {
               <div className="text-xs uppercase tracking-[0.2em] text-slate-500">回写策略</div>
               <AiPanelInfoCard
                 title="结果来源"
-                description="统一说明这次候选结果的来源，以及接受后会怎么写回当前章节。"
+                description=""
                 tone={generationOrigin?.source === 'toolbox' ? 'success' : 'default'}
                 items={[
                   generationOrigin
@@ -1603,9 +1598,7 @@ export function ProjectEditorPage() {
         <DialogContent className="max-w-2xl border border-white/10 bg-slate-950 text-slate-100">
           <DialogHeader>
             <DialogTitle>AI 运行时配置</DialogTitle>
-            <DialogDescription>
-              这里会直接调用后端运行时配置接口。保存后立即生效，新的 AI 续写请求会使用这套配置。
-            </DialogDescription>
+            <DialogDescription>立即生效。</DialogDescription>
           </DialogHeader>
 
           <form className="space-y-4" onSubmit={handleProviderConfigSubmit}>
@@ -1679,7 +1672,7 @@ export function ProjectEditorPage() {
 
             <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-3 text-xs leading-6 text-emerald-100 space-y-2">
               <div>当前保存的是单租户全局 AI 运行时配置。保存成功后，后端 [`/api/ai/runtime-settings`](backend/app/api/routes/runtime_settings.py) 会立即成为新的生效配置源。</div>
-              <div>模型名不再限制死为内置选项。你可以手动填写任意第三方中转站支持的模型名，也可以在保存配置后点击“自动获取模型”从 [`/v1/models`](backend/app/api/routes/runtime_settings.py:58) 拉取可用模型。</div>
+              <div>支持手动填写模型名，也可以保存后自动获取模型列表。</div>
             </div>
 
             <div className="flex justify-end gap-3">
@@ -1698,7 +1691,7 @@ export function ProjectEditorPage() {
         <DialogContent className="max-w-3xl border border-white/10 bg-slate-950 text-slate-100">
           <DialogHeader>
             <DialogTitle>章节版本历史</DialogTitle>
-            <DialogDescription>展示当前章节保存前自动生成的历史快照，可用于快速回看最近变更。</DialogDescription>
+            <DialogDescription>查看历史快照。</DialogDescription>
           </DialogHeader>
 
           <div className="max-h-[70vh] space-y-4 overflow-y-auto pr-2">
@@ -1736,7 +1729,7 @@ export function ProjectEditorPage() {
                 </Card>
               ))
             ) : (
-              <EmptyState title="暂无历史版本" description="当前章节还没有生成可查看的版本快照。" />
+              <EmptyState title="暂无历史版本" />
             )}
           </div>
         </DialogContent>
@@ -1752,20 +1745,20 @@ function AiPanelInfoCard({
   tone = 'default',
 }: {
   title: string
-  description: string
+  description?: string
   items: string[]
   tone?: 'default' | 'success'
 }) {
   const toneClassName =
     tone === 'success'
       ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-50'
-      : 'border-white/10 bg-black/10 text-slate-200'
+      : 'border-white/10 bg-white/[0.03] text-slate-200'
 
   return (
     <div className={`rounded-2xl border p-4 text-sm ${toneClassName}`}>
       <div className="space-y-2">
         <div className="text-xs font-medium uppercase tracking-wide text-slate-300">{title}</div>
-        <p className="text-xs leading-5 text-slate-400">{description}</p>
+        {description ? <p className="text-xs leading-5 text-slate-400">{description}</p> : null}
         <div className="space-y-1.5">
           {items.map((item) => (
             <div key={item} className="leading-6">

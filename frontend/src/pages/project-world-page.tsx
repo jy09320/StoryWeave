@@ -169,18 +169,17 @@ export function ProjectWorldPage() {
             <div className="space-y-3">
               <CardDescription className="text-primary/80">项目世界观</CardDescription>
               <CardTitle className="text-3xl text-white">{project.title}</CardTitle>
-              <CardDescription className="max-w-3xl text-sm leading-7 text-slate-300">
-                把项目级背景、规则、势力、地点和时间线沉淀成稳定上下文，后续可直接被编辑器与 AI 工具消费。
-              </CardDescription>
+              {project.description?.trim() ? (
+                <CardDescription className="max-w-3xl text-sm leading-7 text-slate-300">{project.description.trim()}</CardDescription>
+              ) : null}
             </div>
           </CardHeader>
           <CardFooter className="flex flex-wrap items-center gap-3 border-white/10 bg-white/4">
-            <WorldMetricCard label="章节数量" value={`${project.chapters.length}`} hint="当前已纳入项目结构的章节" />
-            <WorldMetricCard label="角色数量" value={`${projectCharacters.length}`} hint="已绑定到本项目的角色资产" />
+            <WorldMetricCard label="章节数量" value={`${project.chapters.length}`} />
+            <WorldMetricCard label="角色数量" value={`${projectCharacters.length}`} />
             <WorldMetricCard
               label="最近更新"
               value={formatDate(worldSetting?.updated_at || project.updated_at)}
-              hint="世界观或项目最近一次更新时间"
             />
           </CardFooter>
         </Card>
@@ -191,22 +190,18 @@ export function ProjectWorldPage() {
               <Globe2 className="size-5 text-amber-300" />
               设定视角
             </CardTitle>
-            <CardDescription>优先把会反复影响剧情推进的公共信息固定下来，减少章节写作时的来回补录。</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-3">
             <WorldGuideCard
               title="背景概览"
-              description="时代气质、主要矛盾、世界运行方式。"
               icon={<BookOpen className="size-4 text-sky-300" />}
             />
             <WorldGuideCard
               title="核心规则"
-              description="能力来源、技术边界、政治秩序和禁忌条件。"
               icon={<BrainCircuit className="size-4 text-violet-300" />}
             />
             <WorldGuideCard
               title="角色关联"
-              description="检查当前角色阵列是否已经覆盖主要势力与冲突面。"
               icon={<Users2 className="size-4 text-emerald-300" />}
             />
           </CardContent>
@@ -218,7 +213,6 @@ export function ProjectWorldPage() {
           <Card className="border border-white/10 bg-white/6">
             <CardHeader>
               <CardTitle className="text-xl text-white">{worldSetting ? '编辑世界观设定' : '创建世界观设定'}</CardTitle>
-              <CardDescription>当前页面承接完整的项目级设定编辑。保存后，项目工作台和 AI 工具会读取这里的最新内容。</CardDescription>
             </CardHeader>
             <CardContent>
               <form className="space-y-5" onSubmit={handleSubmit}>
@@ -322,7 +316,6 @@ export function ProjectWorldPage() {
           <Card className="border border-white/10 bg-white/6">
             <CardHeader>
               <CardTitle className="text-lg text-white">当前摘要</CardTitle>
-              <CardDescription>这里展示已经保存进项目上下文的内容，方便你校对哪些信息已经生效。</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4 text-sm text-slate-300">
               <SummaryBlock label="标题" value={worldSetting?.title || '尚未设置'} />
@@ -334,12 +327,11 @@ export function ProjectWorldPage() {
           <Card className="border border-white/10 bg-white/6">
             <CardHeader>
               <CardTitle className="text-lg text-white">项目角色</CardTitle>
-              <CardDescription>写世界观时可以顺手检查角色阵列有没有覆盖当前设定需要的势力和关系。</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
               {projectCharacters.length === 0 ? (
                 <div className="rounded-2xl border border-dashed border-white/10 bg-black/10 px-4 py-5 text-sm leading-6 text-slate-400">
-                  当前项目还没有绑定角色。先补齐角色资产，再回到这里完善势力和关系会更顺手。
+                  当前项目还没有绑定角色。
                 </div>
               ) : (
                 projectCharacters.map((item) => <ProjectCharacterCard key={item.id} item={item} />)
@@ -360,33 +352,22 @@ export function ProjectWorldPage() {
   )
 }
 
-function WorldMetricCard({ label, value, hint }: { label: string; value: string; hint: string }) {
+function WorldMetricCard({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
     <div className="min-w-[148px] rounded-2xl border border-white/10 bg-black/10 px-4 py-3">
       <div className="text-xs uppercase tracking-[0.2em] text-slate-500">{label}</div>
       <div className="mt-2 text-xl font-semibold text-white">{value}</div>
-      <div className="mt-1 text-xs leading-5 text-slate-400">{hint}</div>
+      {hint ? <div className="mt-1 text-xs leading-5 text-slate-400">{hint}</div> : null}
     </div>
   )
 }
 
-function WorldGuideCard({
-  title,
-  description,
-  icon,
-}: {
-  title: string
-  description: string
-  icon: React.ReactNode
-}) {
+function WorldGuideCard({ title, icon }: { title: string; icon: React.ReactNode }) {
   return (
     <div className="rounded-2xl border border-white/10 bg-black/10 p-4">
-      <div className="flex items-start gap-3">
+      <div className="flex items-center gap-3">
         <div className="rounded-xl border border-white/10 bg-white/8 p-2">{icon}</div>
-        <div className="space-y-1">
-          <div className="text-sm font-medium text-white">{title}</div>
-          <p className="text-sm leading-6 text-slate-300">{description}</p>
-        </div>
+        <div className="text-sm font-medium text-white">{title}</div>
       </div>
     </div>
   )

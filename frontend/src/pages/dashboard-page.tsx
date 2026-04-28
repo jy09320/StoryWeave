@@ -253,7 +253,7 @@ export function DashboardPage() {
   return (
     <div className="space-y-6 pb-10">
       <section className="grid gap-4 xl:grid-cols-[minmax(0,1.7fr)_320px]">
-        <div className="rounded-md border border-white/8 bg-[#111113] p-5">
+        <div className="rounded-md border border-white/8 bg-[#161618]/92 p-5">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div className="space-y-3">
               <div className="text-[11px] uppercase tracking-[0.22em] text-[#52525B]">Continue Writing</div>
@@ -262,19 +262,19 @@ export function DashboardPage() {
                   <div className="text-2xl font-semibold text-white">{heroProject.title}</div>
                   <div className="flex flex-wrap items-center gap-2 text-xs text-[#A1A1AA]">
                     <StatusBadge status={heroProject.status} />
-                    <Badge variant="outline" className="border-white/10 bg-white/5 text-[#A1A1AA]">
+                    <Badge variant="outline" className="border-white/10 bg-white/[0.035] text-[#A1A1AA]">
                       {formatProjectType(heroProject.type)}
                     </Badge>
                     <span>最近更新 {formatDate(heroProject.updated_at)}</span>
                   </div>
                   <p className="max-w-3xl text-sm leading-7 text-[#A1A1AA]">
-                    {heroProject.description?.trim() || '继续推进最近一次打开的项目。这里优先把你带回创作现场，而不是先展示功能入口。'}
+                    {heroProject.description?.trim() || ''}
                   </p>
                 </>
               ) : (
                 <>
                   <div className="text-2xl font-semibold text-white">还没有最近项目</div>
-                  <p className="max-w-2xl text-sm leading-7 text-[#A1A1AA]">先创建一个项目，后续首页会优先展示最近推进位置和章节回流入口。</p>
+                  <p className="max-w-2xl text-sm leading-7 text-[#A1A1AA]">先创建一个项目。</p>
                 </>
               )}
             </div>
@@ -290,7 +290,7 @@ export function DashboardPage() {
                   </Link>
                   <Link
                     to={`/ai-toolbox?task=continue&projectId=${heroProject.id}`}
-                    className="inline-flex h-10 items-center justify-center rounded-md border border-white/10 bg-white/5 px-4 text-sm text-white transition hover:bg-white/10"
+                    className="inline-flex h-10 items-center justify-center rounded-md border border-white/10 bg-white/[0.035] px-4 text-sm text-white transition hover:bg-white/10"
                   >
                     打开 AI 任务
                   </Link>
@@ -306,12 +306,12 @@ export function DashboardPage() {
         </div>
 
         <div className="grid gap-3">
-          <MetricPanel label="项目总数" value={projectStats.total} hint="当前创作档案" />
-          <MetricPanel label="进行中" value={projectStats.active} hint="适合立即继续写作" />
-          <MetricPanel label="已完成" value={projectStats.completed} hint="可回看或扩写番外" />
+          <MetricPanel label="项目总数" value={projectStats.total} />
+          <MetricPanel label="进行中" value={projectStats.active} />
+          <MetricPanel label="已完成" value={projectStats.completed} />
           <button
             type="button"
-            className="inline-flex h-11 items-center justify-center rounded-md border border-dashed border-white/10 bg-white/4 text-sm text-[#E4E4E7] transition hover:bg-white/8"
+            className="inline-flex h-11 items-center justify-center rounded-md border border-dashed border-white/10 bg-white/[0.03] text-sm text-[#E4E4E7] transition hover:bg-white/[0.07]"
             onClick={() => setIsCreateOpen(true)}
           >
             <Plus className="mr-2 size-4" />
@@ -321,11 +321,10 @@ export function DashboardPage() {
       </section>
 
       <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
-        <div className="rounded-md border border-white/8 bg-[#111113]">
+        <div className="rounded-md border border-white/8 bg-[#161618]/92">
           <div className="flex items-center justify-between border-b border-white/5 px-5 py-4">
             <div>
               <div className="text-sm font-medium text-white">项目列表</div>
-              <div className="text-xs text-[#52525B]">用更高密度的列表承接项目，而不是继续堆卡片。</div>
             </div>
           </div>
 
@@ -333,7 +332,7 @@ export function DashboardPage() {
             <div className="p-5">
               <EmptyState
                 title="尚未建立创作档案"
-                description="每一个故事都需要一个最初的容器。先创建第一个项目，后续再从首页直接回流。"
+                description="先创建第一个项目。"
                 action={
                   <Button onClick={() => setIsCreateOpen(true)}>
                     <Plus className="mr-2 size-4" />
@@ -353,12 +352,12 @@ export function DashboardPage() {
                       <div className="flex flex-wrap items-center gap-2">
                         <div className="truncate text-base font-medium text-white">{project.title}</div>
                         <StatusBadge status={project.status} />
-                        <Badge variant="outline" className="border-white/10 bg-white/5 text-[#A1A1AA]">
+                        <Badge variant="outline" className="border-white/10 bg-white/[0.035] text-[#A1A1AA]">
                           {formatProjectType(project.type)}
                         </Badge>
                       </div>
                       <div className="line-clamp-2 text-sm leading-6 text-[#A1A1AA]">
-                        {project.description?.trim() || '暂无项目简介，建议补充主线、风格目标与边界。'}
+                        {project.description?.trim() || '暂无项目简介'}
                       </div>
                       <div className="flex flex-wrap items-center gap-4 text-xs text-[#52525B]">
                         <span>更新时间 {formatDate(project.updated_at)}</span>
@@ -375,7 +374,7 @@ export function DashboardPage() {
                       </Button>
                       <Link
                         to={`/projects/${project.id}`}
-                        className="inline-flex h-9 items-center justify-center rounded-md bg-white/5 px-3 text-sm text-white transition hover:bg-white/10"
+                        className="inline-flex h-9 items-center justify-center rounded-md bg-white/[0.035] px-3 text-sm text-white transition hover:bg-white/10"
                       >
                         工作台
                       </Link>
@@ -393,29 +392,28 @@ export function DashboardPage() {
         </div>
 
         <div className="space-y-4">
-          <div className="rounded-md border border-white/8 bg-[#111113]">
+          <div className="rounded-md border border-white/8 bg-[#161618]/92">
             <div className="border-b border-white/5 px-5 py-4">
               <div className="text-sm font-medium text-white">最近章节</div>
-              <div className="text-xs text-[#52525B]">直接回到最近改动过的章节，减少从工作台重新定位的步骤。</div>
             </div>
             <div className="space-y-3 p-4">
               {recentProjects.length === 0 ? (
-                <SidebarNotice>先创建项目和章节，这里会自动回流最近编辑过的正文入口。</SidebarNotice>
+                <SidebarNotice>先创建项目和章节。</SidebarNotice>
               ) : recentChaptersError ? (
                 <SidebarNotice>最近章节加载失败，请刷新页面后重试。</SidebarNotice>
               ) : isRecentChaptersLoading && recentChapterCards.length === 0 ? (
                 <LoadingState label="正在整理最近章节..." className="py-6" />
               ) : recentChapterCards.length === 0 ? (
-                <SidebarNotice>最近项目里还没有章节记录，可先进入工作台创建章节结构。</SidebarNotice>
+                <SidebarNotice>最近项目里还没有章节记录。</SidebarNotice>
               ) : (
                 recentChapterCards.map(({ project, chapter }) => (
                   <Link
                     key={chapter.id}
                     to={`/projects/${project.id}/editor/${chapter.id}`}
-                    className="block rounded-md border border-white/8 bg-white/4 p-4 transition hover:bg-white/6"
+                    className="block rounded-md border border-white/8 bg-white/[0.03] p-4 transition hover:bg-white/[0.06]"
                   >
                     <div className="flex flex-wrap items-center gap-2 text-xs text-[#52525B]">
-                      <Badge variant="outline" className="border-white/10 bg-white/5 text-[#A1A1AA]">
+                      <Badge variant="outline" className="border-white/10 bg-white/[0.035] text-[#A1A1AA]">
                         {project.title}
                       </Badge>
                       <span>第 {chapter.order_index} 章</span>
@@ -431,9 +429,8 @@ export function DashboardPage() {
             </div>
           </div>
 
-          <div className="rounded-md border border-white/8 bg-[#111113] p-4">
+          <div className="rounded-md border border-white/8 bg-[#161618]/92 p-4">
             <div className="text-sm font-medium text-white">快速入口</div>
-            <div className="mt-1 text-xs text-[#52525B]">把高频动作收成紧凑工具区，而不是首页功能广场。</div>
             <div className="mt-4 grid gap-2">
               <QuickActionButton label="进入 AI 续写" onClick={() => navigate('/ai-toolbox?task=continue')} icon={<Sparkles className="size-4" />} />
               <QuickActionButton label="角色资产库" onClick={() => navigate('/characters')} icon={<FileText className="size-4" />} />
@@ -451,7 +448,7 @@ export function DashboardPage() {
           }
         }}
         title="编辑项目"
-        description="调整项目基础信息，保持项目列表与后续工作台上下文一致。"
+        description="调整项目基础信息"
         form={editForm}
         onChange={setEditForm}
         onSubmit={handleEditSubmit}
@@ -468,7 +465,7 @@ export function DashboardPage() {
           }
         }}
         title="创建新项目"
-        description="填写基础信息，开启下一个创作档案。"
+        description="填写基础信息"
         form={createForm}
         onChange={setCreateForm}
         onSubmit={handleCreateSubmit}
@@ -479,18 +476,18 @@ export function DashboardPage() {
   )
 }
 
-function MetricPanel({ label, value, hint }: { label: string; value: number; hint: string }) {
+function MetricPanel({ label, value, hint }: { label: string; value: number; hint?: string }) {
   return (
-    <div className="rounded-md border border-white/8 bg-[#111113] px-4 py-4">
+    <div className="rounded-md border border-white/8 bg-[#161618]/92 px-4 py-4">
       <div className="text-[11px] uppercase tracking-[0.22em] text-[#52525B]">{label}</div>
       <div className="mt-2 text-2xl font-semibold text-white">{value}</div>
-      <div className="mt-1 text-xs text-[#A1A1AA]">{hint}</div>
+      {hint ? <div className="mt-1 text-xs text-[#A1A1AA]">{hint}</div> : null}
     </div>
   )
 }
 
 function SidebarNotice({ children }: { children: ReactNode }) {
-  return <div className="rounded-md border border-dashed border-white/8 bg-white/4 px-4 py-4 text-sm leading-6 text-[#A1A1AA]">{children}</div>
+  return <div className="rounded-md border border-dashed border-white/8 bg-white/[0.03] px-4 py-4 text-sm leading-6 text-[#A1A1AA]">{children}</div>
 }
 
 function QuickActionButton({
@@ -506,7 +503,7 @@ function QuickActionButton({
     <button
       type="button"
       onClick={onClick}
-      className="inline-flex h-10 items-center justify-between rounded-md border border-white/8 bg-white/4 px-3 text-sm text-white transition hover:bg-white/8"
+      className="inline-flex h-10 items-center justify-between rounded-md border border-white/8 bg-white/[0.03] px-3 text-sm text-white transition hover:bg-white/[0.07]"
     >
       <span className="inline-flex items-center gap-2">
         {icon}

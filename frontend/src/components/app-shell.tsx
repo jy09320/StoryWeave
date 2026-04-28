@@ -28,7 +28,7 @@ import { getProject } from '@/services/projects'
 import type { ProjectDetail } from '@/types/api'
 
 const primaryNavItems = [
-  { to: '/', label: '首页', icon: Home, end: true },
+  { to: '/workspace', label: '首页', icon: Home, end: true },
   { to: '/characters', label: '角色库', icon: Users2, end: false },
   { to: '/ai-toolbox', label: 'AI 工具箱', icon: Sparkles, end: false },
   { to: '/settings', label: '设置', icon: Settings2, end: false },
@@ -195,11 +195,11 @@ export function AppShell() {
     const project = projectQuery.data
     const activeChapter = project?.chapters.find((item) => item.id === chapterId) ?? null
 
-    if (location.pathname === '/') {
+    if (location.pathname === '/workspace') {
       return {
         eyebrow: 'Dashboard',
-        title: '最近进展',
-        description: '优先回到上次正在推进的作品，而不是重新找入口。',
+        title: '最近进度',
+        description: '',
       }
     }
 
@@ -207,7 +207,7 @@ export function AppShell() {
       return {
         eyebrow: 'Characters',
         title: '角色资产库',
-        description: '维护可复用的角色资料，并逐步接入项目与编辑器上下文。',
+        description: '',
       }
     }
 
@@ -215,7 +215,7 @@ export function AppShell() {
       return {
         eyebrow: 'AI Toolbox',
         title: 'AI 任务工作台',
-        description: '把续写、改写和一致性检查收敛到结构化任务流中。',
+        description: '',
       }
     }
 
@@ -223,7 +223,7 @@ export function AppShell() {
       return {
         eyebrow: 'Settings',
         title: '工作台设置',
-        description: '后续在这里统一管理偏好、快捷键和运行时策略。',
+        description: '',
       }
     }
 
@@ -233,7 +233,7 @@ export function AppShell() {
         title: activeChapter?.title ?? '章节编辑器',
         description: activeChapter
           ? `第 ${activeChapter.order_index} 章 · ${activeChapter.word_count} 字`
-          : '围绕正文、设定和 AI 辅助组织沉浸式写作体验。',
+          : '',
       }
     }
 
@@ -241,7 +241,7 @@ export function AppShell() {
       return {
         eyebrow: project?.title ?? '项目设定',
         title: '世界观编辑',
-        description: '维护项目级规则、势力、地点与时间线，让设定可被复用。',
+        description: '',
       }
     }
 
@@ -249,14 +249,14 @@ export function AppShell() {
       return {
         eyebrow: 'Workspace',
         title: project?.title ?? '项目工作台',
-        description: project?.description?.trim() || '在同一视角下管理章节结构、角色资产与世界观入口。',
+        description: project?.description?.trim() || '',
       }
     }
 
     return {
       eyebrow: 'StoryWeave',
       title: '创作工作台',
-      description: '统一承接项目、编辑器、角色资产与 AI 写作流。',
+      description: '',
     }
   }, [chapterId, isProjectScoped, location.pathname, projectQuery.data])
 
@@ -326,9 +326,9 @@ export function AppShell() {
       : null
 
   return (
-    <div className="flex h-screen bg-[#18181B] text-[#E4E4E7] selection:bg-amber-500/30 selection:text-white">
-      <aside className="flex w-20 shrink-0 flex-col items-center border-r border-white/5 bg-[#09090B] px-2 py-4">
-        <div className="flex size-10 items-center justify-center rounded-md border border-white/10 bg-white/5 text-amber-400">
+    <div className="flex h-screen bg-[#141416] text-[#E7E5E4] selection:bg-amber-500/30 selection:text-white">
+      <aside className="flex w-20 shrink-0 flex-col items-center border-r border-white/5 bg-[#0f0f10] px-2 py-4">
+        <div className="flex size-11 items-center justify-center rounded-md border border-amber-500/20 bg-amber-500/10 text-amber-300">
           <Sparkles className="size-4" />
         </div>
 
@@ -363,7 +363,7 @@ export function AppShell() {
       </aside>
 
       {isProjectScoped && isProjectTreeOpen && !isZenMode ? (
-        <aside className="hidden w-60 shrink-0 border-r border-white/5 bg-[#111113] md:flex md:flex-col">
+        <aside className="hidden w-60 shrink-0 border-r border-white/5 bg-[#161618] md:flex md:flex-col">
           <div className="border-b border-white/5 px-4 py-4">
             <div className="text-[11px] uppercase tracking-[0.22em] text-[#52525B]">Project</div>
             <div className="mt-2 text-sm font-semibold text-white">{project?.title ?? '正在加载项目...'}</div>
@@ -395,14 +395,14 @@ export function AppShell() {
                   />
                 ))
               ) : (
-                <SidebarHint>当前项目还没有章节，先在工作台中创建结构。</SidebarHint>
+                <SidebarHint>当前项目还没有章节。</SidebarHint>
               )}
             </div>
 
             <div className="mt-5 space-y-1">
               <SectionLabel>辅助入口</SectionLabel>
               <ProjectTreeLink to="/characters" label="全局角色库" active={location.pathname === '/characters'} />
-              <ProjectTreeStatic label="回收站" meta="后续接入" />
+              <ProjectTreeStatic label="回收站" meta="" />
             </div>
           </div>
         </aside>
@@ -410,7 +410,7 @@ export function AppShell() {
 
       <div className="flex min-w-0 flex-1">
         <div className="flex min-w-0 flex-1 flex-col">
-          <header className="sticky top-0 z-20 border-b border-white/5 bg-[#18181B]/95 backdrop-blur">
+          <header className="sticky top-0 z-20 border-b border-white/5 bg-[#141416]/95 backdrop-blur">
             <div className="flex items-center justify-between gap-4 px-5 py-4">
               <div className="flex min-w-0 items-center gap-3">
                 {isProjectScoped && !isZenMode ? (
@@ -426,32 +426,51 @@ export function AppShell() {
                 <div className="min-w-0">
                   <div className="text-[11px] uppercase tracking-[0.22em] text-[#52525B]">{pageMeta.eyebrow}</div>
                   <div className="truncate text-lg font-semibold text-white">{pageMeta.title}</div>
-                  <div className="truncate text-sm text-[#A1A1AA]">{pageMeta.description}</div>
+                  {pageMeta.description ? <div className="truncate text-sm text-[#A1A1AA]">{pageMeta.description}</div> : null}
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center justify-end gap-2">
                 {isProjectScoped ? (
                   <>
                     {isEditorRoute ? (
+                      <>
+                        <button
+                          type="button"
+                          className="inline-flex size-9 items-center justify-center rounded-md border border-white/8 bg-white/5 text-[#A1A1AA] transition hover:text-white md:hidden"
+                          onClick={() => setIsZenMode((prev) => !prev)}
+                        >
+                          {isZenMode ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
+                        </button>
+                        <button
+                          type="button"
+                          className="hidden h-9 items-center gap-2 rounded-md border border-white/8 bg-white/5 px-3 text-sm text-[#A1A1AA] transition hover:text-white md:inline-flex"
+                          onClick={() => setIsZenMode((prev) => !prev)}
+                        >
+                          {isZenMode ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
+                          {isZenMode ? '退出专注' : '进入专注'}
+                        </button>
+                      </>
+                    ) : null}
+                    <>
+                      <button
+                        type="button"
+                        className="inline-flex size-9 items-center justify-center rounded-md border border-white/8 bg-white/5 text-[#A1A1AA] transition hover:text-white md:hidden"
+                        onClick={() => setIsUtilityOpen((prev) => !prev)}
+                        disabled={isZenMode}
+                      >
+                        {isUtilityOpen ? <PanelRightClose className="size-4" /> : <PanelRightOpen className="size-4" />}
+                      </button>
                       <button
                         type="button"
                         className="hidden h-9 items-center gap-2 rounded-md border border-white/8 bg-white/5 px-3 text-sm text-[#A1A1AA] transition hover:text-white md:inline-flex"
-                        onClick={() => setIsZenMode((prev) => !prev)}
+                        onClick={() => setIsUtilityOpen((prev) => !prev)}
+                        disabled={isZenMode}
                       >
-                        {isZenMode ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
-                        {isZenMode ? '退出专注' : '进入专注'}
+                        {isUtilityOpen ? <PanelRightClose className="size-4" /> : <PanelRightOpen className="size-4" />}
+                        参考抽屉
                       </button>
-                    ) : null}
-                    <button
-                      type="button"
-                      className="hidden h-9 items-center gap-2 rounded-md border border-white/8 bg-white/5 px-3 text-sm text-[#A1A1AA] transition hover:text-white md:inline-flex"
-                      onClick={() => setIsUtilityOpen((prev) => !prev)}
-                      disabled={isZenMode}
-                    >
-                      {isUtilityOpen ? <PanelRightClose className="size-4" /> : <PanelRightOpen className="size-4" />}
-                      参考抽屉
-                    </button>
+                    </>
                     {!isZenMode ? (
                       <div className="hidden rounded-md border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-200 xl:block">
                         Ctrl+B 侧栏 · Ctrl+J 抽屉
@@ -473,7 +492,7 @@ export function AppShell() {
         </div>
 
         {isProjectScoped && isUtilityOpen && !isZenMode ? (
-          <aside className="hidden w-[300px] shrink-0 border-l border-white/5 bg-[#111113] xl:flex xl:flex-col">
+          <aside className="hidden w-[300px] shrink-0 border-l border-white/5 bg-[#161618] xl:flex xl:flex-col">
             <div className="border-b border-white/5 px-4 py-4">
               <div className="flex items-center gap-2">
                 {utilityTabs.map((tab) => (
@@ -501,7 +520,7 @@ export function AppShell() {
                   <SidebarHint>{chapterContextHint}</SidebarHint>
                   {contextualCharacters.length > 0 ? (
                     contextualCharacters.slice(0, 6).map(({ item, matches, score }) => (
-                      <div key={item.id} className="rounded-md border border-white/8 bg-white/4 p-3">
+                      <div key={item.id} className="rounded-md border border-white/8 bg-white/3 p-3">
                         <div className="flex flex-wrap items-center gap-2">
                           <div className="text-sm font-medium text-white">{item.character.name}</div>
                           {score > 0 ? (
@@ -620,8 +639,8 @@ export function AppShell() {
                       </div>
                     </div>
                   ) : (
-                    <div className="space-y-3 rounded-md border border-white/8 bg-white/4 p-3">
-                      <SidebarHint>选中文本后，右侧会自动带入当前选区；未选区时，也可以直接按章节级任务进入工具箱。</SidebarHint>
+                    <div className="space-y-3 rounded-md border border-white/8 bg-white/3 p-3">
+                      <SidebarHint>选中文本后可直接带入当前选区。</SidebarHint>
                       <div className="grid grid-cols-2 gap-2">
                         <NavLink
                           to={`/ai-toolbox?task=continue&projectId=${projectId}${chapterId ? `&chapterId=${chapterId}` : ''}`}
@@ -669,9 +688,7 @@ export function AppShell() {
                     meta="检查角色与世界观"
                     active={false}
                   />
-                  <SidebarHint>
-                    这部分先作为侧向入口存在。后续会把选区级改写和上下文联动真正下沉到编辑器内。
-                  </SidebarHint>
+                  <SidebarHint>从这里打开相关 AI 任务。</SidebarHint>
                 </div>
               ) : null}
             </div>
@@ -691,7 +708,7 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 }
 
 function SidebarHint({ children }: { children: React.ReactNode }) {
-  return <div className="rounded-md border border-dashed border-white/8 bg-white/3 px-3 py-3 text-xs leading-6 text-[#A1A1AA]">{children}</div>
+  return <div className="rounded-md border border-dashed border-white/8 bg-white/[0.025] px-3 py-3 text-xs leading-6 text-[#A1A1AA]">{children}</div>
 }
 
 function ProjectTreeLink({
@@ -749,7 +766,7 @@ function UtilityInfoCard({
     <div
       className={clsx(
         'rounded-md border p-3',
-        emphasis ? 'border-amber-500/20 bg-amber-500/8' : 'border-white/8 bg-white/4',
+        emphasis ? 'border-amber-500/20 bg-amber-500/8' : 'border-white/8 bg-white/[0.025]',
       )}
     >
       <div className="text-xs uppercase tracking-[0.18em] text-[#52525B]">{title}</div>
