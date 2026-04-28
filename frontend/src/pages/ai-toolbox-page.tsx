@@ -476,7 +476,7 @@ export function AIToolboxPage() {
   return (
     <div className="space-y-6 pb-8">
       <section className="grid gap-4 xl:grid-cols-[1.35fr_0.65fr]">
-        <Card className="border border-white/10 bg-white/6 shadow-lg shadow-black/5">
+        <Card className="border border-white/8 bg-[#161618]/92 shadow-lg shadow-black/10">
           <CardHeader className="gap-4">
             <CardDescription className="text-primary/80">AI 工具箱</CardDescription>
             <CardTitle className="max-w-3xl text-3xl font-semibold leading-tight text-white">
@@ -497,20 +497,20 @@ export function AIToolboxPage() {
           </CardContent>
         </Card>
 
-        <Card className="border border-white/10 bg-white/6 shadow-lg shadow-black/5">
+        <Card className="border border-white/8 bg-[#161618]/92 shadow-lg shadow-black/10">
           <CardHeader>
             <CardTitle className="text-xl text-white">任务上下文</CardTitle>
             <CardDescription>当前工具任务会优先读取你带入的项目与章节信息。</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3 text-sm text-slate-300">
-            <div className="rounded-2xl border border-white/10 bg-black/10 p-4">
+            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
               <div className="text-xs uppercase tracking-[0.2em] text-slate-500">当前项目</div>
               <div className="mt-2 text-base font-medium text-white">{projectQuery.data?.title || '未指定项目'}</div>
               <div className="mt-2 text-xs leading-6 text-slate-400">
                 {projectQuery.data ? `最近更新 ${formatDate(projectQuery.data.updated_at)}` : '从首页或编辑器进入时会自动带入项目上下文。'}
               </div>
             </div>
-            <div className="rounded-2xl border border-white/10 bg-black/10 p-4">
+            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
               <div className="text-xs uppercase tracking-[0.2em] text-slate-500">当前章节</div>
               <div className="mt-2 text-base font-medium text-white">{selectedChapter?.title || '未指定章节'}</div>
               <div className="mt-2 text-xs leading-6 text-slate-400">
@@ -529,7 +529,7 @@ export function AIToolboxPage() {
 
       <section className="grid gap-6 xl:grid-cols-[320px_minmax(0,1fr)_300px]">
         <aside className="space-y-4">
-          <Card className="border border-white/10 bg-white/6 shadow-lg shadow-black/5">
+          <Card className="border border-white/8 bg-[#161618]/92 shadow-lg shadow-black/10">
             <CardHeader>
               <CardTitle className="text-xl text-white">工具分组</CardTitle>
               <CardDescription>先按创作任务分组，而不是按底层技术接口分组。</CardDescription>
@@ -548,11 +548,11 @@ export function AIToolboxPage() {
                       'w-full rounded-3xl border p-4 text-left transition',
                       isActive
                         ? 'border-primary/50 bg-primary/10 shadow-lg shadow-primary/10'
-                        : 'border-white/10 bg-black/10 hover:border-white/20 hover:bg-white/6',
+                        : 'border-white/10 bg-white/[0.03] hover:border-white/20 hover:bg-white/[0.06]',
                     ].join(' ')}
                   >
                     <div className="flex items-start gap-3">
-                      <div className="flex size-10 items-center justify-center rounded-2xl border border-white/10 bg-black/10">
+                      <div className="flex size-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.03]">
                         <Icon className="size-5 text-primary" />
                       </div>
                       <div className="space-y-2">
@@ -560,7 +560,7 @@ export function AIToolboxPage() {
                         <div className="text-xs leading-6 text-slate-400">{task.description}</div>
                         <div className="flex flex-wrap gap-2">
                           {task.items.map((item) => (
-                            <span key={item} className="rounded-full border border-white/10 bg-black/10 px-3 py-1 text-[11px] text-slate-300">
+                            <span key={item} className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-[11px] text-slate-300">
                               {item}
                             </span>
                           ))}
@@ -575,16 +575,16 @@ export function AIToolboxPage() {
         </aside>
 
         <section className="space-y-4">
-          <Card className="border border-white/10 bg-white/6 shadow-lg shadow-black/5">
+          <Card className="border border-white/8 bg-[#161618]/92 shadow-lg shadow-black/10">
             <CardHeader>
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <CardTitle className="text-xl text-white">{taskMeta.title}</CardTitle>
                   <CardDescription className="mt-2 max-w-3xl text-sm leading-7 text-slate-300">{taskMeta.helper}</CardDescription>
                 </div>
-                <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/10 px-3 py-1 text-xs text-slate-400">
+                <div className="inline-flex max-w-full items-center gap-2 rounded-full border border-white/10 bg-black/10 px-3 py-1 text-xs text-slate-400">
                   <FileText className="size-4 text-primary" />
-                  {taskMeta.status}
+                  <span className="truncate">{taskMeta.status}</span>
                 </div>
               </div>
             </CardHeader>
@@ -676,9 +676,9 @@ export function AIToolboxPage() {
                         默认沿用当前运行时配置。需要切换提供商、模型或拉取可选模型时再展开。
                       </div>
                     </div>
-                    <div className="flex items-center gap-2 text-xs text-slate-400">
-                      <span>{selectedProvider}</span>
-                      <span className="max-w-[180px] truncate">{selectedModelId}</span>
+                    <div className="flex min-w-0 items-center gap-2 text-xs text-slate-400">
+                      <span className="shrink-0">{selectedProvider}</span>
+                      <span className="truncate">{selectedModelId}</span>
                       <ChevronRight className={`size-4 transition ${isAdvancedOpen ? 'rotate-90 text-white' : ''}`} />
                     </div>
                   </button>
@@ -775,7 +775,7 @@ export function AIToolboxPage() {
             </CardContent>
           </Card>
 
-          <Card className="border border-white/10 bg-white/6 shadow-lg shadow-black/5">
+          <Card className="border border-white/8 bg-[#161618]/92 shadow-lg shadow-black/10">
             <CardHeader>
               <CardTitle className="text-xl text-white">{taskMeta.resultTitle}</CardTitle>
               <CardDescription>结果以原文、候选结果和差异预览组织，便于继续处理或带回编辑器。</CardDescription>
@@ -827,9 +827,10 @@ export function AIToolboxPage() {
                   <div className="whitespace-pre-wrap">当前任务结果会显示在这里。</div>
                 )}
               </div>
-              <div className="flex flex-wrap gap-3">
+              <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
                 <Button
                   variant="outline"
+                  className="w-full sm:w-auto"
                   onClick={async () => {
                     if (!generation.result.trim()) {
                       toast.error('当前没有可复制的结果')
@@ -877,10 +878,15 @@ export function AIToolboxPage() {
                         </div>
                       </div>
                     </div>
-                    <Button variant="outline" onClick={() => handleSendToEditor('append')} disabled={!generation.result.trim()}>
+                    <Button
+                      variant="outline"
+                      className="w-full sm:w-auto"
+                      onClick={() => handleSendToEditor('append')}
+                      disabled={!generation.result.trim()}
+                    >
                       带回编辑器并追加
                     </Button>
-                    <Button onClick={() => handleSendToEditor('replace')} disabled={!generation.result.trim()}>
+                    <Button className="w-full sm:w-auto" onClick={() => handleSendToEditor('replace')} disabled={!generation.result.trim()}>
                       带回编辑器并覆盖草稿
                       <ArrowRight className="size-4" />
                     </Button>
@@ -892,7 +898,7 @@ export function AIToolboxPage() {
         </section>
 
         <aside className="space-y-4">
-          <Card className="border border-white/10 bg-white/6 shadow-lg shadow-black/5">
+          <Card className="border border-white/8 bg-[#161618]/92 shadow-lg shadow-black/10">
             <CardHeader>
               <CardTitle className="text-xl text-white">生成历史</CardTitle>
               <CardDescription>保留最近几次任务结果，方便回看、复用和再次带回编辑器。</CardDescription>
@@ -908,6 +914,7 @@ export function AIToolboxPage() {
                     <Button
                       variant="ghost"
                       size="sm"
+                      className="w-full sm:w-auto"
                       onClick={() => {
                         setHistory([])
                         window.sessionStorage.removeItem(TOOLBOX_HISTORY_KEY)
@@ -950,10 +957,11 @@ export function AIToolboxPage() {
                         <div className="mt-2 line-clamp-2 text-xs leading-5 text-slate-400">{item.result}</div>
                       </button>
 
-                      <div className="mt-3 flex flex-wrap gap-2">
+                      <div className="mt-3 grid gap-2 sm:grid-cols-2">
                         <Button
                           variant="ghost"
                           size="sm"
+                          className="w-full"
                           onClick={async () => {
                             await handleCopyHistoryResult(item.result)
                           }}
@@ -963,6 +971,7 @@ export function AIToolboxPage() {
                         <Button
                           variant="ghost"
                           size="sm"
+                          className="w-full"
                           onClick={() => {
                             setActiveTask(item.task)
                             syncSearchParams(item.task)
@@ -983,6 +992,7 @@ export function AIToolboxPage() {
                           <Button
                             variant="outline"
                             size="sm"
+                            className="w-full sm:col-span-2"
                             onClick={() => {
                               window.sessionStorage.setItem(
                                 TOOLBOX_RESULT_DRAFT_KEY,
@@ -1034,7 +1044,7 @@ function HighlightMetric({ label, value, hint }: { label: string; value: string;
   return (
     <div className="rounded-2xl border border-white/10 bg-black/10 p-4">
       <p className="text-xs uppercase tracking-[0.2em] text-slate-500">{label}</p>
-      <p className="mt-2 text-lg font-semibold text-white">{value}</p>
+      <p className="mt-2 break-all text-lg font-semibold text-white">{value}</p>
       <p className="mt-2 text-xs leading-5 text-slate-400">{hint}</p>
     </div>
   )
