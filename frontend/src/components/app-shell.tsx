@@ -678,25 +678,6 @@ export function AppShell() {
                 <span className="rounded-full border border-[#d1d5db] bg-[#f9fafb] px-3 py-1 text-[11px] text-[#6b7280]">
                   模型 {selectedModelId}
                 </span>
-                {availableModels.length > 0 ? (
-                  <div className="flex flex-wrap gap-2">
-                    {availableModels.slice(0, 4).map((model) => (
-                      <button
-                        key={model.id}
-                        type="button"
-                        onClick={() => setAIState((prev) => ({ ...prev, result: '', modelId: model.id }))}
-                        className={clsx(
-                          'rounded-full border px-3 py-1 text-[11px] transition',
-                          model.id === selectedModelId
-                            ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-                            : 'border-[#d1d5db] bg-white text-[#6b7280] hover:border-[#9ca3af] hover:text-[#111827]',
-                        )}
-                      >
-                        {model.id}
-                      </button>
-                    ))}
-                  </div>
-                ) : null}
               </div>
 
               <div className="rounded-[20px] border border-[#d1d5db] bg-[#fcfcfd] p-3">
@@ -789,11 +770,11 @@ export function AppShell() {
               <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
-                  onClick={handleLoadModels}
+                  onClick={handleOpenModelDialog}
                   disabled={isLoadingModels || !hasSavedRuntimeKey || runtimeSettingsQuery.isLoading}
                   className="inline-flex h-9 items-center justify-center rounded-xl border border-border bg-background px-3 text-xs text-foreground transition hover:border-primary/30 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {isLoadingModels ? '获取中...' : '获取可用模型'}
+                  {isLoadingModels ? '加载中...' : '选择模型'}
                 </button>
                 <NavLink
                   to="/settings"
@@ -805,30 +786,9 @@ export function AppShell() {
               </div>
               {!hasSavedRuntimeKey ? <div className="text-xs leading-5 text-primary">请先在设置中心保存 API Key。</div> : null}
               <div className="rounded-xl border border-border bg-muted/55 px-3 py-2 text-sm text-foreground">当前模型：{selectedModelId}</div>
-              {availableModels.length > 0 ? (
-                <div className="flex flex-wrap gap-2">
-                  {availableModels.slice(0, 16).map((model) => {
-                    const isSelected = model.id === selectedModelId
-                    return (
-                      <button
-                        key={model.id}
-                        type="button"
-                        onClick={() => setAIState((prev) => ({ ...prev, result: '', modelId: model.id }))}
-                        className={clsx(
-                          'rounded-full border px-3 py-1 text-xs transition',
-                          isSelected
-                            ? 'border-primary/20 bg-primary/10 text-primary'
-                            : 'border-border bg-background text-muted-foreground hover:border-primary/25 hover:text-foreground',
-                        )}
-                      >
-                        {model.id}
-                      </button>
-                    )
-                  })}
-                </div>
-              ) : (
-                <div className="rounded-xl border border-dashed border-border bg-muted/45 px-3 py-2 text-xs leading-5 text-muted-foreground">还没有加载模型列表。</div>
-              )}
+              <div className="rounded-xl border border-dashed border-border bg-muted/45 px-3 py-2 text-xs leading-5 text-muted-foreground">
+                模型列表已收纳到弹窗里，点击上方“选择模型”即可切换。
+              </div>
             </div>
           </div>
 
@@ -907,8 +867,25 @@ export function AppShell() {
     )
   }
 
+  const modelDialog = (
+    <ModelPickerDialog
+      open={isModelDialogOpen}
+      onOpenChange={setIsModelDialogOpen}
+      selectedModelId={selectedModelId}
+      availableModels={availableModels}
+      isLoadingModels={isLoadingModels}
+      hasSavedRuntimeKey={hasSavedRuntimeKey}
+      onRefresh={() => void handleLoadModels()}
+      onSelect={(modelId) => {
+        setAIState((prev) => ({ ...prev, result: '', modelId }))
+        toast.success(`下一次生成将使用模型：${modelId}`)
+      }}
+    />
+  )
+
   return (
     <div className="flex h-screen bg-background text-foreground selection:bg-primary/15 selection:text-foreground">
+      {modelDialog}
       <aside className="flex w-[88px] shrink-0 flex-col items-center border-r border-border bg-[#f6f1e8] px-3 py-5">
         <div className="flex size-12 items-center justify-center rounded-2xl border border-primary/15 bg-primary/10 text-primary shadow-[0_12px_30px_rgba(16,185,129,0.08)]">
           <Sparkles className="size-4" />
@@ -1462,3 +1439,4 @@ function UtilityInfoCard({
     </div>
   )
 }
+

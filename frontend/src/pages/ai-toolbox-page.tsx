@@ -4,6 +4,7 @@ import { ArrowRight, BrainCircuit, FileText, LoaderCircle, Sparkles, WandSparkle
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 
+import { ModelPickerDialog } from '@/components/ai/model-picker-dialog'
 import { EmptyState } from '@/components/empty-state'
 import { LoadingState } from '@/components/loading-state'
 import { Button } from '@/components/ui/button'
@@ -166,6 +167,7 @@ export function AIToolboxPage() {
   const [activeTask, setActiveTask] = useState<ToolboxTaskType>(initialTask)
   const [availableModels, setAvailableModels] = useState<AIModelOption[]>([])
   const [isLoadingModels, setIsLoadingModels] = useState(false)
+  const [isModelDialogOpen, setIsModelDialogOpen] = useState(false)
   const [history, setHistory] = useState<GenerationHistoryItem[]>([])
   const [recommendedSendMode, setRecommendedSendMode] = useState<SendBackMode>(null)
   const [generation, setGeneration] = useState<GenerationState>({
@@ -245,6 +247,7 @@ export function AIToolboxPage() {
   const selectedModelId =
     generation.modelId.trim() || runtimeSettingsQuery.data?.model_id || FALLBACK_MODEL_BY_PROVIDER[generation.provider] || 'gpt-4o'
   const selectedProvider = generation.provider || runtimeSettingsQuery.data?.provider || 'openai'
+  const hasSavedRuntimeKey = Boolean(runtimeSettingsQuery.data?.api_key_masked)
   const contextText = buildContextText(projectQuery.data, selectedChapter)
   const returnTarget = useMemo(() => {
     if (
@@ -307,6 +310,13 @@ export function AIToolboxPage() {
       toast.error(error instanceof Error ? error.message : '获取模型列表失败')
     } finally {
       setIsLoadingModels(false)
+    }
+  }
+
+  function handleOpenModelDialog() {
+    setIsModelDialogOpen(true)
+    if (availableModels.length === 0 && !isLoadingModels && hasSavedRuntimeKey) {
+      void handleLoadModels()
     }
   }
 
@@ -668,8 +678,8 @@ export function AIToolboxPage() {
                   </div>
                   <div className="rounded-xl border border-border bg-muted/45 px-3 py-2 text-sm text-foreground">当前选择：{selectedModelId}</div>
                   <div className="flex flex-col gap-2 sm:flex-row">
-                    <Button variant="outline" className="sm:w-auto" onClick={handleLoadModels} disabled={isLoadingModels}>
-                      {isLoadingModels ? '获取中...' : '获取可用模型'}
+                    <Button variant="outline" className="sm:w-auto" onClick={handleOpenModelDialog} disabled={isLoadingModels}>
+                      {isLoadingModels ? '加载中...' : '选择模型'}
                     </Button>
                     <Link
                       to="/settings"
@@ -679,36 +689,9 @@ export function AIToolboxPage() {
                     </Link>
                   </div>
 
-                  {availableModels.length > 0 ? (
-                    <div className="rounded-xl border border-border bg-muted/35 p-3 text-xs text-muted-foreground">
-                      <div className="mb-2">点击下方模型即可直接用于本次生成：</div>
-                      <div className="flex flex-wrap gap-2">
-                        {availableModels.slice(0, 20).map((model) => {
-                          const isSelected = model.id === selectedModelId
-
-                          return (
-                            <button
-                              key={model.id}
-                              type="button"
-                              className={`rounded-full border px-3 py-1 transition ${
-                                isSelected ? 'border-primary bg-primary/15 text-primary' : 'border-border hover:border-primary hover:text-foreground'
-                              }`}
-                              onClick={() => {
-                                setGeneration((prev) => ({ ...prev, modelId: model.id, result: '' }))
-                                toast.success(`下一次生成将使用模型：${model.id}`)
-                              }}
-                            >
-                              {model.id}
-                            </button>
-                          )
-                        })}
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="rounded-xl border border-dashed border-border bg-muted/35 p-3 text-xs leading-5 text-muted-foreground">
-                      还没有加载模型列表。点击上方“获取可用模型”后即可切换。
-                    </div>
-                  )}
+                  <div className="rounded-xl border border-dashed border-border bg-muted/35 p-3 text-xs leading-5 text-muted-foreground">
+                    模型列表已收纳到弹窗里，点击上方“选择模型”即可切换。
+                  </div>
                 </div>
 
                 <div className="space-y-2">
@@ -992,6 +975,19 @@ export function AIToolboxPage() {
           </Card>
         </aside>
       </section>
+      <ModelPickerDialog
+        open={isModelDialogOpen}
+        onOpenChange={setIsModelDialogOpen}
+        selectedModelId={selectedModelId}
+        availableModels={availableModels}
+        isLoadingModels={isLoadingModels}
+        hasSavedRuntimeKey={hasSavedRuntimeKey}
+        onRefresh={() => void handleLoadModels()}
+        onSelect={(modelId) => {
+          setGeneration((prev) => ({ ...prev, modelId, result: '' }))
+          toast.success(`下一次生成将使用模型：${modelId}`)
+        }}
+      />
     </div>
   )
 }
@@ -1014,3 +1010,4 @@ function InfoPanel({ label, title, description }: { label: string; title: string
     </div>
   )
 }
+
