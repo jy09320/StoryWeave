@@ -1291,30 +1291,28 @@ export function ProjectEditorPage() {
               </section>
 
               <section className="space-y-3">
-              <div className="text-xs uppercase tracking-[0.2em] text-slate-500">运行时概览</div>
-              <AiPanelInfoCard
-                title="后端当前运行配置"
-                tone="success"
-                description=""
-                items={[
-                  `提供商：${runtimeSettings?.provider ?? '-'}`,
-                  `默认模型：${runtimeSettings?.model_id ?? '-'}`,
-                  `来源：${runtimeSettings?.source === 'database' ? '运行时配置接口' : '环境变量'}`,
-                  runtimeSettings?.api_key_masked ? `Key：${runtimeSettings.api_key_masked}` : 'Key：未展示',
-                ]}
-              />
-              <AiPanelInfoCard
-                title="本次任务使用配置"
-                description=""
-                items={[`提供商：${generationProvider}`, `模型：${selectedModelId || '未填写'}`]}
-              />
+                <div className="text-xs uppercase tracking-[0.2em] text-slate-500">运行方式</div>
+                <AiPanelInfoCard
+                  title="全局配置入口"
+                  description=""
+                  items={[
+                    `当前提供商：${runtimeSettings?.provider ?? '-'}`,
+                    `默认模型：${runtimeSettings?.model_id ?? '-'}`,
+                    '提供商、API Key、Base URL 统一在设置中心维护',
+                  ]}
+                />
+                <AiPanelInfoCard
+                  title="本次任务使用模型"
+                  description=""
+                  items={[
+                    `模型：${selectedModelId || '未填写'}`,
+                    '这里只保留任务模型选择，不再修改主配置',
+                  ]}
+                />
               </section>
             </div>
 
             <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-              <Button className="w-full sm:w-auto" variant="outline" size="sm" onClick={() => setIsProviderConfigOpen(true)}>
-                配置运行时默认值
-              </Button>
               <Button
                 variant="outline"
                 size="sm"
@@ -1333,8 +1331,14 @@ export function ProjectEditorPage() {
                 }}
                 disabled={isLoadingModels}
               >
-                {isLoadingModels ? '获取中...' : '获取可选模型'}
+                {isLoadingModels ? '获取中...' : '获取可用模型'}
               </Button>
+              <Link
+                to="/settings"
+                className="inline-flex h-9 w-full items-center justify-center rounded-md border border-white/10 px-3 text-sm text-white transition hover:bg-white/10 sm:w-auto"
+              >
+                前往设置中心
+              </Link>
             </div>
           </CardHeader>
           <CardContent className="space-y-5">
@@ -1345,77 +1349,48 @@ export function ProjectEditorPage() {
                 <WandSparkles className="size-4 text-primary" />
                 AI 任务配置
               </div>
-              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-1">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-200">模型提供商</label>
-                  <Select
-                    value={generationProvider}
-                    onValueChange={(value) => {
-                      setGeneration((prev) => ({
-                        ...prev,
-                        result: '',
-                        provider: value,
-                        modelId: prev.modelId || selectedModelId,
-                      }))
-                    }}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="选择模型提供商" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {MODEL_PROVIDER_OPTIONS.map((option) => (
-                        <SelectItem key={option.value} value={option.value}>
-                          {option.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-200" htmlFor="generation-model-id">本次续写模型</label>
-                  <Input
-                    id="generation-model-id"
-                    value={selectedModelId}
-                    onChange={(event) => setGeneration((prev) => ({ ...prev, result: '', modelId: event.target.value }))}
-                    placeholder="支持手动输入任意模型名，例如 openai/gpt-5.4"
-                  />
+              <div className="space-y-4 rounded-xl border border-white/10 bg-white/[0.03] p-3">
+                <div className="space-y-1">
+                  <div className="text-sm font-medium text-white">本次任务模型</div>
                   <div className="text-xs leading-5 text-slate-400">
-                    只影响下一次生成。
+                    AI 主配置已移到设置中心，这里只切换当前任务要用的可用模型。
                   </div>
-                  {availableModels.length > 0 ? (
-                    <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-xs text-slate-300">
-                      <div className="mb-2">点击下方模型，直接设为“本次续写模型”：</div>
-                      <div className="flex flex-wrap gap-2">
-                        {availableModels.slice(0, 20).map((model) => {
-                          const isSelected = model.id === selectedModelId
-
-                          return (
-                            <button
-                              key={model.id}
-                              type="button"
-                              className={`rounded-full border px-3 py-1 transition ${
-                                isSelected
-                                  ? 'border-primary bg-primary/20 text-white'
-                                  : 'border-white/10 hover:border-primary hover:text-white'
-                              }`}
-                              onClick={() => {
-                                setGeneration((prev) => ({ ...prev, result: '', modelId: model.id }))
-                                toast.success(`下一次续写将使用模型：${model.id}`)
-                              }}
-                            >
-                              {model.id}
-                            </button>
-                          )
-                        })}
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="rounded-xl border border-dashed border-white/10 bg-black/5 p-3 text-xs leading-5 text-slate-400">
-                      还没有加载模型列表。
-                    </div>
-                  )}
                 </div>
+                <div className="rounded-xl border border-white/10 bg-black/10 px-3 py-2 text-sm text-white">
+                  当前选择：{selectedModelId}
+                </div>
+                {availableModels.length > 0 ? (
+                  <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-xs text-slate-300">
+                    <div className="mb-2">点击下方模型，直接用于下一次生成：</div>
+                    <div className="flex flex-wrap gap-2">
+                      {availableModels.slice(0, 20).map((model) => {
+                        const isSelected = model.id === selectedModelId
+
+                        return (
+                          <button
+                            key={model.id}
+                            type="button"
+                            className={`rounded-full border px-3 py-1 transition ${
+                              isSelected
+                                ? 'border-primary bg-primary/20 text-white'
+                                : 'border-white/10 hover:border-primary hover:text-white'
+                            }`}
+                            onClick={() => {
+                              setGeneration((prev) => ({ ...prev, result: '', modelId: model.id }))
+                              toast.success(`下一次生成将使用模型：${model.id}`)
+                            }}
+                          >
+                            {model.id}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="rounded-xl border border-dashed border-white/10 bg-black/5 p-3 text-xs leading-5 text-slate-400">
+                    还没有加载模型列表。点击上方“获取可用模型”后即可切换。
+                  </div>
+                )}
               </div>
 
               <div className="space-y-2">
