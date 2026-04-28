@@ -1,10 +1,9 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useMemo, useState, type FormEvent } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { Link, useParams } from 'react-router-dom'
 import {
   ArrowUpDown,
   BookOpen,
-  BrainCircuit,
   ChevronRight,
   FilePlus2,
   PenSquare,
@@ -12,7 +11,6 @@ import {
   UserPlus,
   Users2,
   Globe2,
-  PencilLine,
   SquarePen,
   Unlink,
 } from 'lucide-react'
@@ -53,7 +51,6 @@ import {
   reorderChapters,
   updateChapter,
   updateProjectCharacter,
-  updateProjectWorldSetting,
 } from '@/services/projects'
 import type {
   Chapter,
@@ -63,8 +60,6 @@ import type {
   ProjectCharacter,
   ProjectCharacterUpdatePayload,
   ProjectDetail,
-  WorldSetting,
-  WorldSettingPayload,
 } from '@/types/api'
 
 interface ChapterDraftState {
@@ -82,16 +77,6 @@ interface CharacterLinkEditState {
   summary: string
 }
 
-interface WorldSettingDraftState {
-  title: string
-  overview: string
-  rules: string
-  factions: string
-  locations: string
-  timeline: string
-  extra_notes: string
-}
-
 const defaultChapterDraft: ChapterDraftState = {
   title: '',
 }
@@ -100,16 +85,6 @@ const defaultCharacterLinkDraft: CharacterLinkDraftState = {
   characterId: '',
   roleLabel: '',
   summary: '',
-}
-
-const defaultWorldSettingDraft: WorldSettingDraftState = {
-  title: '',
-  overview: '',
-  rules: '',
-  factions: '',
-  locations: '',
-  timeline: '',
-  extra_notes: '',
 }
 
 const defaultCharacterLinkEditState: CharacterLinkEditState = {
@@ -121,22 +96,6 @@ function buildCharacterLinkUpdatePayload(editState: CharacterLinkEditState): Pro
   return {
     role_label: editState.roleLabel.trim() || null,
     summary: editState.summary.trim() || null,
-  }
-}
-
-function buildWorldSettingDraft(worldSetting: WorldSetting | null | undefined): WorldSettingDraftState {
-  if (!worldSetting) {
-    return defaultWorldSettingDraft
-  }
-
-  return {
-    title: worldSetting.title ?? '',
-    overview: worldSetting.overview ?? '',
-    rules: worldSetting.rules ?? '',
-    factions: worldSetting.factions ?? '',
-    locations: worldSetting.locations ?? '',
-    timeline: worldSetting.timeline ?? '',
-    extra_notes: worldSetting.extra_notes ?? '',
   }
 }
 
@@ -158,6 +117,14 @@ function buildActivityMap(chapters: Chapter[]) {
   })
 }
 
+function getLatestUpdatedChapter(chapters: Chapter[]) {
+  if (!chapters.length) {
+    return null
+  }
+
+  return [...chapters].sort((left, right) => new Date(right.updated_at).getTime() - new Date(left.updated_at).getTime())[0]
+}
+
 export function ProjectWorkspacePage() {
   const { projectId } = useParams<{ projectId: string }>()
   const [selectedChapterId, setSelectedChapterId] = useState<string | null>(null)
@@ -165,7 +132,6 @@ export function ProjectWorkspacePage() {
   const [characterLinkDraft, setCharacterLinkDraft] = useState<CharacterLinkDraftState>(defaultCharacterLinkDraft)
   const [editingProjectCharacter, setEditingProjectCharacter] = useState<ProjectCharacter | null>(null)
   const [characterLinkEditDraft, setCharacterLinkEditDraft] = useState<CharacterLinkEditState>(defaultCharacterLinkEditState)
-  const [worldSettingDraft, setWorldSettingDraft] = useState<WorldSettingDraftState>(defaultWorldSettingDraft)
 
   const projectQuery = useQuery<ProjectDetail, Error>({
     queryKey: ['project', projectId],
@@ -179,6 +145,7 @@ export function ProjectWorkspacePage() {
   })
 
   const chapters = useMemo(() => projectQuery.data?.chapters ?? [], [projectQuery.data?.chapters])
+  const latestUpdatedChapter = useMemo(() => getLatestUpdatedChapter(chapters), [chapters])
   const selectedChapter = useMemo(() => {
     if (!chapters.length) {
       return null
@@ -188,17 +155,11 @@ export function ProjectWorkspacePage() {
       return chapters.find((chapter) => chapter.id === selectedChapterId) ?? chapters[0]
     }
 
-    return chapters[0]
-  }, [chapters, selectedChapterId])
+    return latestUpdatedChapter ?? chapters[0]
+  }, [chapters, latestUpdatedChapter, selectedChapterId])
 
   const projectCharacters = useMemo(() => projectQuery.data?.project_characters ?? [], [projectQuery.data?.project_characters])
   const worldSetting = projectQuery.data?.world_setting ?? null
-
-  useEffect(() => {
-    if (projectQuery.data) {
-      setWorldSettingDraft(buildWorldSettingDraft(projectQuery.data.world_setting))
-    }
-  }, [projectQuery.data])
 
   const availableCharacters = useMemo(() => {
     const linkedIds = new Set(projectCharacters.map((item) => item.character_id))
@@ -296,17 +257,6 @@ export function ProjectWorkspacePage() {
     },
   })
 
-  const updateWorldSettingMutation = useMutation({
-    mutationFn: (payload: WorldSettingPayload) => updateProjectWorldSetting(projectId ?? '', payload),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['project', projectId] })
-      toast.success('世界观设定已保存')
-    },
-    onError: (error: Error) => {
-      toast.error(error.message)
-    },
-  })
-
   function handleCreateChapter(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
 
@@ -398,26 +348,6 @@ export function ProjectWorkspacePage() {
     })
   }
 
-  function handleSaveWorldSetting(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-
-    const title = worldSettingDraft.title.trim()
-    if (!title) {
-      toast.error('请先填写世界观标题')
-      return
-    }
-
-    updateWorldSettingMutation.mutate({
-      title,
-      overview: worldSettingDraft.overview.trim() || null,
-      rules: worldSettingDraft.rules.trim() || null,
-      factions: worldSettingDraft.factions.trim() || null,
-      locations: worldSettingDraft.locations.trim() || null,
-      timeline: worldSettingDraft.timeline.trim() || null,
-      extra_notes: worldSettingDraft.extra_notes.trim() || null,
-    })
-  }
-
   if (!projectId) {
     return (
       <EmptyState
@@ -456,6 +386,7 @@ export function ProjectWorkspacePage() {
   const project = projectQuery.data
   const activityMap = buildActivityMap(chapters)
   const activeDays = activityMap.filter((item) => item.count > 0).length
+  const totalWords = chapters.reduce((sum, chapter) => sum + chapter.word_count, 0)
 
   return (
     <div className="space-y-6">
@@ -477,10 +408,7 @@ export function ProjectWorkspacePage() {
           </CardHeader>
           <CardFooter className="flex flex-wrap items-center gap-3 border-white/10 bg-white/[0.03]">
             <WorkspaceMetricCard label="章节数量" value={`${chapters.length}`} />
-            <WorkspaceMetricCard
-              label="累计字数"
-              value={`${chapters.reduce((sum, chapter) => sum + chapter.word_count, 0)}`}
-            />
+            <WorkspaceMetricCard label="累计字数" value={`${totalWords}`} />
             <WorkspaceMetricCard label="角色数量" value={`${projectCharacters.length}`} />
             <WorkspaceMetricCard label="来源作品" value={project.source_work || '原创项目'} />
           </CardFooter>
@@ -520,10 +448,12 @@ export function ProjectWorkspacePage() {
               />
               <WorkspaceFocusCard
                 title="角色资产"
+                description={projectCharacters.length ? `已绑定 ${projectCharacters.length} 个角色` : '还没有绑定角色'}
                 icon={<Users2 className="size-4 text-slate-200" />}
               />
               <WorkspaceFocusCard
                 title="设定入口"
+                description={worldSetting?.title?.trim() || '进入世界观页维护词条与规则'}
                 icon={<Globe2 className="size-4 text-amber-300" />}
               />
             </div>
@@ -652,7 +582,8 @@ export function ProjectWorkspacePage() {
 
           <Card className="border border-white/8 bg-[#161618]/92">
             <CardHeader>
-              <CardTitle className="text-xl text-white">章节摘要面板</CardTitle>
+              <CardTitle className="text-xl text-white">当前选章</CardTitle>
+              <CardDescription className="text-slate-400">先决定写哪一章，再进入编辑器处理正文。</CardDescription>
             </CardHeader>
             <CardContent>
               {!selectedChapter ? (
@@ -672,7 +603,7 @@ export function ProjectWorkspacePage() {
 
                   <div>
                     <h3 className="text-2xl font-semibold text-white">{selectedChapter.title}</h3>
-                    <p className="mt-3 text-sm leading-7 text-slate-300">
+                    <p className="mt-3 line-clamp-3 text-sm leading-7 text-slate-300">
                       {selectedChapter.summary?.trim() || '当前章节还没有摘要。'}
                     </p>
                   </div>
@@ -683,6 +614,12 @@ export function ProjectWorkspacePage() {
                     <MetaCard label="当前字数" value={`${selectedChapter.word_count}`} />
                     <MetaCard label="正文状态" value={selectedChapter.content ? '已有草稿' : '待开始'} />
                     <MetaCard label="备注" value={selectedChapter.notes?.trim() || '暂无备注'} />
+                  </div>
+
+                  <div className="grid gap-4 md:grid-cols-3">
+                    <MetaCard label="章节位置" value={selectedChapter === latestUpdatedChapter ? '最近推进章节' : '当前选中章节'} />
+                    <MetaCard label="下一动作" value={selectedChapter.content ? '直接进入编辑器续写' : '进入编辑器建立正文'} />
+                    <MetaCard label="重任务处理" value="长文本改写与对照统一去 AI 工具箱" />
                   </div>
 
                   <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
@@ -721,6 +658,48 @@ export function ProjectWorkspacePage() {
         </section>
 
         <aside className="space-y-4 xl:sticky xl:top-4 xl:self-start">
+          <Card className="border border-white/8 bg-[#161618]/92">
+            <CardHeader>
+              <CardTitle className="text-lg text-white">当前项目步骤</CardTitle>
+              <CardDescription className="text-slate-400">工作台负责选章和整理，正文编辑回到编辑器完成。</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {latestUpdatedChapter ? (
+                <div className="rounded-md border border-white/8 bg-white/[0.03] p-4">
+                  <div className="text-xs text-slate-500">最近推进</div>
+                  <div className="mt-1 text-sm font-medium text-white">{latestUpdatedChapter.title}</div>
+                  <div className="mt-2 text-xs text-slate-400">
+                    第 {latestUpdatedChapter.order_index} 章 · {latestUpdatedChapter.word_count} 字 · {formatDate(latestUpdatedChapter.updated_at)}
+                  </div>
+                </div>
+              ) : (
+                <div className="rounded-md border border-dashed border-white/8 bg-white/[0.03] px-4 py-4 text-sm text-slate-400">
+                  先创建一个章节，再开始推进写作。
+                </div>
+              )}
+
+              <div className="grid gap-2">
+                {selectedChapter ? (
+                  <Link
+                    to={`/projects/${project.id}/editor/${selectedChapter.id}`}
+                    className="inline-flex h-10 items-center justify-center gap-1.5 rounded-md bg-amber-500 px-4 text-sm font-medium text-black transition hover:opacity-90"
+                  >
+                    <PenSquare className="size-4" />
+                    进入当前选中章节
+                  </Link>
+                ) : null}
+                {latestUpdatedChapter && selectedChapter?.id !== latestUpdatedChapter.id ? (
+                  <Link
+                    to={`/projects/${project.id}/editor/${latestUpdatedChapter.id}`}
+                    className="inline-flex h-10 items-center justify-center rounded-md border border-white/10 bg-white/[0.03] px-4 text-sm text-white transition hover:bg-white/10"
+                  >
+                    回到最近推进章节
+                  </Link>
+                ) : null}
+              </div>
+            </CardContent>
+          </Card>
+
           <Card className="border border-white/8 bg-[#161618]/92">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg text-white">
@@ -855,13 +834,11 @@ export function ProjectWorkspacePage() {
                 <Globe2 className="size-5 text-amber-300" />
                 世界观摘要
               </CardTitle>
+              <CardDescription className="text-slate-400">这里保留速览与跳转，详细设定维护回到专页处理。</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm text-slate-300">
-                <div className="flex items-center gap-2 text-white">
-                  <PencilLine className="size-4 text-amber-300" />
-                  <span className="font-medium">当前摘要</span>
-                </div>
+                <div className="font-medium text-white">当前摘要</div>
                 <div className="mt-3 space-y-3 text-sm leading-6 text-slate-400">
                   <p>
                     <span className="text-slate-500">标题：</span>
@@ -884,65 +861,12 @@ export function ProjectWorkspacePage() {
               >
                 进入完整世界观编辑页
               </Link>
-
-              <form className="space-y-3" onSubmit={handleSaveWorldSetting}>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-200">标题</label>
-                  <Input
-                    value={worldSettingDraft.title}
-                    onChange={(event) => setWorldSettingDraft((prev) => ({ ...prev, title: event.target.value }))}
-                    placeholder="例如：蒸汽帝国边境纪事"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-200">世界概览</label>
-                  <Textarea
-                    value={worldSettingDraft.overview}
-                    onChange={(event) => setWorldSettingDraft((prev) => ({ ...prev, overview: event.target.value }))}
-                    rows={3}
-                    placeholder="概括时代背景、主要矛盾与整体气质"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-200">核心规则</label>
-                  <Textarea
-                    value={worldSettingDraft.rules}
-                    onChange={(event) => setWorldSettingDraft((prev) => ({ ...prev, rules: event.target.value }))}
-                    rows={3}
-                    placeholder="例如：能力来源、政治秩序、魔法/科技边界"
-                  />
-                </div>
-                <div className="grid gap-3">
-                  <Input
-                    value={worldSettingDraft.factions}
-                    onChange={(event) => setWorldSettingDraft((prev) => ({ ...prev, factions: event.target.value }))}
-                    placeholder="势力摘要（可选）"
-                  />
-                  <Input
-                    value={worldSettingDraft.locations}
-                    onChange={(event) => setWorldSettingDraft((prev) => ({ ...prev, locations: event.target.value }))}
-                    placeholder="关键地点（可选）"
-                  />
-                  <Input
-                    value={worldSettingDraft.timeline}
-                    onChange={(event) => setWorldSettingDraft((prev) => ({ ...prev, timeline: event.target.value }))}
-                    placeholder="时间线摘要（可选）"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-200">补充备注</label>
-                  <Textarea
-                    value={worldSettingDraft.extra_notes}
-                    onChange={(event) => setWorldSettingDraft((prev) => ({ ...prev, extra_notes: event.target.value }))}
-                    rows={3}
-                    placeholder="记录暂未结构化但希望保留的设定信息"
-                  />
-                </div>
-                <Button type="submit" className="w-full" disabled={updateWorldSettingMutation.isPending}>
-                  <BrainCircuit className="size-4" />
-                  {updateWorldSettingMutation.isPending ? '保存中...' : worldSetting ? '更新世界观' : '创建世界观'}
-                </Button>
-              </form>
+              <Link
+                to={`/ai-toolbox?task=consistency&projectId=${project.id}${selectedChapter ? `&chapterId=${selectedChapter.id}` : ''}`}
+                className="inline-flex h-9 w-full items-center justify-center rounded-lg border border-white/10 bg-white/[0.03] px-3 text-sm font-medium text-white transition hover:bg-white/10"
+              >
+                用当前设定做一致性检查
+              </Link>
             </CardContent>
           </Card>
         </aside>
@@ -1063,3 +987,4 @@ function MetaCard({ label, value }: { label: string; value: string }) {
     </div>
   )
 }
+

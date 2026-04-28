@@ -1,7 +1,7 @@
 import { useMemo, useState, type Dispatch, type FormEvent, type ReactNode, type SetStateAction } from 'react'
 import { useMutation, useQueries, useQuery } from '@tanstack/react-query'
 import { Link, useNavigate } from 'react-router-dom'
-import { Clock3, FileText, Plus, Sparkles } from 'lucide-react'
+import { ArrowRight, Clock3, FileText, Plus, Sparkles } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { EmptyState } from '@/components/empty-state'
@@ -54,6 +54,11 @@ interface ProjectFormState {
   status: ProjectStatus
 }
 
+interface ContinueTarget {
+  project: Project
+  chapter: Chapter | null
+}
+
 const defaultFormState: ProjectFormState = {
   title: '',
   description: '',
@@ -103,7 +108,6 @@ export function DashboardPage() {
 
     return {
       total: projects.length,
-      draft: projects.filter((project) => project.status === 'draft').length,
       active: projects.filter((project) => project.status === 'active').length,
       completed: projects.filter((project) => project.status === 'completed').length,
     }
@@ -179,7 +183,7 @@ export function DashboardPage() {
   }
 
   function handleDelete(project: Project) {
-    const confirmed = window.confirm(`确认删除项目“${project.title}”吗？该操作将同时删除关联章节。`)
+    const confirmed = window.confirm(`确认删除项目“${project.title}”吗？该操作会同时删除关联章节。`)
     if (!confirmed) {
       return
     }
@@ -192,10 +196,15 @@ export function DashboardPage() {
     setEditForm(getInitialFormState(project))
   }
 
-  const projects = projectsQuery.data ?? []
-  const recentProjects = [...projects]
-    .sort((left, right) => new Date(right.updated_at).getTime() - new Date(left.updated_at).getTime())
-    .slice(0, 4)
+  const projects = useMemo(
+    () =>
+      [...(projectsQuery.data ?? [])].sort(
+        (left, right) => new Date(right.updated_at).getTime() - new Date(left.updated_at).getTime(),
+      ),
+    [projectsQuery.data],
+  )
+  const recentProjects = projects.slice(0, 4)
+  const otherProjects = projects.slice(0, 6)
 
   const recentProjectDetailsQueries = useQueries({
     queries: recentProjects.map((project) => ({
@@ -231,7 +240,7 @@ export function DashboardPage() {
   const recentChaptersError = recentProjectDetailsQueries.find((query) => query.isError)?.error
 
   if (projectsQuery.isLoading) {
-    return <LoadingState label="正在加载项目面板..." />
+    return <LoadingState label="正在加载创作面板..." />
   }
 
   if (projectsQuery.isError) {
@@ -248,51 +257,68 @@ export function DashboardPage() {
     )
   }
 
-  const heroProject = recentProjects[0] ?? null
+  const continueTarget: ContinueTarget | null = recentChapterCards[0]
+    ? { project: recentChapterCards[0].project, chapter: recentChapterCards[0].chapter }
+    : recentProjects[0]
+      ? { project: recentProjects[0], chapter: null }
+      : null
 
   return (
     <div className="space-y-6 pb-10">
-      <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
+      <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
         <div className="rounded-md border border-white/8 bg-[#161618]/92 p-5">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div className="space-y-3">
               <div className="text-[11px] uppercase tracking-[0.22em] text-[#52525B]">Continue Writing</div>
-              {heroProject ? (
+              {continueTarget ? (
                 <>
-                  <div className="text-2xl font-semibold text-white">{heroProject.title}</div>
+                  <div className="space-y-2">
+                    <div className="text-2xl font-semibold text-white">
+                      {continueTarget.chapter?.title || continueTarget.project.title}
+                    </div>
+                    <div className="text-sm text-[#A1A1AA]">{continueTarget.project.title}</div>
+                  </div>
                   <div className="flex flex-wrap items-center gap-2 text-xs text-[#A1A1AA]">
-                    <StatusBadge status={heroProject.status} />
+                    <StatusBadge status={continueTarget.project.status} />
                     <Badge variant="outline" className="border-white/10 bg-white/[0.035] text-[#A1A1AA]">
-                      {formatProjectType(heroProject.type)}
+                      {formatProjectType(continueTarget.project.type)}
                     </Badge>
-                    <span>最近更新 {formatDate(heroProject.updated_at)}</span>
+                    {continueTarget.chapter ? <span>第 {continueTarget.chapter.order_index} 章</span> : null}
+                    <span>最近更新 {formatDate(continueTarget.chapter?.updated_at || continueTarget.project.updated_at)}</span>
                   </div>
                   <p className="max-w-3xl text-sm leading-7 text-[#A1A1AA]">
-                    {heroProject.description?.trim() || ''}
+                    {continueTarget.chapter?.summary?.trim() ||
+                      continueTarget.chapter?.notes?.trim() ||
+                      continueTarget.project.description?.trim() ||
+                      '从这里回到最近推进的章节，直接进入正文。'}
                   </p>
                 </>
               ) : (
                 <>
-                  <div className="text-2xl font-semibold text-white">还没有最近项目</div>
-                  <p className="max-w-2xl text-sm leading-7 text-[#A1A1AA]">先创建一个项目。</p>
+                  <div className="text-2xl font-semibold text-white">还没有最近写作记录</div>
+                  <p className="max-w-2xl text-sm leading-7 text-[#A1A1AA]">先创建一个项目，再建立第一章。</p>
                 </>
               )}
             </div>
 
             <div className="flex w-full shrink-0 flex-col gap-2 sm:w-auto">
-              {heroProject ? (
+              {continueTarget ? (
                 <>
                   <Link
-                    to={`/projects/${heroProject.id}`}
+                    to={
+                      continueTarget.chapter
+                        ? `/projects/${continueTarget.project.id}/editor/${continueTarget.chapter.id}`
+                        : `/projects/${continueTarget.project.id}`
+                    }
                     className="inline-flex h-10 w-full items-center justify-center rounded-md bg-amber-500 px-4 text-sm font-medium text-black transition hover:opacity-90 sm:w-auto"
                   >
-                    继续写作
+                    {continueTarget.chapter ? '继续当前章节' : '进入项目'}
                   </Link>
                   <Link
-                    to={`/ai-toolbox?task=continue&projectId=${heroProject.id}`}
+                    to={`/projects/${continueTarget.project.id}`}
                     className="inline-flex h-10 w-full items-center justify-center rounded-md border border-white/10 bg-white/[0.035] px-4 text-sm text-white transition hover:bg-white/10 sm:w-auto"
                   >
-                    打开 AI 任务
+                    打开项目工作台
                   </Link>
                 </>
               ) : (
@@ -323,9 +349,7 @@ export function DashboardPage() {
       <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
         <div className="rounded-md border border-white/8 bg-[#161618]/92">
           <div className="flex items-center justify-between border-b border-white/5 px-5 py-4">
-            <div>
-              <div className="text-sm font-medium text-white">项目列表</div>
-            </div>
+            <div className="text-sm font-medium text-white">其他项目</div>
           </div>
 
           {projects.length === 0 ? (
@@ -343,50 +367,47 @@ export function DashboardPage() {
             </div>
           ) : (
             <div className="divide-y divide-white/5">
-              {projects
-                .slice()
-                .sort((left, right) => new Date(right.updated_at).getTime() - new Date(left.updated_at).getTime())
-                .map((project) => (
-                  <div key={project.id} className="grid gap-4 px-5 py-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
-                    <div className="min-w-0 space-y-2">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <div className="truncate text-base font-medium text-white">{project.title}</div>
-                        <StatusBadge status={project.status} />
-                        <Badge variant="outline" className="border-white/10 bg-white/[0.035] text-[#A1A1AA]">
-                          {formatProjectType(project.type)}
-                        </Badge>
-                      </div>
-                      <div className="line-clamp-2 text-sm leading-6 text-[#A1A1AA]">
-                        {project.description?.trim() || '暂无项目简介'}
-                      </div>
-                      <div className="flex flex-wrap items-center gap-4 text-xs text-[#52525B]">
-                        <span>更新时间 {formatDate(project.updated_at)}</span>
-                        <span>{project.source_work || '原创项目'}</span>
-                      </div>
+              {otherProjects.map((project) => (
+                <div key={project.id} className="grid gap-4 px-5 py-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+                  <div className="min-w-0 space-y-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="truncate text-base font-medium text-white">{project.title}</div>
+                      <StatusBadge status={project.status} />
+                      <Badge variant="outline" className="border-white/10 bg-white/[0.035] text-[#A1A1AA]">
+                        {formatProjectType(project.type)}
+                      </Badge>
                     </div>
-
-                    <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
-                      <Button variant="ghost" size="sm" onClick={() => openEditDialog(project)}>
-                        编辑
-                      </Button>
-                      <Button variant="ghost" size="sm" onClick={() => handleDelete(project)} disabled={deleteProjectMutation.isPending}>
-                        删除
-                      </Button>
-                      <Link
-                        to={`/projects/${project.id}`}
-                        className="inline-flex h-9 w-full items-center justify-center rounded-md bg-white/[0.035] px-3 text-sm text-white transition hover:bg-white/10 sm:w-auto"
-                      >
-                        工作台
-                      </Link>
-                      <Link
-                        to={`/projects/${project.id}`}
-                        className="inline-flex h-9 w-full items-center justify-center rounded-md bg-amber-500 px-3 text-sm font-medium text-black transition hover:opacity-90 sm:w-auto"
-                      >
-                        继续写作
-                      </Link>
+                    <div className="line-clamp-2 text-sm leading-6 text-[#A1A1AA]">
+                      {project.description?.trim() || '暂无项目简介'}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-4 text-xs text-[#52525B]">
+                      <span>更新时间 {formatDate(project.updated_at)}</span>
+                      <span>{project.source_work || '原创项目'}</span>
                     </div>
                   </div>
-                ))}
+
+                  <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+                    <Button variant="ghost" size="sm" onClick={() => openEditDialog(project)}>
+                      编辑
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => handleDelete(project)} disabled={deleteProjectMutation.isPending}>
+                      删除
+                    </Button>
+                    <Link
+                      to={`/projects/${project.id}`}
+                      className="inline-flex h-9 w-full items-center justify-center rounded-md bg-white/[0.035] px-3 text-sm text-white transition hover:bg-white/10 sm:w-auto"
+                    >
+                      工作台
+                    </Link>
+                    <Link
+                      to={`/projects/${project.id}`}
+                      className="inline-flex h-9 w-full items-center justify-center rounded-md bg-amber-500 px-3 text-sm font-medium text-black transition hover:opacity-90 sm:w-auto"
+                    >
+                      继续写作
+                    </Link>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </div>
@@ -394,13 +415,13 @@ export function DashboardPage() {
         <div className="space-y-4">
           <div className="rounded-md border border-white/8 bg-[#161618]/92">
             <div className="border-b border-white/5 px-5 py-4">
-              <div className="text-sm font-medium text-white">最近章节</div>
+              <div className="text-sm font-medium text-white">待续章节</div>
             </div>
             <div className="space-y-3 p-4">
               {recentProjects.length === 0 ? (
                 <SidebarNotice>先创建项目和章节。</SidebarNotice>
               ) : recentChaptersError ? (
-                <SidebarNotice>最近章节加载失败，请刷新页面后重试。</SidebarNotice>
+                <SidebarNotice>待续章节加载失败，请刷新页面后重试。</SidebarNotice>
               ) : isRecentChaptersLoading && recentChapterCards.length === 0 ? (
                 <LoadingState label="正在整理最近章节..." className="py-6" />
               ) : recentChapterCards.length === 0 ? (
@@ -423,6 +444,10 @@ export function DashboardPage() {
                     <div className="mt-1 line-clamp-2 text-sm leading-6 text-[#A1A1AA]">
                       {chapter.summary?.trim() || chapter.notes?.trim() || '暂无章节摘要。'}
                     </div>
+                    <div className="mt-3 inline-flex items-center gap-1 text-xs text-amber-200">
+                      继续这一章
+                      <ArrowRight className="size-3.5" />
+                    </div>
                   </Link>
                 ))
               )}
@@ -430,10 +455,34 @@ export function DashboardPage() {
           </div>
 
           <div className="rounded-md border border-white/8 bg-[#161618]/92 p-4">
-            <div className="text-sm font-medium text-white">快速入口</div>
+            <div className="text-sm font-medium text-white">接下来做什么</div>
             <div className="mt-4 grid gap-2">
-              <QuickActionButton label="进入 AI 续写" onClick={() => navigate('/ai-toolbox?task=continue')} icon={<Sparkles className="size-4" />} />
-              <QuickActionButton label="角色资产库" onClick={() => navigate('/characters')} icon={<FileText className="size-4" />} />
+              <QuickActionButton
+                label="从最近章节继续写"
+                description={
+                  continueTarget
+                    ? continueTarget.chapter
+                      ? `${continueTarget.project.title} / ${continueTarget.chapter.title}`
+                      : continueTarget.project.title
+                    : '优先回到正文'
+                }
+                onClick={() =>
+                  navigate(
+                    continueTarget
+                      ? continueTarget.chapter
+                        ? `/projects/${continueTarget.project.id}/editor/${continueTarget.chapter.id}`
+                        : `/projects/${continueTarget.project.id}`
+                      : '/workspace',
+                  )
+                }
+                icon={<Sparkles className="size-4" />}
+              />
+              <QuickActionButton
+                label="整理角色资料"
+                description="只在资料缺失时离开编辑器"
+                onClick={() => navigate('/characters')}
+                icon={<FileText className="size-4" />}
+              />
             </div>
           </div>
         </div>
@@ -492,10 +541,12 @@ function SidebarNotice({ children }: { children: ReactNode }) {
 
 function QuickActionButton({
   label,
+  description,
   icon,
   onClick,
 }: {
   label: string
+  description?: string
   icon: ReactNode
   onClick: () => void
 }) {
@@ -503,13 +554,16 @@ function QuickActionButton({
     <button
       type="button"
       onClick={onClick}
-      className="inline-flex h-10 items-center justify-between rounded-md border border-white/8 bg-white/[0.03] px-3 text-sm text-white transition hover:bg-white/[0.07]"
+      className="inline-flex h-12 items-center justify-between rounded-md border border-white/8 bg-white/[0.03] px-3 text-sm text-white transition hover:bg-white/[0.07]"
     >
-      <span className="inline-flex items-center gap-2">
-        {icon}
-        {label}
+      <span className="inline-flex min-w-0 items-center gap-2">
+        <span className="shrink-0">{icon}</span>
+        <span className="min-w-0 text-left">
+          <span className="block truncate">{label}</span>
+          {description ? <span className="block truncate text-xs text-[#52525B]">{description}</span> : null}
+        </span>
       </span>
-      <Clock3 className="size-4 text-[#52525B]" />
+      <Clock3 className="size-4 shrink-0 text-[#52525B]" />
     </button>
   )
 }
@@ -557,7 +611,7 @@ function ProjectDialog({
               id="project-title"
               value={form.title}
               onChange={(event) => onChange((prev) => ({ ...prev, title: event.target.value }))}
-              placeholder="例如：雪夜东京 · 平行世界支线"
+              placeholder="例如：雪夜东京 / 平行世界支线"
               maxLength={200}
             />
           </div>

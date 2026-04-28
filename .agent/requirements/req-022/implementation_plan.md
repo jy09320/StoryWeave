@@ -1,5 +1,7 @@
 # req-022 实施计划
 
+> 补充说明：从 2026-04-28 起，后续页面收口优先遵循 [`user_journey_optimization_plan.md`](./user_journey_optimization_plan.md) 中定义的用户主链路、页面职责和优化批次，再落回本实施计划逐项执行。
+
 ## 目标
 
 将 [`task.md`](./task.md) 中的“沉浸式写作工作台与 Tiptap 编辑器重构”拆分为可排期、可验收、可逐步落地的实施队列。
