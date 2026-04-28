@@ -1129,6 +1129,74 @@ export function ProjectEditorPage() {
                   placeholder="从这一行开始写标题后的正文。右侧的 AI 面板和参考抽屉会作为辅助层存在，不再挤占主写作区。"
                 />
               </div>
+
+              {selectionContext && generation.result.trim() ? (
+                <section className="space-y-3 rounded-2xl border border-emerald-500/20 bg-emerald-500/6 p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="space-y-1">
+                      <div className="text-xs uppercase tracking-[0.2em] text-emerald-300">内联候选块</div>
+                      <div className="text-sm font-medium text-white">当前选区的 AI 候选结果已就绪</div>
+                      <p className="text-xs leading-6 text-slate-300">
+                        这里直接承接刚刚的选区级操作。你可以先在正文附近对比，再决定接受、丢弃，或去右侧工作台继续调整。
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        size="sm"
+                        onClick={handleAcceptGeneratedText}
+                        disabled={!generation.result.trim() || generation.isGenerating}
+                      >
+                        {getAcceptButtonLabel(generationOrigin, selectionContext)}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={handleDiscardGeneratedText}
+                        disabled={!generation.result.trim() && !generation.isGenerating}
+                      >
+                        丢弃结果
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-3 lg:grid-cols-2">
+                    <div className="rounded-xl border border-white/8 bg-black/10 p-3">
+                      <div className="mb-2 text-xs uppercase tracking-[0.18em] text-slate-500">原文片段</div>
+                      <div className="whitespace-pre-wrap text-sm leading-6 text-slate-300">{selectionContext.text}</div>
+                    </div>
+                    <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3">
+                      <div className="mb-2 text-xs uppercase tracking-[0.18em] text-emerald-300">候选结果</div>
+                      <div className="whitespace-pre-wrap text-sm leading-6 text-emerald-50">{generation.result}</div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-white/8 bg-[#0F0F11] p-3">
+                    <div className="mb-2 text-xs uppercase tracking-[0.18em] text-slate-500">近邻差异</div>
+                    <div className="space-y-1">
+                      {buildDiffLines(selectionContext.text, generation.result)
+                        .slice(0, 6)
+                        .map((line, index) => (
+                          <div
+                            key={`inline-diff-${line.type}-${index}`}
+                            className={[
+                              'grid gap-2 rounded-md px-2 py-1.5 text-xs leading-5 sm:grid-cols-2',
+                              line.type === 'same'
+                                ? 'text-slate-500'
+                                : line.type === 'added'
+                                  ? 'bg-emerald-500/10 text-emerald-100'
+                                  : line.type === 'removed'
+                                    ? 'bg-rose-500/10 text-rose-100'
+                                    : 'bg-amber-500/10 text-amber-100',
+                            ].join(' ')}
+                          >
+                            <div className="whitespace-pre-wrap">{line.original || ' '}</div>
+                            <div className="whitespace-pre-wrap">{line.next || ' '}</div>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+                </section>
+              ) : null}
             </div>
 
             <div className="space-y-2">
