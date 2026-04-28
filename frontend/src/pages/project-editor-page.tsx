@@ -1386,122 +1386,134 @@ export function ProjectEditorPage() {
             </CardTitle>
             <CardDescription>先预览生成结果，再决定接受、丢弃或继续生成下一版。</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="min-h-[260px] rounded-2xl border border-white/10 bg-black/10 p-4 text-sm leading-7 text-slate-200 whitespace-pre-wrap">
-              {selectionContext && generation.result.trim() ? (
-                <div className="space-y-4 whitespace-normal">
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <div className="rounded-xl border border-white/8 bg-white/4 p-3">
-                      <div className="mb-2 text-xs uppercase tracking-[0.18em] text-slate-500">原文</div>
-                      <div className="whitespace-pre-wrap text-sm leading-6 text-slate-300">{selectionContext.text}</div>
+          <CardContent className="space-y-5">
+            <section className="space-y-3">
+              <div className="text-xs uppercase tracking-[0.2em] text-slate-500">结果预览</div>
+              <div className="min-h-[260px] rounded-2xl border border-white/10 bg-black/10 p-4 text-sm leading-7 text-slate-200 whitespace-pre-wrap">
+                {selectionContext && generation.result.trim() ? (
+                  <div className="space-y-4 whitespace-normal">
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="rounded-xl border border-white/8 bg-white/4 p-3">
+                        <div className="mb-2 text-xs uppercase tracking-[0.18em] text-slate-500">原文</div>
+                        <div className="whitespace-pre-wrap text-sm leading-6 text-slate-300">{selectionContext.text}</div>
+                      </div>
+                      <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/8 p-3">
+                        <div className="mb-2 text-xs uppercase tracking-[0.18em] text-emerald-300">候选结果</div>
+                        <div className="whitespace-pre-wrap text-sm leading-6 text-emerald-50">{generation.result}</div>
+                      </div>
                     </div>
-                    <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/8 p-3">
-                      <div className="mb-2 text-xs uppercase tracking-[0.18em] text-emerald-300">候选结果</div>
-                      <div className="whitespace-pre-wrap text-sm leading-6 text-emerald-50">{generation.result}</div>
+
+                    <div className="rounded-xl border border-white/8 bg-[#0F0F11]">
+                      <div className="border-b border-white/6 px-3 py-2 text-xs uppercase tracking-[0.18em] text-slate-500">
+                        差异预览
+                      </div>
+                      <div className="space-y-1 p-3">
+                        {buildDiffLines(selectionContext.text, generation.result).map((line, index) => (
+                          <div
+                            key={`${line.type}-${index}`}
+                            className={[
+                              'grid gap-2 rounded-md px-2 py-1.5 text-xs leading-5 sm:grid-cols-2',
+                              line.type === 'same'
+                                ? 'text-slate-500'
+                                : line.type === 'added'
+                                  ? 'bg-emerald-500/10 text-emerald-100'
+                                  : line.type === 'removed'
+                                    ? 'bg-rose-500/10 text-rose-100'
+                                    : 'bg-amber-500/10 text-amber-100',
+                            ].join(' ')}
+                          >
+                            <div className="whitespace-pre-wrap">{line.original || ' '}</div>
+                            <div className="whitespace-pre-wrap">{line.next || ' '}</div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   </div>
+                ) : (
+                  generation.result || 'AI 续写结果会显示在这里。'
+                )}
+              </div>
+            </section>
 
-                  <div className="rounded-xl border border-white/8 bg-[#0F0F11]">
-                    <div className="border-b border-white/6 px-3 py-2 text-xs uppercase tracking-[0.18em] text-slate-500">
-                      差异预览
-                    </div>
-                    <div className="space-y-1 p-3">
-                      {buildDiffLines(selectionContext.text, generation.result).map((line, index) => (
-                        <div
-                          key={`${line.type}-${index}`}
-                          className={[
-                            'grid gap-2 rounded-md px-2 py-1.5 text-xs leading-5 sm:grid-cols-2',
-                            line.type === 'same'
-                              ? 'text-slate-500'
-                              : line.type === 'added'
-                                ? 'bg-emerald-500/10 text-emerald-100'
-                                : line.type === 'removed'
-                                  ? 'bg-rose-500/10 text-rose-100'
-                                  : 'bg-amber-500/10 text-amber-100',
-                          ].join(' ')}
-                        >
-                          <div className="whitespace-pre-wrap">{line.original || ' '}</div>
-                          <div className="whitespace-pre-wrap">{line.next || ' '}</div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                generation.result || 'AI 续写结果会显示在这里。'
-              )}
-            </div>
+            <section className="space-y-3">
+              <div className="text-xs uppercase tracking-[0.2em] text-slate-500">状态与动作</div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <AiPanelInfoCard
+                  title="当前状态"
+                  description={generation.isGenerating ? '模型正在持续输出中。' : '等待你发起下一次生成。'}
+                  items={[
+                    generation.isGenerating ? '生成状态：进行中' : '生成状态：空闲',
+                    generation.result.trim()
+                      ? selectionContext
+                        ? '已有结果：可按选区模式回写'
+                        : '已有结果：可追加到正文'
+                      : '已有结果：暂无',
+                  ]}
+                />
+                <AiPanelInfoCard
+                  title="后续动作"
+                  description="接受结果会按当前模式写回正文；丢弃只清空本次生成结果，不影响正文。"
+                  items={[
+                    selectionContext
+                      ? `动作 1：${
+                          selectionContext.action === 'expand' ? '插入到选区后' : selectionContext.action === 'consistency' ? '保留为检查结果' : '替换当前选区'
+                        }`
+                      : '动作 1：追加到正文',
+                    '动作 2：丢弃结果',
+                    '动作 3：调整指令后重新生成',
+                    '快捷键：Tab 接受，Esc 放弃',
+                  ]}
+                />
+              </div>
+            </section>
 
-            <div className="grid gap-3 sm:grid-cols-2">
+            <section className="space-y-3">
+              <div className="text-xs uppercase tracking-[0.2em] text-slate-500">回写策略</div>
               <AiPanelInfoCard
-                title="当前状态"
-                description={generation.isGenerating ? '模型正在持续输出中。' : '等待你发起下一次生成。'}
+                title="结果来源"
+                description="统一说明这次候选结果的来源，以及接受后会怎么写回当前章节。"
+                tone={generationOrigin?.source === 'toolbox' ? 'success' : 'default'}
                 items={[
-                  generation.isGenerating ? '生成状态：进行中' : '生成状态：空闲',
-                  generation.result.trim()
-                    ? selectionContext
-                      ? '已有结果：可按选区模式回写'
-                      : '已有结果：可追加到正文'
-                    : '已有结果：暂无',
-                ]}
-              />
-              <AiPanelInfoCard
-                title="后续动作"
-                description="接受结果会按当前模式写回正文；丢弃只清空本次生成结果，不影响正文。"
-                items={[
-                  selectionContext
-                    ? `动作 1：${
-                        selectionContext.action === 'expand' ? '插入到选区后' : selectionContext.action === 'consistency' ? '保留为检查结果' : '替换当前选区'
+                  generationOrigin
+                    ? `来源：${
+                        generationOrigin.source === 'toolbox'
+                          ? 'AI 工具箱'
+                          : generationOrigin.source === 'editor-selection'
+                            ? '正文选区'
+                            : '章节级续写'
                       }`
-                    : '动作 1：追加到正文',
-                  '动作 2：丢弃结果',
-                  '动作 3：调整指令后重新生成',
-                  '快捷键：Tab 接受，Esc 放弃',
+                    : '来源：等待下一次 AI 任务',
+                  generationOrigin?.label || '当前还没有活动中的回写策略',
+                  generationOrigin?.mode
+                    ? `写回方式：${
+                        generationOrigin.mode === 'replace'
+                          ? '覆盖当前草稿'
+                          : generationOrigin.mode === 'append'
+                            ? '追加到当前正文'
+                            : generationOrigin.mode === 'replace-selection'
+                              ? '替换当前选区'
+                              : generationOrigin.mode === 'append-after-selection'
+                                ? '插入到选区后'
+                                : '追加到当前正文'
+                      }`
+                    : '写回方式：当前以结果预览为主',
                 ]}
               />
-            </div>
-
-            <AiPanelInfoCard
-              title="结果来源"
-              description="统一说明这次候选结果的来源，以及接受后会怎么写回当前章节。"
-              tone={generationOrigin?.source === 'toolbox' ? 'success' : 'default'}
-              items={[
-                generationOrigin
-                  ? `来源：${
-                      generationOrigin.source === 'toolbox'
-                        ? 'AI 工具箱'
-                        : generationOrigin.source === 'editor-selection'
-                          ? '正文选区'
-                          : '章节级续写'
-                    }`
-                  : '来源：等待下一次 AI 任务',
-                generationOrigin?.label || '当前还没有活动中的回写策略',
-                generationOrigin?.mode
-                  ? `写回方式：${
-                      generationOrigin.mode === 'replace'
-                        ? '覆盖当前草稿'
-                        : generationOrigin.mode === 'append'
-                          ? '追加到当前正文'
-                          : generationOrigin.mode === 'replace-selection'
-                            ? '替换当前选区'
-                            : generationOrigin.mode === 'append-after-selection'
-                              ? '插入到选区后'
-                              : '追加到当前正文'
-                    }`
-                  : '写回方式：当前以结果预览为主',
-              ]}
-            />
+            </section>
 
             <Separator className="bg-white/10" />
 
-            <div className="flex flex-wrap gap-3">
-              <Button onClick={handleAcceptGeneratedText} disabled={!generation.result.trim() || generation.isGenerating}>
-                {getAcceptButtonLabel(generationOrigin, selectionContext)}
-              </Button>
-              <Button variant="outline" onClick={handleDiscardGeneratedText} disabled={!generation.result.trim() && !generation.isGenerating}>
-                丢弃结果
-              </Button>
-            </div>
+            <section className="space-y-3">
+              <div className="text-xs uppercase tracking-[0.2em] text-slate-500">执行结果</div>
+              <div className="flex flex-wrap gap-3">
+                <Button onClick={handleAcceptGeneratedText} disabled={!generation.result.trim() || generation.isGenerating}>
+                  {getAcceptButtonLabel(generationOrigin, selectionContext)}
+                </Button>
+                <Button variant="outline" onClick={handleDiscardGeneratedText} disabled={!generation.result.trim() && !generation.isGenerating}>
+                  丢弃结果
+                </Button>
+              </div>
+            </section>
           </CardContent>
         </Card>
       </aside>
