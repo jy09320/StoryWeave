@@ -33,11 +33,28 @@ function buildSseUrl() {
   return `${baseURL}/ai/generate`
 }
 
+async function readErrorMessage(response: Response, fallback: string) {
+  const text = await response.text()
+  if (!text) {
+    return fallback
+  }
+
+  try {
+    const parsed = JSON.parse(text) as {
+      detail?: string
+      message?: string
+      error?: { message?: string }
+    }
+    return parsed.detail || parsed.message || parsed.error?.message || text
+  } catch {
+    return text
+  }
+}
+
 export async function getAIRuntimeSettings() {
   const response = await fetch(`${baseURL}/ai/runtime-settings`)
   if (!response.ok) {
-    const text = await response.text()
-    throw new Error(text || '获取 AI 运行时配置失败')
+    throw new Error(await readErrorMessage(response, '获取 AI 运行时配置失败'))
   }
   return (await response.json()) as AIRuntimeSettings
 }
@@ -52,8 +69,7 @@ export async function updateAIRuntimeSettings(payload: AIRuntimeSettingsPayload)
   })
 
   if (!response.ok) {
-    const text = await response.text()
-    throw new Error(text || '更新 AI 运行时配置失败')
+    throw new Error(await readErrorMessage(response, '更新 AI 运行时配置失败'))
   }
 
   return (await response.json()) as AIRuntimeSettings
@@ -62,8 +78,7 @@ export async function updateAIRuntimeSettings(payload: AIRuntimeSettingsPayload)
 export async function listAIRuntimeModels() {
   const response = await fetch(`${baseURL}/ai/runtime-settings/models`)
   if (!response.ok) {
-    const text = await response.text()
-    throw new Error(text || '获取可用模型列表失败')
+    throw new Error(await readErrorMessage(response, '获取可用模型列表失败'))
   }
   return (await response.json()) as AIModelListResponse
 }
@@ -78,8 +93,7 @@ export async function streamGenerate(payload: AIGeneratePayload, onMessage: (chu
   })
 
   if (!response.ok || !response.body) {
-    const text = await response.text()
-    throw new Error(text || 'AI 生成请求失败')
+    throw new Error(await readErrorMessage(response, 'AI 生成请求失败'))
   }
 
   const reader = response.body.getReader()
