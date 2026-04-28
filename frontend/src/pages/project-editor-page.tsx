@@ -1192,6 +1192,7 @@ export function ProjectEditorPage() {
                 />
               ) : null}
 
+              <section className="space-y-3">
               <div className="text-xs uppercase tracking-[0.2em] text-slate-500">任务入口</div>
               <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4">
                 <div className="space-y-2">
@@ -1221,7 +1222,9 @@ export function ProjectEditorPage() {
                   </Link>
                 </div>
               </div>
+              </section>
 
+              <section className="space-y-3">
               <div className="text-xs uppercase tracking-[0.2em] text-slate-500">运行时概览</div>
               <AiPanelInfoCard
                 title="后端当前运行配置"
@@ -1239,6 +1242,7 @@ export function ProjectEditorPage() {
                 description="点击开始生成时，请求会使用这里的提供商与模型；切换模型只影响下一次任务。"
                 items={[`提供商：${generationProvider}`, `模型：${selectedModelId || '未填写'}`]}
               />
+              </section>
             </div>
 
             <div className="flex flex-wrap gap-2">
