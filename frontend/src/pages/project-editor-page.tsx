@@ -1192,6 +1192,7 @@ export function ProjectEditorPage() {
                 />
               ) : null}
 
+              <div className="text-xs uppercase tracking-[0.2em] text-slate-500">任务入口</div>
               <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4">
                 <div className="space-y-2">
                   <div className="text-sm font-medium text-white">统一 AI 工具箱入口</div>
@@ -1221,6 +1222,7 @@ export function ProjectEditorPage() {
                 </div>
               </div>
 
+              <div className="text-xs uppercase tracking-[0.2em] text-slate-500">运行时概览</div>
               <AiPanelInfoCard
                 title="后端当前运行配置"
                 tone="success"
@@ -1265,6 +1267,7 @@ export function ProjectEditorPage() {
             </div>
           </CardHeader>
           <CardContent className="space-y-5">
+            <div className="text-xs uppercase tracking-[0.2em] text-slate-500">任务配置</div>
             <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4 space-y-4">
               <div className="flex items-center gap-2 text-sm font-medium text-white">
                 <WandSparkles className="size-4 text-primary" />
