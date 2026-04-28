@@ -9,6 +9,7 @@ import { queryClient } from '@/lib/query-client'
 import { AIToolboxPage } from '@/pages/ai-toolbox-page'
 import { CharactersPage } from '@/pages/characters-page'
 import { DashboardPage } from '@/pages/dashboard-page'
+import { HomePage } from '@/pages/home-page'
 import { ProjectEditorPage } from '@/pages/project-editor-page'
 import { ProjectWorldPage } from '@/pages/project-world-page'
 import { ProjectWorkspacePage } from '@/pages/project-workspace-page'
@@ -17,41 +18,45 @@ import { SettingsPage } from '@/pages/settings-page'
 const router = createBrowserRouter([
   {
     path: '/',
+    element: <HomePage />,
+  },
+  {
+    path: '/',
     element: <AppShell />,
     children: [
       {
-        index: true,
+        path: 'workspace',
         element: <DashboardPage />,
       },
       {
-        path: '/characters',
+        path: 'characters',
         element: <CharactersPage />,
       },
       {
-        path: '/projects/:projectId',
+        path: 'projects/:projectId',
         element: <ProjectWorkspacePage />,
       },
       {
-        path: '/projects/:projectId/editor/:chapterId',
+        path: 'projects/:projectId/editor/:chapterId',
         element: <ProjectEditorPage />,
       },
       {
-        path: '/projects/:projectId/world',
+        path: 'projects/:projectId/world',
         element: <ProjectWorldPage />,
       },
       {
-        path: '/ai-toolbox',
+        path: 'ai-toolbox',
         element: <AIToolboxPage />,
       },
       {
-        path: '/settings',
+        path: 'settings',
         element: <SettingsPage />,
       },
-      {
-        path: '*',
-        element: <Navigate to="/" replace />,
-      },
     ],
+  },
+  {
+    path: '*',
+    element: <Navigate to="/" replace />,
   },
 ])
 
