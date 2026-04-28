@@ -191,6 +191,20 @@ export function AppShell() {
     return () => window.removeEventListener('keydown', handleKeydown)
   }, [isProjectScoped, isZenMode])
 
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return
+    }
+
+    if (window.innerWidth < 768) {
+      setIsProjectTreeOpen(false)
+    }
+
+    if (window.innerWidth < 1280) {
+      setIsUtilityOpen(false)
+    }
+  }, [location.pathname])
+
   const pageMeta = useMemo(() => {
     const project = projectQuery.data
     const activeChapter = project?.chapters.find((item) => item.id === chapterId) ?? null
@@ -324,6 +338,8 @@ export function AppShell() {
     editorUtilityContext?.projectId === projectId && editorUtilityContext?.chapterId === chapterId
       ? editorUtilityContext
       : null
+  const shouldRenderProjectTree = isProjectScoped && isProjectTreeOpen && !isZenMode
+  const shouldRenderUtility = isProjectScoped && isUtilityOpen && !isZenMode
 
   return (
     <div className="flex h-screen bg-[#141416] text-[#E7E5E4] selection:bg-amber-500/30 selection:text-white">
@@ -362,7 +378,7 @@ export function AppShell() {
         </div>
       </aside>
 
-      {isProjectScoped && isProjectTreeOpen && !isZenMode ? (
+      {shouldRenderProjectTree ? (
         <aside className="hidden w-60 shrink-0 border-r border-white/5 bg-[#161618] md:flex md:flex-col">
           <div className="border-b border-white/5 px-4 py-4">
             <div className="text-[11px] uppercase tracking-[0.22em] text-[#52525B]">Project</div>
@@ -491,7 +507,7 @@ export function AppShell() {
           </main>
         </div>
 
-        {isProjectScoped && isUtilityOpen && !isZenMode ? (
+        {shouldRenderUtility ? (
           <aside className="hidden w-[300px] shrink-0 border-l border-white/5 bg-[#161618] xl:flex xl:flex-col">
             <div className="border-b border-white/5 px-4 py-4">
               <div className="flex items-center gap-2">
@@ -699,6 +715,288 @@ export function AppShell() {
           </aside>
         ) : null}
       </div>
+
+      {shouldRenderProjectTree ? (
+        <div
+          className="fixed inset-0 z-30 bg-black/55 md:hidden"
+          onClick={() => setIsProjectTreeOpen(false)}
+          aria-hidden="true"
+        >
+          <aside
+            className="flex h-full w-[min(84vw,320px)] flex-col border-r border-white/8 bg-[#161618] shadow-2xl shadow-black/40"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-white/5 px-4 py-4">
+              <div>
+                <div className="text-[11px] uppercase tracking-[0.22em] text-[#52525B]">Project</div>
+                <div className="mt-2 text-sm font-semibold text-white">{project?.title ?? '加载中...'}</div>
+              </div>
+              <button
+                type="button"
+                className="inline-flex size-9 items-center justify-center rounded-md border border-white/8 bg-white/5 text-[#A1A1AA] transition hover:text-white"
+                onClick={() => setIsProjectTreeOpen(false)}
+              >
+                <PanelLeftClose className="size-4" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto px-3 py-3">
+              <div className="space-y-1">
+                <SectionLabel>导航</SectionLabel>
+                <ProjectTreeLink
+                  to={`/projects/${projectId}`}
+                  label="项目大盘"
+                  active={location.pathname === `/projects/${projectId}`}
+                  onNavigate={() => setIsProjectTreeOpen(false)}
+                />
+                <ProjectTreeLink
+                  to={`/projects/${projectId}/world`}
+                  label="世界观设定"
+                  active={location.pathname === `/projects/${projectId}/world`}
+                  onNavigate={() => setIsProjectTreeOpen(false)}
+                />
+              </div>
+
+              <div className="mt-5 space-y-1">
+                <SectionLabel>章节树</SectionLabel>
+                {projectQuery.isLoading ? (
+                  <SidebarHint>正在加载章节结构...</SidebarHint>
+                ) : projectChapters.length > 0 ? (
+                  projectChapters.map((chapter) => (
+                    <ProjectTreeLink
+                      key={chapter.id}
+                      to={`/projects/${projectId}/editor/${chapter.id}`}
+                      label={chapter.title}
+                      meta={`第 ${chapter.order_index} 章`}
+                      active={chapter.id === chapterId}
+                      onNavigate={() => setIsProjectTreeOpen(false)}
+                    />
+                  ))
+                ) : (
+                  <SidebarHint>当前项目还没有章节。</SidebarHint>
+                )}
+              </div>
+
+              <div className="mt-5 space-y-1">
+                <SectionLabel>辅助入口</SectionLabel>
+                <ProjectTreeLink
+                  to="/characters"
+                  label="全局角色库"
+                  active={location.pathname === '/characters'}
+                  onNavigate={() => setIsProjectTreeOpen(false)}
+                />
+                <ProjectTreeStatic label="回收站" meta="" />
+              </div>
+            </div>
+          </aside>
+        </div>
+      ) : null}
+
+      {shouldRenderUtility ? (
+        <div
+          className="fixed inset-0 z-30 bg-black/55 xl:hidden"
+          onClick={() => setIsUtilityOpen(false)}
+          aria-hidden="true"
+        >
+          <aside
+            className="ml-auto flex h-full w-[min(88vw,360px)] flex-col border-l border-white/8 bg-[#161618] shadow-2xl shadow-black/40"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-white/5 px-4 py-4">
+              <div className="flex items-center gap-2">
+                {utilityTabs.map((tab) => (
+                  <button
+                    key={tab.key}
+                    type="button"
+                    onClick={() => setActiveUtilityTab(tab.key)}
+                    className={clsx(
+                      'rounded-md px-3 py-1.5 text-sm transition',
+                      activeUtilityTab === tab.key
+                        ? 'bg-white/10 text-white'
+                        : 'text-[#A1A1AA] hover:bg-white/5 hover:text-white',
+                    )}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+              <button
+                type="button"
+                className="inline-flex size-9 items-center justify-center rounded-md border border-white/8 bg-white/5 text-[#A1A1AA] transition hover:text-white"
+                onClick={() => setIsUtilityOpen(false)}
+              >
+                <PanelRightClose className="size-4" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto px-4 py-4">
+              {activeUtilityTab === 'characters' ? (
+                <div className="space-y-3">
+                  <SectionLabel>角色速查</SectionLabel>
+                  <SidebarHint>{chapterContextHint}</SidebarHint>
+                  {contextualCharacters.length > 0 ? (
+                    contextualCharacters.slice(0, 6).map(({ item, matches, score }) => (
+                      <div key={item.id} className="rounded-md border border-white/8 bg-white/3 p-3">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <div className="text-sm font-medium text-white">{item.character.name}</div>
+                          {score > 0 ? (
+                            <span className="rounded-full border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 text-[11px] text-amber-200">
+                              当前章命中
+                            </span>
+                          ) : null}
+                        </div>
+                        <div className="mt-1 text-xs text-[#A1A1AA]">
+                          {item.role_label || item.summary || item.character.personality || '暂无项目摘要'}
+                        </div>
+                        {matches.length > 0 ? (
+                          <div className="mt-2 flex flex-wrap gap-1.5">
+                            {matches.map((keyword) => (
+                              <span
+                                key={`${item.id}-${keyword}`}
+                                className="rounded-full border border-white/8 px-2 py-0.5 text-[11px] text-[#A1A1AA]"
+                              >
+                                {keyword}
+                              </span>
+                            ))}
+                          </div>
+                        ) : null}
+                      </div>
+                    ))
+                  ) : (
+                    <SidebarHint>当前项目还没有已绑定角色。</SidebarHint>
+                  )}
+                </div>
+              ) : null}
+
+              {activeUtilityTab === 'world' ? (
+                <div className="space-y-3">
+                  <SectionLabel>世界观词条</SectionLabel>
+                  <SidebarHint>{chapterContextHint}</SidebarHint>
+                  <UtilityInfoCard title="标题" value={worldSetting?.title || '尚未填写'} />
+                  {contextualWorldSections.map((section) => (
+                    <UtilityInfoCard
+                      key={section.key}
+                      title={section.label}
+                      value={section.value || section.emptyLabel}
+                      emphasis={section.score > 0}
+                      keywords={section.matches}
+                    />
+                  ))}
+                </div>
+              ) : null}
+
+              {activeUtilityTab === 'ai' ? (
+                <div className="space-y-3">
+                  <SectionLabel>AI 任务台</SectionLabel>
+                  {scopedEditorUtilityContext ? (
+                    <div className="rounded-md border border-amber-500/20 bg-amber-500/8 p-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <div className="text-sm font-medium text-white">当前选区</div>
+                        <span className="rounded-full border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 text-[11px] text-amber-200">
+                          {actionLabelMap[scopedEditorUtilityContext.action]}
+                        </span>
+                      </div>
+                      <div className="mt-2 text-xs leading-6 text-[#A1A1AA]">
+                        {scopedEditorUtilityContext.chapterTitle || '当前章节'}
+                      </div>
+                      <div className="mt-2 line-clamp-4 text-sm leading-6 text-[#E4E4E7]">
+                        {scopedEditorUtilityContext.selectedText}
+                      </div>
+                      <div className="mt-3 grid gap-2">
+                        <div className="grid grid-cols-2 gap-2">
+                          {utilityTaskActions.map((item) => (
+                            <NavLink
+                              key={item.action}
+                              to={`/ai-toolbox?task=${item.task}&projectId=${projectId}${chapterId ? `&chapterId=${chapterId}` : ''}`}
+                              onClick={() => {
+                                writeToolboxInputDraft({
+                                  task: item.task,
+                                  projectId: projectId || null,
+                                  chapterId: chapterId || null,
+                                  input: scopedEditorUtilityContext.selectedText,
+                                  createdAt: new Date().toISOString(),
+                                })
+                                setIsUtilityOpen(false)
+                              }}
+                              className={clsx(
+                                'inline-flex h-8 items-center justify-center rounded-md border px-3 text-xs transition',
+                                scopedEditorUtilityContext.action === item.action
+                                  ? 'border-amber-500/20 bg-amber-500/10 text-amber-100 hover:bg-amber-500/20'
+                                  : 'border-white/10 text-[#A1A1AA] hover:border-white/20 hover:text-white',
+                              )}
+                            >
+                              {item.label}
+                            </NavLink>
+                          ))}
+                        </div>
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          <NavLink
+                            to={`/ai-toolbox?task=${actionToToolboxTask[scopedEditorUtilityContext.action]}&projectId=${projectId}${chapterId ? `&chapterId=${chapterId}` : ''}`}
+                            onClick={() => {
+                              writeToolboxInputDraft({
+                                task: actionToToolboxTask[scopedEditorUtilityContext.action],
+                                projectId: projectId || null,
+                                chapterId: chapterId || null,
+                                input: scopedEditorUtilityContext.selectedText,
+                                createdAt: new Date().toISOString(),
+                              })
+                              setIsUtilityOpen(false)
+                            }}
+                            className="inline-flex h-8 items-center justify-center rounded-md border border-amber-500/20 bg-amber-500/10 px-3 text-xs text-amber-100 transition hover:bg-amber-500/20"
+                          >
+                            按当前动作打开
+                          </NavLink>
+                          <button
+                            type="button"
+                            onClick={() => setIsUtilityOpen(false)}
+                            className="inline-flex h-8 items-center justify-center rounded-md border border-white/10 px-3 text-xs text-[#A1A1AA] transition hover:text-white"
+                          >
+                            收起抽屉
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-3 rounded-md border border-white/8 bg-white/3 p-3">
+                      <SidebarHint>选中文本后可直接带入当前选区。</SidebarHint>
+                      <div className="grid grid-cols-2 gap-2">
+                        <NavLink
+                          to={`/ai-toolbox?task=continue&projectId=${projectId}${chapterId ? `&chapterId=${chapterId}` : ''}`}
+                          onClick={() => setIsUtilityOpen(false)}
+                          className="inline-flex h-8 items-center justify-center rounded-md border border-white/10 px-3 text-xs text-[#A1A1AA] transition hover:border-white/20 hover:text-white"
+                        >
+                          章节续写
+                        </NavLink>
+                        <NavLink
+                          to={`/ai-toolbox?task=rewrite&projectId=${projectId}${chapterId ? `&chapterId=${chapterId}` : ''}`}
+                          onClick={() => setIsUtilityOpen(false)}
+                          className="inline-flex h-8 items-center justify-center rounded-md border border-white/10 px-3 text-xs text-[#A1A1AA] transition hover:border-white/20 hover:text-white"
+                        >
+                          全文改写
+                        </NavLink>
+                        <NavLink
+                          to={`/ai-toolbox?task=consistency&projectId=${projectId}${chapterId ? `&chapterId=${chapterId}` : ''}`}
+                          onClick={() => setIsUtilityOpen(false)}
+                          className="inline-flex h-8 items-center justify-center rounded-md border border-white/10 px-3 text-xs text-[#A1A1AA] transition hover:border-white/20 hover:text-white"
+                        >
+                          设定检查
+                        </NavLink>
+                        <button
+                          type="button"
+                          onClick={() => setIsUtilityOpen(false)}
+                          className="inline-flex h-8 items-center justify-center rounded-md border border-white/10 px-3 text-xs text-[#A1A1AA] transition hover:border-white/20 hover:text-white"
+                        >
+                          收起抽屉
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : null}
+            </div>
+          </aside>
+        </div>
+      ) : null}
     </div>
   )
 }
@@ -716,15 +1014,18 @@ function ProjectTreeLink({
   label,
   meta,
   active,
+  onNavigate,
 }: {
   to: string
   label: string
   meta?: string
   active: boolean
+  onNavigate?: () => void
 }) {
   return (
     <NavLink
       to={to}
+      onClick={onNavigate}
       className={clsx(
         'flex items-center justify-between rounded-md px-3 py-2.5 transition',
         active ? 'bg-white/10 text-white' : 'text-[#A1A1AA] hover:bg-white/5 hover:text-white',

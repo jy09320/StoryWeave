@@ -1,4 +1,4 @@
-import { useMemo, useState, type Dispatch, type FormEvent, type SetStateAction } from 'react'
+import { useEffect, useMemo, useState, type Dispatch, type FormEvent, type SetStateAction } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { BookOpenText, PencilLine, Plus, Search, Trash2, Users2 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -8,7 +8,6 @@ import { LoadingState } from '@/components/loading-state'
 import { Button } from '@/components/ui/button'
 import {
   Card,
-  CardAction,
   CardContent,
   CardDescription,
   CardFooter,
@@ -83,9 +82,21 @@ function getInitialFormState(character?: Character | null): CharacterFormState {
   }
 }
 
+function splitTags(tags?: string | null) {
+  if (!tags?.trim()) {
+    return []
+  }
+
+  return tags
+    .split(/[，,、/]/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+}
+
 export function CharactersPage() {
   const [keyword, setKeyword] = useState('')
   const [searchKeyword, setSearchKeyword] = useState('')
+  const [selectedCharacterId, setSelectedCharacterId] = useState<string | null>(null)
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [editingCharacter, setEditingCharacter] = useState<Character | null>(null)
   const [createForm, setCreateForm] = useState<CharacterFormState>(defaultFormState)
@@ -98,8 +109,9 @@ export function CharactersPage() {
 
   const createCharacterMutation = useMutation({
     mutationFn: createCharacter,
-    onSuccess: async () => {
+    onSuccess: async (character: Character) => {
       await queryClient.invalidateQueries({ queryKey: ['characters'] })
+      setSelectedCharacterId(character.id)
       setIsCreateOpen(false)
       setCreateForm(defaultFormState)
       toast.success('角色已创建')
@@ -112,8 +124,9 @@ export function CharactersPage() {
   const updateCharacterMutation = useMutation({
     mutationFn: ({ characterId, payload }: { characterId: string; payload: Partial<CharacterPayload> }) =>
       updateCharacter(characterId, payload),
-    onSuccess: async () => {
+    onSuccess: async (character: Character) => {
       await queryClient.invalidateQueries({ queryKey: ['characters'] })
+      setSelectedCharacterId(character.id)
       setEditingCharacter(null)
       setEditForm(defaultFormState)
       toast.success('角色信息已更新')
@@ -125,8 +138,9 @@ export function CharactersPage() {
 
   const deleteCharacterMutation = useMutation({
     mutationFn: deleteCharacter,
-    onSuccess: async () => {
+    onSuccess: async (_, deletedId) => {
       await queryClient.invalidateQueries({ queryKey: ['characters'] })
+      setSelectedCharacterId((current) => (current === deletedId ? null : current))
       toast.success('角色已删除')
     },
     onError: (error: Error) => {
@@ -135,7 +149,26 @@ export function CharactersPage() {
   })
 
   const characters = charactersQuery.data ?? []
+  const selectedCharacter = useMemo(
+    () => characters.find((character) => character.id === selectedCharacterId) ?? characters[0] ?? null,
+    [characters, selectedCharacterId],
+  )
   const charactersWithTags = useMemo(() => characters.filter((character) => Boolean(character.tags?.trim())).length, [characters])
+  const charactersWithProfile = useMemo(
+    () => characters.filter((character) => Boolean(character.profile?.trim() || character.personality?.trim())).length,
+    [characters],
+  )
+
+  useEffect(() => {
+    if (!characters.length) {
+      setSelectedCharacterId(null)
+      return
+    }
+
+    if (!selectedCharacterId || !characters.some((character) => character.id === selectedCharacterId)) {
+      setSelectedCharacterId(characters[0].id)
+    }
+  }, [characters, selectedCharacterId])
 
   function handleSearchSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -207,39 +240,35 @@ export function CharactersPage() {
 
   return (
     <div className="space-y-6 pb-8">
-      <section className="grid gap-4 xl:grid-cols-[1.6fr_0.4fr]">
+      <section className="grid gap-4 xl:grid-cols-[1.45fr_0.55fr]">
         <Card className="border border-white/8 bg-[#161618]/92 shadow-2xl shadow-black/10">
-          <CardHeader className="gap-3 pb-3">
-            <CardTitle className="max-w-3xl text-2xl font-semibold leading-tight text-white sm:text-3xl">
-              全局角色库
-            </CardTitle>
+          <CardHeader className="gap-4 pb-3">
+            <div className="space-y-3">
+              <CardTitle className="max-w-3xl text-2xl font-semibold leading-tight text-white sm:text-3xl">
+                全局角色库
+              </CardTitle>
+              <CardDescription className="max-w-2xl text-sm leading-7 text-slate-300">
+                用主从视图集中维护角色档案，写作时提及、悬停和 AI 任务都会复用这里的资料。
+              </CardDescription>
+            </div>
           </CardHeader>
           <CardContent className="grid gap-3 sm:grid-cols-3">
-            <FeatureCard
-              title="统一角色卡"
-              icon={<Users2 className="size-5 text-amber-300" />}
-            />
-            <FeatureCard
-              title="项目复用"
-              icon={<BookOpenText className="size-5 text-slate-200" />}
-            />
-            <FeatureCard
-              title="AI 上下文基础"
-              icon={<PencilLine className="size-5 text-emerald-300" />}
-            />
+            <FeatureCard title="统一角色卡" icon={<Users2 className="size-5 text-amber-300" />} />
+            <FeatureCard title="项目复用" icon={<BookOpenText className="size-5 text-slate-200" />} />
+            <FeatureCard title="AI 上下文底座" icon={<PencilLine className="size-5 text-emerald-300" />} />
           </CardContent>
-          <CardFooter className="flex flex-col items-start gap-3 border-white/10 bg-white/[0.03] sm:flex-row sm:items-center sm:justify-between">
-            <form className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row" onSubmit={handleSearchSubmit}>
-              <div className="relative min-w-[260px]">
+          <CardFooter className="flex flex-col items-stretch gap-3 border-white/10 bg-white/[0.03] lg:flex-row lg:items-center lg:justify-between">
+            <form className="flex w-full flex-col gap-3 sm:flex-row lg:max-w-xl" onSubmit={handleSearchSubmit}>
+              <div className="relative min-w-0 flex-1">
                 <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-500" />
                 <Input
                   value={keyword}
                   onChange={(event) => setKeyword(event.target.value)}
-                  placeholder="搜索角色名、别名或标签"
+                  placeholder="搜索角色名、别名、标签"
                   className="pl-9"
                 />
               </div>
-              <Button type="submit" variant="outline">
+              <Button className="w-full sm:w-auto" type="submit" variant="outline">
                 搜索
               </Button>
             </form>
@@ -258,7 +287,7 @@ export function CharactersPage() {
               onSubmit={handleCreateSubmit}
               pending={createCharacterMutation.isPending}
               trigger={
-                <Button>
+                <Button className="w-full lg:w-auto">
                   <Plus className="size-4" />
                   新建角色
                 </Button>
@@ -271,73 +300,161 @@ export function CharactersPage() {
         <div className="grid gap-4 sm:grid-cols-3 xl:grid-cols-1">
           <MetricCard label="角色总数" value={characters.length} />
           <MetricCard label="已打标签" value={charactersWithTags} />
-          <MetricCard label="当前筛选" value={searchKeyword ? 1 : 0} hint={searchKeyword ? `关键词：${searchKeyword}` : ''} />
-        </div>
-      </section>
-
-      <section className="space-y-4">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <h2 className="text-xl font-semibold text-white">角色列表</h2>
-          </div>
-        </div>
-
-        {characters.length === 0 ? (
-          <EmptyState
-            title={searchKeyword ? '没有匹配的角色' : '角色库还是空的'}
-            description={
-              searchKeyword ? '换个关键词试试。' : '先创建一个角色。'
-            }
-            action={
-              <Button onClick={() => setIsCreateOpen(true)}>
-                <Plus className="size-4" />
-                创建角色
-              </Button>
-            }
+          <MetricCard
+            label="资料完整度"
+            value={charactersWithProfile}
+            hint={searchKeyword ? `当前筛选：${searchKeyword}` : '含人设或档案'}
           />
-        ) : (
-          <div className="grid gap-4 xl:grid-cols-2">
-            {characters.map((character) => (
-              <Card key={character.id} className="border border-white/8 bg-[#161618]/92 shadow-lg shadow-black/10">
-                <CardHeader className="gap-3">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="space-y-2">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <CardTitle className="text-xl text-white">{character.name}</CardTitle>
-                        {character.alias ? (
-                          <span className="rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1 text-xs text-slate-300">
-                            别名：{character.alias}
-                          </span>
-                        ) : null}
-                      </div>
-                      {character.description?.trim() ? <CardDescription>{character.description.trim()}</CardDescription> : null}
-                    </div>
-                    <CardAction className="flex gap-2">
-                      <Button variant="outline" size="sm" onClick={() => openEditDialog(character)}>
-                        编辑
-                      </Button>
-                      <Button variant="ghost" size="icon" onClick={() => handleDelete(character)}>
-                        <Trash2 className="size-4" />
-                        <span className="sr-only">删除角色</span>
-                      </Button>
-                    </CardAction>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-4 text-sm text-slate-300">
-                  <InfoBlock label="标签" value={character.tags || '未设置标签'} />
-                  <InfoBlock label="性格" value={character.personality || '未填写性格'} />
-                  <InfoBlock label="背景" value={character.background || '未填写背景'} />
-                  <InfoBlock label="关系备注" value={character.relationship_notes || '未填写关系备注'} />
-                </CardContent>
-                <CardFooter className="justify-between border-white/10 bg-white/[0.03] text-xs text-slate-400">
-                  <span>创建于 {formatDate(character.created_at)}</span>
-                  <span>更新于 {formatDate(character.updated_at)}</span>
-                </CardFooter>
-              </Card>
-            ))}
-          </div>
-        )}
+        </div>
       </section>
+
+      {characters.length === 0 ? (
+        <EmptyState
+          title={searchKeyword ? '没有匹配的角色' : '角色库还是空的'}
+          description={searchKeyword ? '换个关键词再试。' : '先创建一个角色。'}
+          action={
+            <Button onClick={() => setIsCreateOpen(true)}>
+              <Plus className="size-4" />
+              创建角色
+            </Button>
+          }
+        />
+      ) : (
+        <section className="grid gap-6 xl:grid-cols-[320px_minmax(0,1fr)]">
+          <aside className="space-y-4">
+            <Card className="border border-white/8 bg-[#161618]/92">
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <CardTitle className="text-lg text-white">角色列表</CardTitle>
+                    <CardDescription>按名称、别名和标签快速定位</CardDescription>
+                  </div>
+                  <span className="rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1 text-xs text-slate-400">
+                    {characters.length} 条
+                  </span>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {characters.map((character) => {
+                  const tags = splitTags(character.tags)
+                  const isActive = selectedCharacter?.id === character.id
+
+                  return (
+                    <button
+                      key={character.id}
+                      type="button"
+                      onClick={() => setSelectedCharacterId(character.id)}
+                      className={[
+                        'w-full rounded-md border px-4 py-3 text-left transition',
+                        isActive
+                          ? 'border-amber-500/25 bg-amber-500/10'
+                          : 'border-white/8 bg-white/[0.025] hover:border-white/15 hover:bg-white/[0.04]',
+                      ].join(' ')}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0 space-y-2">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <div className="truncate text-sm font-medium text-white">{character.name}</div>
+                            {character.alias ? (
+                              <span className="rounded-full border border-white/10 px-2 py-0.5 text-[11px] text-slate-300">
+                                {character.alias}
+                              </span>
+                            ) : null}
+                          </div>
+                          <div className="line-clamp-2 text-xs leading-5 text-slate-400">
+                            {character.description?.trim() || character.personality?.trim() || '暂无角色摘要'}
+                          </div>
+                        </div>
+                        <div className="shrink-0 text-[11px] text-slate-500">{formatDate(character.updated_at)}</div>
+                      </div>
+                      {tags.length > 0 ? (
+                        <div className="mt-3 flex flex-wrap gap-1.5">
+                          {tags.slice(0, 4).map((tag) => (
+                            <span
+                              key={`${character.id}-${tag}`}
+                              className="rounded-full border border-white/8 bg-white/[0.03] px-2 py-0.5 text-[11px] text-slate-400"
+                            >
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
+                      ) : null}
+                    </button>
+                  )
+                })}
+              </CardContent>
+            </Card>
+          </aside>
+
+          <section className="min-w-0 space-y-4">
+            {selectedCharacter ? (
+              <>
+                <Card className="border border-white/8 bg-[#161618]/92">
+                  <CardHeader className="gap-4">
+                    <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                      <div className="min-w-0 space-y-3">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <CardTitle className="text-2xl text-white sm:text-3xl">{selectedCharacter.name}</CardTitle>
+                          {selectedCharacter.alias ? (
+                            <span className="rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1 text-xs text-slate-300">
+                              别名：{selectedCharacter.alias}
+                            </span>
+                          ) : null}
+                        </div>
+                        <CardDescription className="max-w-3xl text-sm leading-7 text-slate-300">
+                          {selectedCharacter.description?.trim() || '这名角色还没有补充摘要。'}
+                        </CardDescription>
+                        <div className="flex flex-wrap gap-2">
+                          {splitTags(selectedCharacter.tags).length > 0 ? (
+                            splitTags(selectedCharacter.tags).map((tag) => (
+                              <span
+                                key={`${selectedCharacter.id}-${tag}`}
+                                className="rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1 text-xs text-slate-300"
+                              >
+                                {tag}
+                              </span>
+                            ))
+                          ) : (
+                            <span className="rounded-full border border-dashed border-white/10 px-2.5 py-1 text-xs text-slate-500">
+                              暂无标签
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+                        <Button className="w-full sm:w-auto" variant="outline" onClick={() => openEditDialog(selectedCharacter)}>
+                          编辑资料
+                        </Button>
+                        <Button
+                          className="w-full sm:w-auto"
+                          variant="ghost"
+                          onClick={() => handleDelete(selectedCharacter)}
+                          disabled={deleteCharacterMutation.isPending}
+                        >
+                          <Trash2 className="size-4" />
+                          删除角色
+                        </Button>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardFooter className="flex flex-col items-start gap-2 border-white/10 bg-white/[0.03] text-xs text-slate-400 sm:flex-row sm:items-center sm:justify-between">
+                    <span>创建于 {formatDate(selectedCharacter.created_at)}</span>
+                    <span>更新于 {formatDate(selectedCharacter.updated_at)}</span>
+                  </CardFooter>
+                </Card>
+
+                <div className="grid gap-4 xl:grid-cols-2">
+                  <InfoBlock label="人物档案" value={selectedCharacter.profile || '未填写人物档案'} />
+                  <InfoBlock label="性格特征" value={selectedCharacter.personality || '未填写性格特征'} />
+                  <InfoBlock label="背景经历" value={selectedCharacter.background || '未填写背景经历'} />
+                  <InfoBlock label="关系备注" value={selectedCharacter.relationship_notes || '未填写关系备注'} />
+                </div>
+              </>
+            ) : null}
+          </section>
+        </section>
+      )}
 
       <CharacterDialog
         open={Boolean(editingCharacter)}
@@ -361,9 +478,9 @@ export function CharactersPage() {
 
 function FeatureCard({ title, icon }: { title: string; icon: React.ReactNode }) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+    <div className="rounded-md border border-white/10 bg-white/[0.03] p-4">
       <div className="flex items-center gap-3">
-        <div className="rounded-xl border border-white/10 bg-white/[0.04] p-2">{icon}</div>
+        <div className="rounded-md border border-white/10 bg-white/[0.04] p-2">{icon}</div>
         <div className="text-sm font-medium text-white">{title}</div>
       </div>
     </div>
@@ -384,10 +501,14 @@ function MetricCard({ label, value, hint }: { label: string; value: number; hint
 
 function InfoBlock({ label, value }: { label: string; value: string }) {
   return (
-    <div className="space-y-1 rounded-2xl border border-white/10 bg-white/[0.03] p-3">
-      <div className="text-xs uppercase tracking-[0.24em] text-slate-500">{label}</div>
-      <div className="text-sm leading-6 text-slate-200">{value}</div>
-    </div>
+    <Card className="border border-white/8 bg-[#161618]/92">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-sm font-medium text-white">{label}</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="rounded-md border border-white/10 bg-white/[0.03] p-4 text-sm leading-7 text-slate-200">{value}</div>
+      </CardContent>
+    </Card>
   )
 }
 
@@ -443,7 +564,7 @@ function CharacterDialog({
             <Input
               value={form.tags}
               onChange={(event) => onChange((prev) => ({ ...prev, tags: event.target.value }))}
-              placeholder="例如：主角 / 反派 / 导师"
+              placeholder="例如：主角、反派、导师"
             />
           </div>
 
