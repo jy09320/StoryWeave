@@ -16,6 +16,8 @@ async def generate_text(req: AIGenerateRequest, db: AsyncSession = Depends(get_d
         try:
             async for chunk in ai_service.generate_stream(
                 db,
+                project_id=req.project_id,
+                chapter_id=req.chapter_id,
                 text=req.text,
                 instruction=req.instruction,
                 model_provider=req.model_provider,
