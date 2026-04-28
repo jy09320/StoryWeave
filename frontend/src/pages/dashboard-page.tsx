@@ -279,18 +279,18 @@ export function DashboardPage() {
               )}
             </div>
 
-            <div className="flex shrink-0 flex-col gap-2">
+            <div className="flex w-full shrink-0 flex-col gap-2 sm:w-auto">
               {heroProject ? (
                 <>
                   <Link
                     to={`/projects/${heroProject.id}`}
-                    className="inline-flex h-10 items-center justify-center rounded-md bg-amber-500 px-4 text-sm font-medium text-black transition hover:opacity-90"
+                    className="inline-flex h-10 w-full items-center justify-center rounded-md bg-amber-500 px-4 text-sm font-medium text-black transition hover:opacity-90 sm:w-auto"
                   >
                     继续写作
                   </Link>
                   <Link
                     to={`/ai-toolbox?task=continue&projectId=${heroProject.id}`}
-                    className="inline-flex h-10 items-center justify-center rounded-md border border-white/10 bg-white/[0.035] px-4 text-sm text-white transition hover:bg-white/10"
+                    className="inline-flex h-10 w-full items-center justify-center rounded-md border border-white/10 bg-white/[0.035] px-4 text-sm text-white transition hover:bg-white/10 sm:w-auto"
                   >
                     打开 AI 任务
                   </Link>
@@ -365,7 +365,7 @@ export function DashboardPage() {
                       </div>
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
                       <Button variant="ghost" size="sm" onClick={() => openEditDialog(project)}>
                         编辑
                       </Button>
@@ -374,13 +374,13 @@ export function DashboardPage() {
                       </Button>
                       <Link
                         to={`/projects/${project.id}`}
-                        className="inline-flex h-9 items-center justify-center rounded-md bg-white/[0.035] px-3 text-sm text-white transition hover:bg-white/10"
+                        className="inline-flex h-9 w-full items-center justify-center rounded-md bg-white/[0.035] px-3 text-sm text-white transition hover:bg-white/10 sm:w-auto"
                       >
                         工作台
                       </Link>
                       <Link
                         to={`/ai-toolbox?task=continue&projectId=${project.id}`}
-                        className="inline-flex h-9 items-center justify-center rounded-md bg-amber-500 px-3 text-sm font-medium text-black transition hover:opacity-90"
+                        className="inline-flex h-9 w-full items-center justify-center rounded-md bg-amber-500 px-3 text-sm font-medium text-black transition hover:opacity-90 sm:w-auto"
                       >
                         继续写作
                       </Link>

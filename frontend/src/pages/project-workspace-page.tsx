@@ -539,14 +539,14 @@ export function ProjectWorkspacePage() {
                 <div>
                   <CardTitle className="text-xl text-white">快速创建章节</CardTitle>
                 </div>
-                <form className="flex w-full max-w-md gap-2" onSubmit={handleCreateChapter}>
+                <form className="flex w-full max-w-md flex-col gap-2 sm:flex-row" onSubmit={handleCreateChapter}>
                   <Input
                     value={newChapter.title}
                     onChange={(event) => setNewChapter({ title: event.target.value })}
                     placeholder="例如：第一章 · 雪夜重逢"
                     maxLength={200}
                   />
-                  <Button type="submit" disabled={createChapterMutation.isPending}>
+                  <Button className="w-full sm:w-auto" type="submit" disabled={createChapterMutation.isPending}>
                     <FilePlus2 className="size-4" />
                     {createChapterMutation.isPending ? '创建中...' : '新建'}
                   </Button>
@@ -600,11 +600,12 @@ export function ProjectWorkspacePage() {
                               {chapter.word_count} 字 · 最近更新 {formatDate(chapter.updated_at)}
                             </p>
                           </div>
-                          <div className="flex shrink-0 items-center gap-2">
+                          <div className="flex shrink-0 flex-col gap-2 sm:flex-row sm:items-center">
                             <Button
                               type="button"
                               variant="outline"
                               size="sm"
+                              className="w-full sm:w-auto"
                               disabled={index === 0 || reorderMutation.isPending}
                               onClick={(event) => {
                                 event.stopPropagation()
@@ -617,6 +618,7 @@ export function ProjectWorkspacePage() {
                               type="button"
                               variant="outline"
                               size="sm"
+                              className="w-full sm:w-auto"
                               disabled={index === chapters.length - 1 || reorderMutation.isPending}
                               onClick={(event) => {
                                 event.stopPropagation()
@@ -629,6 +631,7 @@ export function ProjectWorkspacePage() {
                               type="button"
                               variant="destructive"
                               size="sm"
+                              className="w-full sm:w-auto"
                               disabled={deleteChapterMutation.isPending}
                               onClick={(event) => {
                                 event.stopPropagation()
@@ -682,10 +685,10 @@ export function ProjectWorkspacePage() {
                     <MetaCard label="备注" value={selectedChapter.notes?.trim() || '暂无备注'} />
                   </div>
 
-                  <div className="flex flex-wrap gap-3">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
                     <Link
                       to={`/projects/${project.id}/editor/${selectedChapter.id}`}
-                      className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground transition hover:opacity-90"
+                      className="inline-flex h-8 w-full items-center justify-center gap-1.5 rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground transition hover:opacity-90 sm:w-auto"
                     >
                       <PenSquare className="size-4" />
                       打开编辑器
@@ -693,11 +696,12 @@ export function ProjectWorkspacePage() {
                     </Link>
                     <Link
                       to={`/ai-toolbox?task=continue&projectId=${project.id}&chapterId=${selectedChapter.id}`}
-                      className="inline-flex h-8 items-center justify-center rounded-lg border border-white/10 bg-transparent px-3 text-sm font-medium text-white transition hover:bg-white/10"
+                      className="inline-flex h-8 w-full items-center justify-center rounded-lg border border-white/10 bg-transparent px-3 text-sm font-medium text-white transition hover:bg-white/10 sm:w-auto"
                     >
                       续写任务
                     </Link>
                     <Button
+                      className="w-full sm:w-auto"
                       variant="outline"
                       onClick={() =>
                         updateChapterMutation.mutate({
