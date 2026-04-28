@@ -14,6 +14,15 @@ def mask_api_key(api_key: str | None) -> str | None:
 
 
 class RuntimeAIConfigService:
+    async def get_latest_saved_api_key(self, db: AsyncSession) -> str | None:
+        result = await db.execute(
+            select(AIRuntimeSetting.api_key)
+            .where(AIRuntimeSetting.api_key.is_not(None))
+            .order_by(AIRuntimeSetting.updated_at.desc())
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
+
     async def get_active_setting(self, db: AsyncSession) -> AIRuntimeSetting | None:
         result = await db.execute(
             select(AIRuntimeSetting)
@@ -25,13 +34,15 @@ class RuntimeAIConfigService:
 
     async def get_effective_config(self, db: AsyncSession) -> dict[str, str | None]:
         active = await self.get_active_setting(db)
+        latest_saved_api_key = await self.get_latest_saved_api_key(db)
         if active:
+            effective_api_key = active.api_key or latest_saved_api_key or settings.OPENAI_API_KEY
             return {
                 "provider": active.provider,
                 "model_id": active.model_id,
                 "base_url": active.base_url,
-                "api_key": active.api_key,
-                "api_key_masked": mask_api_key(active.api_key),
+                "api_key": effective_api_key,
+                "api_key_masked": mask_api_key(effective_api_key),
                 "source": "database",
                 "updated_at": active.updated_at,
             }
@@ -56,6 +67,7 @@ class RuntimeAIConfigService:
         api_key: str | None,
     ) -> AIRuntimeSetting:
         current = await self.get_active_setting(db)
+        latest_saved_api_key = await self.get_latest_saved_api_key(db)
         if current:
             current.is_active = False
 
@@ -63,7 +75,7 @@ class RuntimeAIConfigService:
             provider=provider,
             model_id=model_id,
             base_url=base_url,
-            api_key=api_key,
+            api_key=api_key or (current.api_key if current else None) or latest_saved_api_key,
             is_active=True,
         )
         db.add(next_setting)
