@@ -327,12 +327,12 @@ export function AppShell() {
 
   return (
     <div className="flex h-screen bg-[#18181B] text-[#E4E4E7] selection:bg-amber-500/30 selection:text-white">
-      <aside className="flex w-16 shrink-0 flex-col items-center border-r border-white/5 bg-[#09090B] py-4">
+      <aside className="flex w-20 shrink-0 flex-col items-center border-r border-white/5 bg-[#09090B] px-2 py-4">
         <div className="flex size-10 items-center justify-center rounded-md border border-white/10 bg-white/5 text-amber-400">
           <Sparkles className="size-4" />
         </div>
 
-        <nav className="mt-6 flex flex-1 flex-col items-center gap-2">
+        <nav className="mt-6 flex flex-1 flex-col items-stretch gap-2">
           {primaryNavItems.map((item) => {
             const Icon = item.icon
             return (
@@ -343,7 +343,7 @@ export function AppShell() {
                 title={item.label}
                 className={({ isActive }) =>
                   clsx(
-                    'flex size-11 items-center justify-center rounded-md transition',
+                    'flex min-h-14 flex-col items-center justify-center gap-1 rounded-md px-2 py-2 text-center transition',
                     isActive
                       ? 'bg-white/10 text-white'
                       : 'text-[#A1A1AA] hover:bg-white/5 hover:text-white',
@@ -351,7 +351,7 @@ export function AppShell() {
                 }
               >
                 <Icon className="size-4" />
-                <span className="sr-only">{item.label}</span>
+                <span className="text-[11px] leading-none">{item.label}</span>
               </NavLink>
             )
           })}
