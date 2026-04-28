@@ -960,6 +960,25 @@ export function AIToolboxPage() {
                         >
                           复制
                         </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setActiveTask(item.task)
+                            syncSearchParams(item.task)
+                            setRecommendedSendMode(item.task === 'continue' ? 'append' : 'replace')
+                            setGeneration((prev) => ({
+                              ...prev,
+                              input: item.result,
+                              result: '',
+                              instruction: getTaskMeta(item.task).defaultInstruction,
+                              isGenerating: false,
+                            }))
+                            toast.success('历史结果已载入当前输入区，可继续加工')
+                          }}
+                        >
+                          继续加工
+                        </Button>
                         {item.projectId && item.chapterId ? (
                           <Button
                             variant="outline"
