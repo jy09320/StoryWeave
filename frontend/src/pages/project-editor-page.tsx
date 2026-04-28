@@ -1,13 +1,12 @@
-import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { Bot, ChevronLeft, FileText, History, LoaderCircle, Save, Sparkles, WandSparkles } from 'lucide-react'
+import { ChevronLeft, History, LoaderCircle, Save } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { RichTextEditor, type RichTextEditorHandle } from '@/components/editor/rich-text-editor'
 import { EmptyState } from '@/components/empty-state'
 import { LoadingState } from '@/components/loading-state'
-import { StatusBadge } from '@/components/status-badge'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -17,46 +16,21 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
-import { Separator } from '@/components/ui/separator'
 import { Textarea } from '@/components/ui/textarea'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
+  EDITOR_AI_COMMAND_EVENT,
+  writeEditorAIDraftContext,
+  type EditorAICommand,
+} from '@/lib/editor-ai-bridge'
+import { writeToolboxInputDraft } from '@/lib/ai-toolbox-context'
+import { writeEditorRouteContext } from '@/lib/editor-route-context'
 import { writeEditorUtilityContext, type EditorUtilityAction } from '@/lib/editor-utility-context'
 import { formatDate } from '@/lib/format'
 import { queryClient } from '@/lib/query-client'
-import {
-  getAIRuntimeSettings,
-  listAIRuntimeModels,
-  streamGenerate,
-  updateAIRuntimeSettings,
-  type AIModelOption,
-  type AIRuntimeSettings,
-} from '@/services/ai'
+import { cn } from '@/lib/utils'
 import { getProject, listChapterVersions, updateChapter } from '@/services/projects'
-import type { AIGeneratePayload, Chapter, ChapterStatus, ChapterVersion, ProjectDetail } from '@/types/api'
-
-const MODEL_PROVIDER_OPTIONS = [
-  { label: 'OpenAI', value: 'openai' },
-  { label: 'Anthropic', value: 'anthropic' },
-] as const
-
-const FALLBACK_MODEL_BY_PROVIDER: Record<string, string> = {
-  openai: 'gpt-4o',
-  anthropic: 'claude-3-5-sonnet-latest',
-}
+import type { Chapter, ChapterStatus, ChapterVersion, ProjectDetail } from '@/types/api'
 
 const CHAPTER_STATUS_OPTIONS: Array<{ label: string; value: ChapterStatus }> = [
   { label: '草稿', value: 'draft' },
@@ -73,39 +47,7 @@ interface EditorFormState {
   notes: string
 }
 
-interface GenerationState {
-  instruction: string
-  provider: string
-  modelId: string
-  result: string
-  isGenerating: boolean
-  requestId: number
-}
-
 type SelectionAction = EditorUtilityAction
-
-interface SelectionContextState {
-  text: string
-  action: SelectionAction
-}
-
-type GenerationSource = 'editor-selection' | 'editor-chapter' | 'toolbox'
-
-interface GenerationOriginState {
-  source: GenerationSource
-  task: ToolboxTaskType | SelectionAction | null
-  mode: ToolboxDraftApplyMode | 'replace-selection' | 'append-after-selection' | 'append-chapter' | null
-  label: string
-}
-
-interface ProviderConfigFormState {
-  provider: string
-  modelId: string
-  baseUrl: string
-  apiKey: string
-}
-
-const defaultGenerationInstruction = '请基于当前正文继续写下去，保持风格一致，并自然衔接上一段。'
 const TOOLBOX_RESULT_DRAFT_KEY = 'storyweave.toolbox-result-draft'
 
 type ToolboxTaskType = 'continue' | 'rewrite' | 'consistency'
@@ -119,43 +61,6 @@ interface ToolboxResultDraft {
   sourceInput: string
   createdAt: string
   mode: ToolboxDraftApplyMode
-}
-
-function getSelectionActionLabel(action: SelectionAction) {
-  switch (action) {
-    case 'polish':
-      return 'AI 润色'
-    case 'expand':
-      return '扩写'
-    case 'rewrite':
-      return '改写'
-    case 'consistency':
-      return '一致性检查'
-  }
-}
-
-function getAcceptButtonLabel(origin: GenerationOriginState | null, selection: SelectionContextState | null) {
-  if (origin?.mode === 'replace') {
-    return '覆盖当前草稿'
-  }
-
-  if (origin?.mode === 'append') {
-    return '追加到当前正文'
-  }
-
-  if (origin?.mode === 'replace-selection') {
-    return '替换当前选区'
-  }
-
-  if (origin?.mode === 'append-after-selection') {
-    return '插入到选区后'
-  }
-
-  if (selection?.action === 'consistency') {
-    return '保留检查结果'
-  }
-
-  return '追加到正文'
 }
 
 function getChapterById(project: ProjectDetail | undefined, chapterId: string | undefined) {
@@ -223,46 +128,6 @@ function normalizeChapterContent(content: string | null | undefined, plainText: 
   return plainTextToHtml(plainText ?? content ?? '')
 }
 
-function buildSelectionInstruction(action: SelectionAction, selectedText: string) {
-  const quotedText = `「${selectedText}」`
-
-  switch (action) {
-    case 'polish':
-      return `请润色这段文字，保持原意和人物口吻，不要脱离当前章节语境：${quotedText}`
-    case 'expand':
-      return `请围绕这段文字继续扩写，补足细节、情绪和动作，但保持与当前章节一致：${quotedText}`
-    case 'rewrite':
-      return `请改写这段文字，提升表达与节奏，但不要偏离当前剧情信息：${quotedText}`
-    case 'consistency':
-      return `请检查这段文字是否与当前角色设定、语气和世界观一致，并指出问题或给出更稳妥的改写建议：${quotedText}`
-  }
-}
-
-function buildDiffLines(originalText: string, nextText: string) {
-  const originalLines = originalText.split('\n')
-  const nextLines = nextText.split('\n')
-  const maxLength = Math.max(originalLines.length, nextLines.length)
-
-  return Array.from({ length: maxLength }, (_, index) => {
-    const original = originalLines[index] ?? ''
-    const next = nextLines[index] ?? ''
-
-    if (original === next) {
-      return { type: 'same' as const, original, next }
-    }
-
-    if (!original) {
-      return { type: 'added' as const, original, next }
-    }
-
-    if (!next) {
-      return { type: 'removed' as const, original, next }
-    }
-
-    return { type: 'changed' as const, original, next }
-  })
-}
-
 export function ProjectEditorPage() {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -281,68 +146,13 @@ export function ProjectEditorPage() {
 
   const [drafts, setDrafts] = useState<Record<string, EditorFormState>>({})
   const [dirtyChapterIds, setDirtyChapterIds] = useState<Record<string, boolean>>({})
-  const [selectionContext, setSelectionContext] = useState<SelectionContextState | null>(null)
-  const [generationOrigin, setGenerationOrigin] = useState<GenerationOriginState | null>(null)
-  const [generation, setGeneration] = useState<GenerationState>({
-    instruction: defaultGenerationInstruction,
-    provider: 'openai',
-    modelId: 'gpt-4o',
-    result: '',
-    isGenerating: false,
-    requestId: 0,
-  })
-
   const [isVersionDialogOpen, setIsVersionDialogOpen] = useState(false)
-  const [isProviderConfigOpen, setIsProviderConfigOpen] = useState(false)
-  const [providerConfig, setProviderConfig] = useState<ProviderConfigFormState>({
-    provider: 'openai',
-    modelId: 'gpt-4o',
-    baseUrl: '',
-    apiKey: '',
-  })
-  const [runtimeSettings, setRuntimeSettings] = useState<AIRuntimeSettings | null>(null)
-  const [availableModels, setAvailableModels] = useState<AIModelOption[]>([])
-  const [isLoadingModels, setIsLoadingModels] = useState(false)
-  const [isSavingRuntimeSettings, setIsSavingRuntimeSettings] = useState(false)
 
   const projectQuery = useQuery<ProjectDetail, Error>({
     queryKey: ['project', projectId],
     queryFn: () => getProject(projectId ?? ''),
     enabled: Boolean(projectId),
   })
-
-  useEffect(() => {
-    let cancelled = false
-
-    getAIRuntimeSettings()
-      .then((settings) => {
-        if (cancelled) {
-          return
-        }
-
-        setRuntimeSettings(settings)
-        setProviderConfig({
-          provider: settings.provider,
-          modelId: settings.model_id,
-          baseUrl: settings.base_url ?? '',
-          apiKey: '',
-        })
-        setGeneration((prev) => ({
-          ...prev,
-          provider: settings.provider,
-          modelId: settings.model_id,
-        }))
-      })
-      .catch((error: Error) => {
-        if (!cancelled) {
-          toast.error(error.message)
-        }
-      })
-
-    return () => {
-      cancelled = true
-    }
-  }, [])
 
 
   const chapter = useMemo(
@@ -360,8 +170,6 @@ export function ProjectEditorPage() {
       })),
     [projectQuery.data?.project_characters],
   )
-  const defaultGenerationProvider = projectQuery.data?.default_model_provider ?? 'openai'
-  const defaultGenerationModelId = projectQuery.data?.default_model_id ?? 'gpt-4o'
 
   const saveChapterMutation = useMutation({
     mutationFn: async ({
@@ -497,13 +305,6 @@ export function ProjectEditorPage() {
     }))
     scheduleAutosave(chapter.id, next)
     writeEditorUtilityContext(null)
-    setGeneration((prev) => ({ ...prev, result: draft.result.trim(), isGenerating: false }))
-    setGenerationOrigin({
-      source: 'toolbox',
-      task: draft.task,
-      mode: draft.mode,
-      label: draft.mode === 'replace' ? '工具箱结果已覆盖当前草稿' : '工具箱结果已追加到当前正文',
-    })
     clearToolboxDraft()
     searchParams.delete('fromToolbox')
     setSearchParams(searchParams, { replace: true })
@@ -541,54 +342,34 @@ export function ProjectEditorPage() {
     updateFormField('status', value as ChapterStatus)
   }
 
-  function handleDiscardGeneratedText() {
-    setGeneration((prev) => ({
-      ...prev,
-      result: '',
-    }))
-    setSelectionContext(null)
-    setGenerationOrigin(null)
-    writeEditorUtilityContext(null)
-  }
 
   function handleBubbleAction(action: SelectionAction, selectedText: string) {
-    setSelectionContext({ action, text: selectedText })
-    setGeneration((prev) => ({
-      ...prev,
-      result: '',
-      instruction: buildSelectionInstruction(action, selectedText),
-    }))
-    if (projectId && chapter?.id) {
-      writeEditorUtilityContext({
-        projectId,
-        projectTitle: projectQuery.data?.title ?? null,
-        chapterId: chapter.id,
-        chapterTitle: chapter.title ?? null,
-        action,
-        selectedText,
-        updatedAt: new Date().toISOString(),
-      })
+    if (!projectId || !chapter?.id) {
+      return
     }
-    setGenerationOrigin({
-      source: 'editor-selection',
-      task: action,
-      mode: action === 'expand' ? 'append-after-selection' : action === 'consistency' ? null : 'replace-selection',
-      label: `当前结果将按“${getSelectionActionLabel(action)}”模式优先回写`,
-    })
-    toast.success(
-      `已切换到选区${
-        action === 'expand' ? '扩写' : action === 'rewrite' ? '改写' : action === 'polish' ? '润色' : '一致性检查'
-      }模式`,
-    )
-  }
 
-  function handleStopGeneration() {
-    setGeneration((prev) => ({
-      ...prev,
-      isGenerating: false,
-      requestId: prev.requestId + 1,
-    }))
-    toast.info('已停止接收本次 AI 续写结果')
+    if (action !== 'expand') {
+      writeToolboxInputDraft({
+        task: action === 'consistency' ? 'consistency' : 'rewrite',
+        projectId,
+        chapterId: chapter.id,
+        input: selectedText,
+        createdAt: new Date().toISOString(),
+      })
+      navigate(`/ai-toolbox?task=${action === 'consistency' ? 'consistency' : 'rewrite'}&projectId=${projectId}&chapterId=${chapter.id}`)
+      return
+    }
+
+    writeEditorUtilityContext({
+      projectId,
+      projectTitle: projectQuery.data?.title ?? null,
+      chapterId: chapter.id,
+      chapterTitle: chapter.title ?? null,
+      action,
+      selectedText,
+      updatedAt: new Date().toISOString(),
+    })
+    toast.success('已切换到选区扩写模式')
   }
 
   async function handleManualSave() {
@@ -611,148 +392,8 @@ export function ProjectEditorPage() {
     })
   }
 
-  async function handleGenerate() {
-    if (!projectId || !chapterId) {
-      toast.error('项目或章节标识缺失')
-      return
-    }
-
-    const sourceText = selectionContext?.text?.trim() || activeForm.plainText.trim()
-
-    if (!sourceText) {
-      toast.error('请先输入章节正文，再发起 AI 续写')
-      return
-    }
-
-    if (!selectionContext) {
-      setGenerationOrigin({
-        source: 'editor-chapter',
-        task: 'continue',
-        mode: 'append-chapter',
-        label: '当前结果会按章节级续写方式追加到正文',
-      })
-    }
-
-    clearAutosaveTimer()
-
-    const requestId = generation.requestId + 1
-    setGeneration((prev) => ({ ...prev, result: '', isGenerating: true, requestId }))
-
-    const attemptModels = Array.from(new Set([selectedModelId, FALLBACK_MODEL_BY_PROVIDER[generationProvider]].filter(Boolean)))
-
-    let lastError: unknown = null
-
-    for (const modelId of attemptModels) {
-      try {
-        const payload: AIGeneratePayload = {
-          project_id: projectId,
-          chapter_id: chapterId,
-          text: sourceText,
-          instruction: generation.instruction,
-          model_provider: generationProvider,
-          model_id: modelId,
-        }
-
-        await streamGenerate(payload, (chunk) => {
-          setGeneration((prev) => {
-            if (prev.requestId !== requestId || !prev.isGenerating) {
-              return prev
-            }
-
-            return {
-              ...prev,
-              result: `${prev.result}${chunk}`,
-              modelId,
-            }
-          })
-        })
-
-        setGeneration((prev) => {
-          if (prev.requestId !== requestId) {
-            return prev
-          }
-
-          return {
-            ...prev,
-            isGenerating: false,
-            modelId,
-          }
-        })
-
-        if (modelId !== selectedModelId) {
-          toast.success(`当前模型不可用，已自动切换到 ${modelId}`)
-        }
-
-        return
-      } catch (error) {
-        lastError = error
-      }
-    }
-
-    setGeneration((prev) => {
-      if (prev.requestId !== requestId) {
-        return prev
-      }
-
-      return {
-        ...prev,
-        isGenerating: false,
-      }
-    })
-    toast.error(lastError instanceof Error ? lastError.message : 'AI 续写失败')
-  }
-
-  function handleAcceptGeneratedText() {
-    if (!generation.result.trim()) {
-      return
-    }
-
-    if (selectionContext && selectionContext.action !== 'consistency') {
-      const applied = editorRef.current?.applyGeneratedText({
-        text: generation.result.trim(),
-        mode: selectionContext.action === 'expand' ? 'append-after-selection' : 'replace-selection',
-      })
-
-      if (applied) {
-        setGeneration((prev) => ({ ...prev, result: '', isGenerating: false }))
-        setSelectionContext(null)
-        setGenerationOrigin(null)
-        writeEditorUtilityContext(null)
-        toast.success(selectionContext.action === 'expand' ? '已在选区后插入扩写结果' : '已替换当前选区')
-        return
-      }
-    }
-
-    const mergedText = activeForm.plainText.trim()
-      ? `${activeForm.plainText.trimEnd()}\n\n${generation.result.trim()}`
-      : generation.result.trim()
-
-    setGeneration((prev) => ({ ...prev, result: '', isGenerating: false }))
-    setSelectionContext(null)
-    setGenerationOrigin(null)
-    if (!chapter?.id) {
-      return
-    }
-
-    const next = {
-      ...(drafts[chapter.id] ?? buildEditorForm(chapter)),
-      contentHtml: plainTextToHtml(mergedText),
-      plainText: mergedText,
-    }
-
-    setDrafts((prev) => ({
-      ...prev,
-      [chapter.id]: next,
-    }))
-    setDirtyChapterIds((prev) => ({
-      ...prev,
-      [chapter.id]: true,
-    }))
-    scheduleAutosave(chapter.id, next)
-    toast.success('已追加到正文')
-  }
-
   function handleRestoreVersion(version: ChapterVersion) {
+
     const restoredText = version.plain_text ?? version.content
     if (!chapter?.id) {
       return
@@ -777,86 +418,103 @@ export function ProjectEditorPage() {
     toast.success('历史版本内容已恢复到正文，可继续编辑或保存')
   }
 
-  async function handleProviderConfigSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-
-    const nextModel = providerConfig.modelId.trim()
-    const nextProvider = providerConfig.provider
-    const nextBaseUrl = providerConfig.baseUrl.trim()
-    const nextApiKey = providerConfig.apiKey.trim()
-
-    if (!nextModel) {
-      toast.error('请填写模型标识')
-      return
-    }
-
-    if (!nextApiKey && !runtimeSettings?.api_key_masked) {
-      toast.error('请至少填写一次 API Key')
-      return
-    }
-
-    setIsSavingRuntimeSettings(true)
-
-    try {
-      const saved = await updateAIRuntimeSettings({
-        provider: nextProvider,
-        model_id: nextModel,
-        base_url: nextBaseUrl || null,
-        api_key: nextApiKey || null,
-      })
-
-      setRuntimeSettings(saved)
-      setGeneration((prev) => ({
-        ...prev,
-        provider: saved.provider,
-        modelId: saved.model_id,
-        result: '',
-      }))
-      setProviderConfig({
-        provider: saved.provider,
-        modelId: saved.model_id,
-        baseUrl: saved.base_url ?? '',
-        apiKey: '',
-      })
-      setIsProviderConfigOpen(false)
-      toast.success(nextApiKey ? 'AI 运行时配置已更新，后端已立即切换到新配置' : 'AI 运行时配置已更新，沿用已保存的 API Key')
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : '更新 AI 运行时配置失败')
-    } finally {
-      setIsSavingRuntimeSettings(false)
-    }
-  }
-
   const activeForm = chapter ? drafts[chapter.id] ?? buildEditorForm(chapter) : buildEditorForm(null)
   const isDirty = chapter ? (dirtyChapterIds[chapter.id] ?? false) : false
   const shouldBlockNavigation = Boolean(chapter) && (isDirty || saveChapterMutation.isPending)
   const wordCount = countWords(activeForm.plainText)
-  const generationProvider = generation.provider || defaultGenerationProvider
-  const generationModelId = generation.modelId || defaultGenerationModelId
-  const selectedModelId = generationModelId || defaultGenerationModelId
 
   useEffect(() => {
-    if (!selectionContext || !projectId || !chapter?.id) {
-      writeEditorUtilityContext(null)
+    if (!projectId || !chapter?.id) {
       return
     }
 
-    writeEditorUtilityContext({
+    writeEditorRouteContext({
       projectId,
       projectTitle: projectQuery.data?.title ?? null,
       chapterId: chapter.id,
       chapterTitle: chapter.title ?? null,
-      action: selectionContext.action,
-      selectedText: selectionContext.text,
       updatedAt: new Date().toISOString(),
     })
-  }, [chapter?.id, chapter?.title, projectId, projectQuery.data?.title, selectionContext])
+  }, [chapter?.id, chapter?.title, projectId, projectQuery.data?.title])
+
 
   useEffect(() => {
-    return () => {
-      writeEditorUtilityContext(null)
+    if (!projectId || !chapter?.id) {
+      return
     }
-  }, [])
+
+    writeEditorAIDraftContext({
+      projectId,
+      chapterId: chapter.id,
+      chapterTitle: chapter.title ?? null,
+      plainText: activeForm.plainText,
+      updatedAt: new Date().toISOString(),
+    })
+  }, [activeForm.plainText, chapter?.id, chapter?.title, projectId])
+
+  useEffect(() => {
+    function handleAICommand(event: Event) {
+      const customEvent = event as CustomEvent<EditorAICommand>
+      const command = customEvent.detail
+      if (!command || command.projectId !== projectId || command.chapterId != chapter?.id) {
+        return
+      }
+
+      if (command.type === 'discard-generated-text') {
+        writeEditorUtilityContext(null)
+        return
+      }
+
+      const nextText = command.text?.trim()
+      if (!nextText || !chapter?.id) {
+        return
+      }
+
+      if (command.mode === 'append-after-selection') {
+        const applied = editorRef.current?.applyGeneratedText({
+          text: nextText,
+          mode: 'append-after-selection',
+        })
+
+        if (applied) {
+          writeEditorUtilityContext(null)
+          toast.success('已在选区后插入扩写结果')
+          return
+        }
+
+        toast.error('当前选区已失效，请重新选择后再试')
+        return
+      }
+
+      const mergedText = activeForm.plainText.trim() ? `${activeForm.plainText.trimEnd()}
+
+${nextText}` : nextText
+      const next = {
+        ...(drafts[chapter.id] ?? buildEditorForm(chapter)),
+        contentHtml: plainTextToHtml(mergedText),
+        plainText: mergedText,
+      }
+
+      setDrafts((prev) => ({
+        ...prev,
+        [chapter.id]: next,
+      }))
+      setDirtyChapterIds((prev) => ({
+        ...prev,
+        [chapter.id]: true,
+      }))
+      scheduleAutosave(chapter.id, next)
+      writeEditorUtilityContext(null)
+      toast.success('已追加到正文')
+    }
+
+    window.addEventListener(EDITOR_AI_COMMAND_EVENT, handleAICommand as EventListener)
+    return () => {
+      window.removeEventListener(EDITOR_AI_COMMAND_EVENT, handleAICommand as EventListener)
+      writeEditorUtilityContext(null)
+      writeEditorAIDraftContext(null)
+    }
+  }, [activeForm.plainText, chapter, drafts, projectId])
 
   useEffect(() => {
     if (!chapter?.id || searchParams.get('fromToolbox') !== '1') {
@@ -943,34 +601,6 @@ export function ProjectEditorPage() {
     }
   }, [shouldBlockNavigation])
 
-  useEffect(() => {
-    function handleResultHotkeys(event: KeyboardEvent) {
-      if (generation.isGenerating || !generation.result.trim()) {
-        return
-      }
-
-      const target = event.target
-      const isTypingField =
-        target instanceof HTMLElement &&
-        (target.tagName === 'INPUT' ||
-          target.tagName === 'TEXTAREA' ||
-          target.isContentEditable)
-
-      if (event.key === 'Tab' && !isTypingField) {
-        event.preventDefault()
-        handleAcceptGeneratedText()
-      }
-
-      if (event.key === 'Escape') {
-        event.preventDefault()
-        handleDiscardGeneratedText()
-        toast.info('已放弃当前 AI 结果')
-      }
-    }
-
-    window.addEventListener('keydown', handleResultHotkeys)
-    return () => window.removeEventListener('keydown', handleResultHotkeys)
-  }, [generation.isGenerating, generation.result, selectionContext, activeForm.plainText, chapter?.id, drafts])
 
   if (!projectId || !chapterId) {
     return (
@@ -1022,184 +652,114 @@ export function ProjectEditorPage() {
   }
 
   return (
-    <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
-      <section className="space-y-4">
-        <Card className="border border-white/8 bg-[#161618]/92">
-          <CardHeader className="gap-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="space-y-2">
-                <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
-                  <Link to={`/projects/${projectId}`} className="inline-flex items-center gap-1 hover:text-white">
+    <div className="space-y-5">
+      <section className="space-y-5">
+        <Card className="overflow-hidden border border-border bg-card/95 shadow-[0_18px_44px_rgba(148,163,184,0.18)]">
+          <CardHeader className="gap-5 border-b border-border bg-background/72 px-6 py-5">
+            <div className="space-y-4">
+              <div className="space-y-3">
+                <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                  <Link to={`/projects/${projectId}`} className="inline-flex items-center gap-1 hover:text-foreground">
                     <ChevronLeft className="size-4" />
                     返回工作台
                   </Link>
                   <span>·</span>
                   <span>{projectQuery.data.title}</span>
                 </div>
-                <CardTitle className="text-2xl text-white">章节编辑器</CardTitle>
+                <div className="flex justify-center">
+                  <input
+                    value={activeForm.title}
+                    onChange={(event) => updateFormField('title', event.target.value)}
+                    placeholder="????????"
+                    maxLength={200}
+                    className="w-full max-w-4xl border-none bg-transparent px-0 text-center text-4xl font-semibold tracking-tight text-foreground outline-none placeholder:text-muted-foreground"
+                  />
+                </div>
               </div>
-              <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
-                <StatusBadge status={chapter.status} />
-                <span className="rounded-full border border-white/10 px-3 py-1">{wordCount} 字</span>
-                <span>最近更新 {formatDate(chapter.updated_at)}</span>
-                <Button variant="outline" size="sm" onClick={() => setIsVersionDialogOpen(true)}>
+              <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground">
+                <div className="flex flex-wrap items-center gap-3 rounded-[20px] border border-border bg-background/92 px-3 py-2">
+                  <span className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">章节状态</span>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {CHAPTER_STATUS_OPTIONS.map((option) => {
+                      const active = activeForm.status === option.value
+
+                      return (
+                        <button
+                          key={option.value}
+                          type="button"
+                          onClick={() => handleStatusChange(option.value)}
+                          className={cn(
+                            'rounded-full px-3 py-1.5 text-xs font-medium transition',
+                            active
+                              ? 'bg-primary text-primary-foreground'
+                              : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+                          )}
+                        >
+                          {option.label}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+                <span className="rounded-full border border-border bg-background px-3 py-1.5">{wordCount} 字</span>
+                <span className="rounded-full border border-border bg-background px-3 py-1.5">最近更新 {formatDate(chapter.updated_at)}</span>
+                <Button variant="outline" size="sm" className="h-10 rounded-xl border-border bg-background px-4 text-foreground/85" onClick={() => setIsVersionDialogOpen(true)}>
                   <History className="size-4" />
                   版本历史
                 </Button>
               </div>
             </div>
           </CardHeader>
-          <CardContent className="space-y-5">
-            <div className="mx-auto grid w-full max-w-4xl gap-5">
-              <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_220px]">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-200">章节状态</label>
-                  <div className="rounded-md border border-dashed border-white/8 bg-white/[0.03] px-4 py-3 text-sm leading-6 text-slate-400">
-                    标题回车后可直接进入正文。
-                  </div>
+          <CardContent className="space-y-5 bg-transparent p-5">
+            <div className="rounded-[24px] border border-border bg-background/92 p-5 shadow-sm">
+              <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-[20px] border border-border bg-muted/45 px-4 py-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="rounded-xl bg-primary/10 px-3 py-2 text-sm font-medium text-primary">续写正文</span>
+                  <span className="rounded-xl bg-background px-3 py-2 text-sm text-muted-foreground ring-1 ring-border">AI检测</span>
                 </div>
-
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-200">章节状态</label>
-                  <Select value={activeForm.status} onValueChange={handleStatusChange}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="选择章节状态" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {CHAPTER_STATUS_OPTIONS.map((option) => (
-                        <SelectItem key={option.value} value={option.value}>
-                          {option.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="rounded-full border border-border bg-background px-3 py-1.5 text-xs text-muted-foreground">跨章滚动</span>
+                  <span className="rounded-full border border-border bg-background px-3 py-1.5 text-xs text-muted-foreground">智能补全</span>
                 </div>
               </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-200" htmlFor="chapter-content">
+              <div className="space-y-3">
+                <label className="text-sm font-medium text-foreground/85" htmlFor="chapter-content">
                   写作区
                 </label>
                 <RichTextEditor
                   ref={editorRef}
-                  title={activeForm.title}
-                  onTitleChange={(nextTitle) => updateFormField('title', nextTitle)}
-                  titlePlaceholder="在这里写章节标题"
                   value={activeForm.contentHtml}
                   mentionItems={mentionItems}
-                  onSelectionChange={({ text }) => {
-                    setSelectionContext((prev) => (prev ? { ...prev, text } : prev))
-                  }}
+                  onSelectionChange={() => {}}
                   onBubbleAction={handleBubbleAction}
                   onSlashCommand={(command) => {
+                    writeEditorUtilityContext(null)
                     if (command === 'continue') {
-                      setSelectionContext(null)
-                      setGeneration((prev) => ({
-                        ...prev,
-                        result: '',
-                        instruction: '请基于当前章节正文继续写下去，保持风格一致并自然承接最近一段内容。',
-                      }))
                       toast.success('已切换到章节续写模式')
                       return
                     }
 
-                    if (command === 'consistency') {
-                      setSelectionContext(null)
-                      setGeneration((prev) => ({
-                        ...prev,
-                        result: '',
-                        instruction: '请检查当前章节是否与项目角色设定、口吻和世界观规则一致，并指出明显冲突。',
-                      }))
-                      toast.success('已切换到设定检查模式')
-                      return
-                    }
-
-                    if (command === 'rewrite') {
-                      setSelectionContext(null)
-                      setGeneration((prev) => ({
-                        ...prev,
-                        result: '',
-                        instruction: '请基于当前章节整体内容进行改写，优化表达、节奏和可读性，但不要偏离既有剧情信息。',
-                      }))
-                      toast.success('已切换到章节改写模式')
-                    }
+                    const task = command === 'consistency' ? 'consistency' : 'rewrite'
+                    writeToolboxInputDraft({
+                      task,
+                      projectId: projectId ?? null,
+                      chapterId: chapterId ?? null,
+                      input: activeForm.plainText,
+                      createdAt: new Date().toISOString(),
+                    })
+                    navigate(`/ai-toolbox?task=${task}&projectId=${projectId}&chapterId=${chapterId}`)
                   }}
                   onChange={handleEditorChange}
+                  className="border-0 bg-transparent"
                   placeholder="从这一行开始写标题后的正文。右侧的 AI 面板和参考抽屉会作为辅助层存在，不再挤占主写作区。"
                 />
               </div>
 
-              {selectionContext && generation.result.trim() ? (
-                <section className="space-y-3 rounded-2xl border border-emerald-500/20 bg-emerald-500/6 p-4">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div className="space-y-1">
-                      <div className="text-xs uppercase tracking-[0.2em] text-emerald-300">内联候选块</div>
-                      <div className="text-sm font-medium text-white">当前选区的 AI 候选结果已就绪</div>
-                      <p className="text-xs leading-6 text-slate-300">对比后决定接受或丢弃。</p>
-                    </div>
-                    <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-                      <Button
-                        size="sm"
-                        className="w-full sm:w-auto"
-                        onClick={handleAcceptGeneratedText}
-                        disabled={!generation.result.trim() || generation.isGenerating}
-                      >
-                        {getAcceptButtonLabel(generationOrigin, selectionContext)}
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="w-full sm:w-auto"
-                        onClick={handleDiscardGeneratedText}
-                        disabled={!generation.result.trim() && !generation.isGenerating}
-                      >
-                        丢弃结果
-                      </Button>
-                    </div>
-                  </div>
 
-                  <div className="grid gap-3 lg:grid-cols-2">
-                    <div className="rounded-xl border border-white/8 bg-white/[0.03] p-3">
-                      <div className="mb-2 text-xs uppercase tracking-[0.18em] text-slate-500">原文片段</div>
-                      <div className="whitespace-pre-wrap text-sm leading-6 text-slate-300">{selectionContext.text}</div>
-                    </div>
-                    <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3">
-                      <div className="mb-2 text-xs uppercase tracking-[0.18em] text-emerald-300">候选结果</div>
-                      <div className="whitespace-pre-wrap text-sm leading-6 text-emerald-50">{generation.result}</div>
-                    </div>
-                  </div>
-
-                  <div className="rounded-xl border border-white/8 bg-[#111113] p-3">
-                    <div className="mb-2 text-xs uppercase tracking-[0.18em] text-slate-500">近邻差异</div>
-                    <div className="space-y-1">
-                      {buildDiffLines(selectionContext.text, generation.result)
-                        .slice(0, 6)
-                        .map((line, index) => (
-                          <div
-                            key={`inline-diff-${line.type}-${index}`}
-                            className={[
-                              'grid gap-2 rounded-md px-2 py-1.5 text-xs leading-5 sm:grid-cols-2',
-                              line.type === 'same'
-                                ? 'text-slate-500'
-                                : line.type === 'added'
-                                  ? 'bg-emerald-500/10 text-emerald-100'
-                                  : line.type === 'removed'
-                                    ? 'bg-rose-500/10 text-rose-100'
-                                    : 'bg-amber-500/10 text-amber-100',
-                            ].join(' ')}
-                          >
-                            <div className="whitespace-pre-wrap">{line.original || ' '}</div>
-                            <div className="whitespace-pre-wrap">{line.next || ' '}</div>
-                          </div>
-                        ))}
-                    </div>
-                  </div>
-                </section>
-              ) : null}
             </div>
 
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-200" htmlFor="chapter-notes">
+            <div className="rounded-[24px] border border-border bg-background/92 p-5 shadow-sm">
+              <label className="mb-2 block text-sm font-medium text-foreground/85" htmlFor="chapter-notes">
                 章节备注
               </label>
               <Textarea
@@ -1207,19 +767,20 @@ export function ProjectEditorPage() {
                 value={activeForm.notes}
                 onChange={handleNotesChange}
                 rows={5}
+                className="min-h-[132px] rounded-2xl border-border bg-background text-foreground placeholder:text-muted-foreground"
                 placeholder="记录当前章节目标、伏笔提醒或 AI 指令草稿。"
               />
             </div>
           </CardContent>
-          <CardFooter className="flex flex-wrap items-center justify-between gap-3 border-white/10 bg-white/[0.03]">
-            <div className="text-xs text-slate-400">
+          <CardFooter className="flex flex-wrap items-center justify-between gap-3 border-t border-border bg-background/88 px-6 py-4">
+            <div className="text-xs text-muted-foreground">
               {saveChapterMutation.isPending
                 ? '正在保存...'
                 : isDirty
                   ? '已修改，等待自动保存；离开页面时会提醒保存风险'
                   : '内容已同步'}
             </div>
-            <Button onClick={handleManualSave} disabled={saveChapterMutation.isPending}>
+            <Button className="h-10 rounded-xl bg-primary px-4 text-primary-foreground hover:opacity-90" onClick={handleManualSave} disabled={saveChapterMutation.isPending}>
               {saveChapterMutation.isPending ? <LoaderCircle className="size-4 animate-spin" /> : <Save className="size-4" />}
               手动保存
             </Button>
@@ -1228,482 +789,8 @@ export function ProjectEditorPage() {
 
       </section>
 
-      <aside className="space-y-4 xl:sticky xl:top-4 xl:self-start">
-        <Card className="border border-white/8 bg-[#161618]/92">
-          <CardHeader className="space-y-4">
-            <div>
-              <CardTitle className="flex items-center gap-2 text-lg text-white">
-                <Sparkles className="size-5 text-primary" />
-                AI 写作工作台
-              </CardTitle>
-            </div>
-
-            <div className="grid gap-3">
-              {selectionContext ? (
-                <AiPanelInfoCard
-                  title="当前选区模式"
-                  description=""
-                  items={[
-                    `动作：${
-                      selectionContext.action === 'polish'
-                        ? 'AI 润色'
-                        : selectionContext.action === 'expand'
-                          ? '扩写'
-                          : selectionContext.action === 'rewrite'
-                            ? '改写'
-                            : '一致性检查'
-                    }`,
-                    `选中文本：${selectionContext.text.slice(0, 80)}${selectionContext.text.length > 80 ? '...' : ''}`,
-                  ]}
-                />
-              ) : null}
-
-              <section className="space-y-3">
-              <div className="text-xs uppercase tracking-[0.2em] text-slate-500">任务入口</div>
-              <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4">
-                <div className="space-y-2">
-                  <div className="text-sm font-medium text-white">统一 AI 工具箱入口</div>
-                  <p className="text-xs leading-6 text-slate-300">
-                    需要更大工作区时可切到 AI 工具箱。
-                  </p>
-                </div>
-                <div className="mt-3 grid gap-2 sm:grid-cols-3">
-                  <Link
-                    to={`/ai-toolbox?task=continue&projectId=${projectId}&chapterId=${chapterId}`}
-                    className="inline-flex h-8 w-full items-center justify-center rounded-md bg-primary px-3 text-xs font-medium text-primary-foreground transition hover:opacity-90"
-                  >
-                    续写任务
-                  </Link>
-                  <Link
-                    to={`/ai-toolbox?task=rewrite&projectId=${projectId}&chapterId=${chapterId}`}
-                    className="inline-flex h-8 w-full items-center justify-center rounded-md border border-white/10 px-3 text-xs text-white transition hover:bg-white/10"
-                  >
-                    改写任务
-                  </Link>
-                  <Link
-                    to={`/ai-toolbox?task=consistency&projectId=${projectId}&chapterId=${chapterId}`}
-                    className="inline-flex h-8 w-full items-center justify-center rounded-md border border-white/10 px-3 text-xs text-white transition hover:bg-white/10"
-                  >
-                    设定检查
-                  </Link>
-                </div>
-              </div>
-              </section>
-
-              <section className="space-y-3">
-                <div className="text-xs uppercase tracking-[0.2em] text-slate-500">上下文资产</div>
-                <AiPanelInfoCard
-                  title="世界观"
-                  description=""
-                  items={
-                    projectQuery.data?.world_setting
-                      ? [
-                          `标题：${projectQuery.data.world_setting.title}`,
-                          projectQuery.data.world_setting.overview?.trim() ? '概述：已维护' : '概述：未填写',
-                          projectQuery.data.world_setting.rules?.trim() ? '世界规则：已维护' : '世界规则：未填写',
-                          '生成时后端自动注入到 system prompt',
-                        ]
-                      : ['当前项目尚未设置世界观', '可在工作台的"世界观"板块中补充']
-                  }
-                />
-                <AiPanelInfoCard
-                  title="已关联角色"
-                  description=""
-                  items={
-                    (projectQuery.data?.project_characters ?? []).length > 0
-                      ? [
-                          ...(projectQuery.data?.project_characters ?? []).slice(0, 4).map((pc) => pc.character.name),
-                          (projectQuery.data?.project_characters ?? []).length > 4
-                            ? `……共 ${projectQuery.data?.project_characters.length} 个角色`
-                            : '生成时后端自动注入角色设定',
-                        ]
-                      : ['当前项目暂未关联角色', '可在工作台的"角色"板块中关联']
-                  }
-                />
-              </section>
-
-              <section className="space-y-3">
-                <div className="text-xs uppercase tracking-[0.2em] text-slate-500">运行方式</div>
-                <AiPanelInfoCard
-                  title="全局配置入口"
-                  description=""
-                  items={[
-                    `当前提供商：${runtimeSettings?.provider ?? '-'}`,
-                    `默认模型：${runtimeSettings?.model_id ?? '-'}`,
-                    '提供商、API Key、Base URL 统一在设置中心维护',
-                  ]}
-                />
-                <AiPanelInfoCard
-                  title="本次任务使用模型"
-                  description=""
-                  items={[
-                    `模型：${selectedModelId || '未填写'}`,
-                    '这里只保留任务模型选择，不再修改主配置',
-                  ]}
-                />
-              </section>
-            </div>
-
-            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-full sm:w-auto"
-                onClick={async () => {
-                  setIsLoadingModels(true)
-                  try {
-                    const response = await listAIRuntimeModels()
-                    setAvailableModels(response.models)
-                    toast.success(`已获取 ${response.models.length} 个可用模型，可点击下方直接用于下一次续写`)
-                  } catch (error) {
-                    toast.error(error instanceof Error ? error.message : '获取模型列表失败')
-                  } finally {
-                    setIsLoadingModels(false)
-                  }
-                }}
-                disabled={isLoadingModels}
-              >
-                {isLoadingModels ? '获取中...' : '获取可用模型'}
-              </Button>
-              <Link
-                to="/settings"
-                className="inline-flex h-9 w-full items-center justify-center rounded-md border border-white/10 px-3 text-sm text-white transition hover:bg-white/10 sm:w-auto"
-              >
-                前往设置中心
-              </Link>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-5">
-            <section className="space-y-3">
-            <div className="text-xs uppercase tracking-[0.2em] text-slate-500">任务配置</div>
-            <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4 space-y-4">
-              <div className="flex items-center gap-2 text-sm font-medium text-white">
-                <WandSparkles className="size-4 text-primary" />
-                AI 任务配置
-              </div>
-              <div className="space-y-4 rounded-xl border border-white/10 bg-white/[0.03] p-3">
-                <div className="space-y-1">
-                  <div className="text-sm font-medium text-white">本次任务模型</div>
-                  <div className="text-xs leading-5 text-slate-400">
-                    AI 主配置已移到设置中心，这里只切换当前任务要用的可用模型。
-                  </div>
-                </div>
-                <div className="rounded-xl border border-white/10 bg-black/10 px-3 py-2 text-sm text-white">
-                  当前选择：{selectedModelId}
-                </div>
-                {availableModels.length > 0 ? (
-                  <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-xs text-slate-300">
-                    <div className="mb-2">点击下方模型，直接用于下一次生成：</div>
-                    <div className="flex flex-wrap gap-2">
-                      {availableModels.slice(0, 20).map((model) => {
-                        const isSelected = model.id === selectedModelId
-
-                        return (
-                          <button
-                            key={model.id}
-                            type="button"
-                            className={`rounded-full border px-3 py-1 transition ${
-                              isSelected
-                                ? 'border-primary bg-primary/20 text-white'
-                                : 'border-white/10 hover:border-primary hover:text-white'
-                            }`}
-                            onClick={() => {
-                              setGeneration((prev) => ({ ...prev, result: '', modelId: model.id }))
-                              toast.success(`下一次生成将使用模型：${model.id}`)
-                            }}
-                          >
-                            {model.id}
-                          </button>
-                        )
-                      })}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="rounded-xl border border-dashed border-white/10 bg-black/5 p-3 text-xs leading-5 text-slate-400">
-                    还没有加载模型列表。点击上方“获取可用模型”后即可切换。
-                  </div>
-                )}
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-200" htmlFor="ai-instruction">
-                  续写指令
-                </label>
-                <Textarea
-                  id="ai-instruction"
-                  value={generation.instruction}
-                  onChange={(event) => setGeneration((prev) => ({ ...prev, result: '', instruction: event.target.value }))}
-                  rows={5}
-                  placeholder="描述续写目标、情绪、节奏或限制条件。"
-                />
-              </div>
-
-              <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-                <Button className="w-full sm:flex-1" onClick={handleGenerate} disabled={generation.isGenerating || saveChapterMutation.isPending}>
-                  {generation.isGenerating ? <LoaderCircle className="size-4 animate-spin" /> : <Bot className="size-4" />}
-                  {generation.isGenerating ? '生成中...' : '开始 AI 续写'}
-                </Button>
-                <Button className="w-full sm:w-auto" variant="outline" onClick={handleStopGeneration} disabled={!generation.isGenerating}>
-                  停止生成
-                </Button>
-              </div>
-            </div>
-            </section>
-          </CardContent>
-        </Card>
-
-        <Card className="border border-white/8 bg-[#161618]/92">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-lg text-white">
-              <FileText className="size-5 text-primary" />
-              结果与处理
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-5">
-            <section className="space-y-3">
-              <div className="text-xs uppercase tracking-[0.2em] text-slate-500">结果预览</div>
-              <div className="min-h-[260px] rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm leading-7 text-slate-200 whitespace-pre-wrap">
-                {selectionContext && generation.result.trim() ? (
-                  <div className="space-y-4 whitespace-normal">
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <div className="rounded-xl border border-white/8 bg-white/[0.03] p-3">
-                        <div className="mb-2 text-xs uppercase tracking-[0.18em] text-slate-500">原文</div>
-                        <div className="whitespace-pre-wrap text-sm leading-6 text-slate-300">{selectionContext.text}</div>
-                      </div>
-                      <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/8 p-3">
-                        <div className="mb-2 text-xs uppercase tracking-[0.18em] text-emerald-300">候选结果</div>
-                        <div className="whitespace-pre-wrap text-sm leading-6 text-emerald-50">{generation.result}</div>
-                      </div>
-                    </div>
-
-                    <div className="rounded-xl border border-white/8 bg-[#111113]">
-                      <div className="border-b border-white/6 px-3 py-2 text-xs uppercase tracking-[0.18em] text-slate-500">
-                        差异预览
-                      </div>
-                      <div className="space-y-1 p-3">
-                        {buildDiffLines(selectionContext.text, generation.result).map((line, index) => (
-                          <div
-                            key={`${line.type}-${index}`}
-                            className={[
-                              'grid gap-2 rounded-md px-2 py-1.5 text-xs leading-5 sm:grid-cols-2',
-                              line.type === 'same'
-                                ? 'text-slate-500'
-                                : line.type === 'added'
-                                  ? 'bg-emerald-500/10 text-emerald-100'
-                                  : line.type === 'removed'
-                                    ? 'bg-rose-500/10 text-rose-100'
-                                    : 'bg-amber-500/10 text-amber-100',
-                            ].join(' ')}
-                          >
-                            <div className="whitespace-pre-wrap">{line.original || ' '}</div>
-                            <div className="whitespace-pre-wrap">{line.next || ' '}</div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  generation.result || '暂无结果'
-                )}
-              </div>
-            </section>
-
-            <section className="space-y-3">
-              <div className="text-xs uppercase tracking-[0.2em] text-slate-500">状态与动作</div>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <AiPanelInfoCard
-                  title="当前状态"
-                  description=""
-                  items={[
-                    generation.isGenerating ? '生成状态：进行中' : '生成状态：空闲',
-                    generation.result.trim()
-                      ? selectionContext
-                        ? '已有结果：可按选区模式回写'
-                        : '已有结果：可追加到正文'
-                      : '已有结果：暂无',
-                  ]}
-                />
-                <AiPanelInfoCard
-                  title="操作"
-                  description=""
-                  items={[
-                    selectionContext
-                      ? `动作 1：${
-                          selectionContext.action === 'expand' ? '插入到选区后' : selectionContext.action === 'consistency' ? '保留为检查结果' : '替换当前选区'
-                        }`
-                      : '动作 1：追加到正文',
-                    '动作 2：丢弃结果',
-                    '动作 3：调整指令后重新生成',
-                    '快捷键：Tab 接受，Esc 放弃',
-                  ]}
-                />
-              </div>
-            </section>
-
-            <section className="space-y-3">
-              <div className="text-xs uppercase tracking-[0.2em] text-slate-500">回写策略</div>
-              <AiPanelInfoCard
-                title="结果来源"
-                description=""
-                tone={generationOrigin?.source === 'toolbox' ? 'success' : 'default'}
-                items={[
-                  generationOrigin
-                    ? `来源：${
-                        generationOrigin.source === 'toolbox'
-                          ? 'AI 工具箱'
-                          : generationOrigin.source === 'editor-selection'
-                            ? '正文选区'
-                            : '章节级续写'
-                      }`
-                    : '来源：等待下一次 AI 任务',
-                  generationOrigin?.label || '当前还没有活动中的回写策略',
-                  generationOrigin?.mode
-                    ? `写回方式：${
-                        generationOrigin.mode === 'replace'
-                          ? '覆盖当前草稿'
-                          : generationOrigin.mode === 'append'
-                            ? '追加到当前正文'
-                            : generationOrigin.mode === 'replace-selection'
-                              ? '替换当前选区'
-                              : generationOrigin.mode === 'append-after-selection'
-                                ? '插入到选区后'
-                                : '追加到当前正文'
-                      }`
-                    : '写回方式：当前以结果预览为主',
-                ]}
-              />
-            </section>
-
-            <Separator className="bg-white/10" />
-
-            <section className="space-y-3">
-              <div className="text-xs uppercase tracking-[0.2em] text-slate-500">执行结果</div>
-              <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-                <Button className="w-full sm:w-auto" onClick={handleAcceptGeneratedText} disabled={!generation.result.trim() || generation.isGenerating}>
-                  {getAcceptButtonLabel(generationOrigin, selectionContext)}
-                </Button>
-                <Button
-                  className="w-full sm:w-auto"
-                  variant="outline"
-                  onClick={handleDiscardGeneratedText}
-                  disabled={!generation.result.trim() && !generation.isGenerating}
-                >
-                  丢弃结果
-                </Button>
-              </div>
-            </section>
-          </CardContent>
-        </Card>
-      </aside>
-
-      <Dialog
-        open={isProviderConfigOpen}
-        onOpenChange={(open) => {
-          setIsProviderConfigOpen(open)
-          if (open && runtimeSettings) {
-            setProviderConfig({
-              provider: runtimeSettings.provider,
-              modelId: runtimeSettings.model_id,
-              baseUrl: runtimeSettings.base_url ?? '',
-              apiKey: '',
-            })
-          }
-        }}
-      >
-        <DialogContent className="max-w-2xl border border-white/10 bg-slate-950 text-slate-100">
-          <DialogHeader>
-            <DialogTitle>AI 运行时配置</DialogTitle>
-            <DialogDescription>立即生效。</DialogDescription>
-          </DialogHeader>
-
-          <form className="space-y-4" onSubmit={handleProviderConfigSubmit}>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-200">模型提供商</label>
-                <Select
-                  value={providerConfig.provider}
-                  onValueChange={(value) =>
-                    setProviderConfig((prev) => ({
-                      ...prev,
-                      provider: value,
-                    }))
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="选择模型提供商" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {MODEL_PROVIDER_OPTIONS.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-200" htmlFor="provider-model-id">
-                  模型标识
-                </label>
-                <Input
-                  id="provider-model-id"
-                  value={providerConfig.modelId}
-                  onChange={(event) => setProviderConfig((prev) => ({ ...prev, modelId: event.target.value }))}
-                  placeholder="支持手动填写任意模型名，例如 openai/gpt-5.4"
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-200" htmlFor="provider-base-url">
-                OpenAI 兼容 Base URL
-              </label>
-              <Input
-                id="provider-base-url"
-                value={providerConfig.baseUrl}
-                onChange={(event) => setProviderConfig((prev) => ({ ...prev, baseUrl: event.target.value }))}
-                placeholder="例如 https://onehub.235.transcengram.com/v1"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-200" htmlFor="provider-api-key">
-                API Key
-              </label>
-              <Input
-                id="provider-api-key"
-                type="password"
-                value={providerConfig.apiKey}
-                onChange={(event) => setProviderConfig((prev) => ({ ...prev, apiKey: event.target.value }))}
-                placeholder={runtimeSettings?.api_key_masked ? '留空则沿用当前已保存的 API Key' : '首次保存时必须填写 API Key'}
-              />
-              {runtimeSettings?.api_key_masked ? (
-                <div className="text-xs text-slate-400">
-                  当前后端已保存 Key：{runtimeSettings.api_key_masked}。出于安全原因，弹窗再次打开时不会回填明文。
-                </div>
-              ) : null}
-            </div>
-
-            <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-3 text-xs leading-6 text-emerald-100 space-y-2">
-              <div>当前保存的是单租户全局 AI 运行时配置。保存成功后，后端 [`/api/ai/runtime-settings`](backend/app/api/routes/runtime_settings.py) 会立即成为新的生效配置源。</div>
-              <div>支持手动填写模型名，也可以保存后自动获取模型列表。</div>
-            </div>
-
-            <div className="flex justify-end gap-3">
-              <Button type="button" variant="outline" onClick={() => setIsProviderConfigOpen(false)}>
-                取消
-              </Button>
-              <Button type="submit" disabled={isSavingRuntimeSettings}>
-                {isSavingRuntimeSettings ? '保存中...' : '保存并立即生效'}
-              </Button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
-
       <Dialog open={isVersionDialogOpen} onOpenChange={setIsVersionDialogOpen}>
-        <DialogContent className="max-w-3xl border border-white/10 bg-slate-950 text-slate-100">
+        <DialogContent className="max-w-3xl border border-border bg-popover text-popover-foreground">
           <DialogHeader>
             <DialogTitle>章节版本历史</DialogTitle>
             <DialogDescription>查看历史快照。</DialogDescription>
@@ -1724,15 +811,15 @@ export function ProjectEditorPage() {
               />
             ) : chapterVersionsQuery.data && chapterVersionsQuery.data.length > 0 ? (
               chapterVersionsQuery.data.map((version) => (
-                <Card key={version.id} className="border border-white/10 bg-white/5">
+                <Card key={version.id} className="border border-border bg-background/90">
                   <CardHeader className="space-y-2">
-                    <CardTitle className="text-base text-white">{formatDate(version.created_at)}</CardTitle>
+                    <CardTitle className="text-base text-foreground">{formatDate(version.created_at)}</CardTitle>
                     <CardDescription>
                       {version.change_note || '自动保存快照'} · {version.word_count ?? countWords(version.plain_text ?? version.content)} 字
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-3">
-                    <div className="max-h-72 overflow-y-auto whitespace-pre-wrap rounded-2xl border border-white/10 bg-black/20 p-4 text-sm leading-7 text-slate-200">
+                    <div className="max-h-72 overflow-y-auto whitespace-pre-wrap rounded-2xl border border-border bg-muted/45 p-4 text-sm leading-7 text-foreground/85">
                       {version.plain_text || version.content}
                     </div>
                     <div className="flex justify-end">
@@ -1749,39 +836,6 @@ export function ProjectEditorPage() {
           </div>
         </DialogContent>
       </Dialog>
-    </div>
-  )
-}
-
-function AiPanelInfoCard({
-  title,
-  description,
-  items,
-  tone = 'default',
-}: {
-  title: string
-  description?: string
-  items: string[]
-  tone?: 'default' | 'success'
-}) {
-  const toneClassName =
-    tone === 'success'
-      ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-50'
-      : 'border-white/10 bg-white/[0.03] text-slate-200'
-
-  return (
-    <div className={`rounded-2xl border p-4 text-sm ${toneClassName}`}>
-      <div className="space-y-2">
-        <div className="text-xs font-medium uppercase tracking-wide text-slate-300">{title}</div>
-        {description ? <p className="text-xs leading-5 text-slate-400">{description}</p> : null}
-        <div className="space-y-1.5">
-          {items.map((item) => (
-            <div key={item} className="leading-6">
-              {item}
-            </div>
-          ))}
-        </div>
-      </div>
     </div>
   )
 }

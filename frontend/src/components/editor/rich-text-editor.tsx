@@ -140,7 +140,7 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
     editorProps: {
       attributes: {
         class:
-          'storyweave-editor min-h-[560px] text-[16px] leading-[1.95] text-[#E4E4E7] focus:outline-none',
+          'storyweave-editor min-h-[560px] text-[16px] leading-[1.95] text-foreground focus:outline-none',
         'data-placeholder': placeholder ?? '',
       },
     },
@@ -346,7 +346,7 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
   const loadingFallback = !isEditorReady ? (
     <div
         className={cn(
-          'min-h-[520px] rounded-lg border border-white/10 bg-black/10 px-4 py-4 text-sm text-slate-500',
+          'min-h-[520px] rounded-2xl border border-border bg-muted/45 px-4 py-4 text-sm text-muted-foreground',
           className,
         )}
       >
@@ -488,7 +488,7 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
   return loadingFallback ?? (
     <div
       ref={containerRef}
-      className={cn('relative rounded-md border border-white/8 bg-[#111113]', className)}
+      className={cn('relative rounded-[20px] border border-border bg-card/95', className)}
       onMouseMove={(event) => {
         const target = event.target
         if (!(target instanceof HTMLElement)) {
@@ -525,7 +525,7 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
     >
       {bubbleState.visible ? (
         <div
-          className="absolute z-20 -translate-x-1/2 rounded-md border border-white/10 bg-[#111113]/95 p-1 shadow-2xl shadow-black/30 backdrop-blur"
+          className="absolute z-20 -translate-x-1/2 rounded-2xl border border-border bg-background/95 p-1 shadow-xl shadow-slate-200/70 backdrop-blur"
           style={{ top: bubbleState.top, left: bubbleState.left }}
         >
           <div className="flex items-center gap-1">
@@ -533,7 +533,7 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
             <button
               key={action.key}
               type="button"
-              className="rounded-md px-2.5 py-1.5 text-xs text-[#E4E4E7] transition hover:bg-white/8"
+              className="rounded-xl px-2.5 py-1.5 text-xs text-foreground/80 transition hover:bg-muted"
               onMouseDown={(event) => event.preventDefault()}
               onClick={() => {
                 const { from, to } = editor!.state.selection
@@ -552,7 +552,7 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
 
       {mentionState.visible && filteredMentionItems.length > 0 ? (
         <div
-          className="absolute z-20 w-64 rounded-md border border-white/10 bg-[#111113]/98 p-1 shadow-2xl shadow-black/30 backdrop-blur"
+          className="absolute z-20 w-64 rounded-2xl border border-border bg-background/98 p-1 shadow-xl shadow-slate-200/70 backdrop-blur"
           style={{ top: mentionState.top, left: mentionState.left }}
         >
           {filteredMentionItems.map((item) => (
@@ -560,8 +560,8 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
               key={item.id}
               type="button"
               className={cn(
-                'block w-full rounded-md px-3 py-2 text-left transition hover:bg-white/8',
-                filteredMentionItems[mentionActiveIndex]?.id === item.id && 'bg-white/8',
+                'block w-full rounded-xl px-3 py-2 text-left transition hover:bg-muted',
+                filteredMentionItems[mentionActiveIndex]?.id === item.id && 'bg-muted',
               )}
               onMouseDown={(event) => event.preventDefault()}
               onMouseEnter={() => {
@@ -572,8 +572,8 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
               }}
               onClick={() => insertMention(item)}
             >
-              <div className="text-sm text-white">@{item.label}</div>
-              <div className="mt-1 line-clamp-2 text-xs leading-5 text-[#A1A1AA]">
+              <div className="text-sm text-foreground">@{item.label}</div>
+              <div className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">
                 {item.projectSummary || item.personality || '插入后会作为角色实体文本高亮显示'}
               </div>
             </button>
@@ -583,7 +583,7 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
 
       {slashState.visible && filteredSlashCommands.length > 0 ? (
         <div
-          className="absolute z-20 w-72 rounded-md border border-white/10 bg-[#111113]/98 p-1 shadow-2xl shadow-black/30 backdrop-blur"
+          className="absolute z-20 w-72 rounded-2xl border border-border bg-background/98 p-1 shadow-xl shadow-slate-200/70 backdrop-blur"
           style={{ top: slashState.top, left: slashState.left }}
         >
           {filteredSlashCommands.map((command) => (
@@ -591,8 +591,8 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
               key={command.key}
               type="button"
               className={cn(
-                'block w-full rounded-md px-3 py-2 text-left transition hover:bg-white/8',
-                filteredSlashCommands[slashActiveIndex]?.key === command.key && 'bg-white/8',
+                'block w-full rounded-xl px-3 py-2 text-left transition hover:bg-muted',
+                filteredSlashCommands[slashActiveIndex]?.key === command.key && 'bg-muted',
               )}
               onMouseDown={(event) => event.preventDefault()}
               onMouseEnter={() => {
@@ -603,8 +603,8 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
               }}
               onClick={() => runSlashCommand(command)}
             >
-              <div className="text-sm text-white">/{command.label}</div>
-              <div className="mt-1 text-xs leading-5 text-[#A1A1AA]">{command.description}</div>
+              <div className="text-sm text-foreground">/{command.label}</div>
+              <div className="mt-1 text-xs leading-5 text-muted-foreground">{command.description}</div>
             </button>
           ))}
         </div>
@@ -612,24 +612,24 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
 
       {hoveredMention.visible ? (
         <div
-          className="absolute z-20 w-72 rounded-md border border-white/10 bg-[#111113]/98 p-3 shadow-2xl shadow-black/30 backdrop-blur"
+          className="absolute z-20 w-72 rounded-2xl border border-border bg-background/98 p-3 shadow-xl shadow-slate-200/70 backdrop-blur"
           style={{ top: hoveredMention.top, left: hoveredMention.left }}
         >
-          <div className="text-sm font-medium text-white">{hoveredMention.label}</div>
+          <div className="text-sm font-medium text-foreground">{hoveredMention.label}</div>
           {hoveredMention.personality ? (
-            <div className="mt-2 text-xs leading-5 text-sky-200">性格：{hoveredMention.personality}</div>
+            <div className="mt-2 text-xs leading-5 text-primary">性格：{hoveredMention.personality}</div>
           ) : null}
           {hoveredMention.projectSummary ? (
-            <div className="mt-2 text-xs leading-5 text-[#A1A1AA]">项目备注：{hoveredMention.projectSummary}</div>
+            <div className="mt-2 text-xs leading-5 text-muted-foreground">项目备注：{hoveredMention.projectSummary}</div>
           ) : null}
           {hoveredMention.description ? (
-            <div className="mt-2 text-xs leading-5 text-[#A1A1AA]">角色摘要：{hoveredMention.description}</div>
+            <div className="mt-2 text-xs leading-5 text-muted-foreground">角色摘要：{hoveredMention.description}</div>
           ) : null}
         </div>
       ) : null}
 
       {typeof title === 'string' ? (
-        <div className="border-b border-white/6 px-6 pb-4 pt-5">
+        <div className="border-b border-border px-6 pb-4 pt-5">
           <input
             value={title}
             onChange={(event) => onTitleChange?.(event.target.value)}
@@ -641,7 +641,7 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
             }}
             placeholder={titlePlaceholder ?? '输入章节标题'}
             maxLength={200}
-            className="w-full border-none bg-transparent p-0 text-[30px] font-semibold leading-[1.25] text-white outline-none placeholder:text-[#52525B]"
+            className="w-full border-none bg-transparent p-0 text-[30px] font-semibold leading-[1.25] text-foreground outline-none placeholder:text-muted-foreground"
           />
         </div>
       ) : null}

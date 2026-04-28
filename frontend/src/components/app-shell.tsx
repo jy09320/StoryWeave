@@ -2,30 +2,40 @@ import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { clsx } from 'clsx'
 import {
+  Bot,
   BookCopy,
   ChevronRight,
   Home,
+  LoaderCircle,
   Maximize2,
   Minimize2,
   PanelLeftClose,
   PanelLeftOpen,
   PanelRightClose,
   PanelRightOpen,
+  SendHorizontal,
   Settings2,
   Sparkles,
   Users2,
 } from 'lucide-react'
 import { NavLink, Outlet, useLocation, useParams } from 'react-router-dom'
+import { toast } from 'sonner'
 
+import {
+  EDITOR_AI_DRAFT_EVENT,
+  dispatchEditorAICommand,
+  readEditorAIDraftContext,
+  type EditorAIDraftContext,
+} from '@/lib/editor-ai-bridge'
 import {
   EDITOR_UTILITY_CONTEXT_EVENT,
   readEditorUtilityContext,
   type EditorUtilityContext,
 } from '@/lib/editor-utility-context'
-import { writeToolboxInputDraft } from '@/lib/ai-toolbox-context'
 import { formatDate } from '@/lib/format'
+import { getAIRuntimeSettings, listAIRuntimeModels, streamGenerate, type AIModelOption } from '@/services/ai'
 import { getProject } from '@/services/projects'
-import type { ProjectDetail } from '@/types/api'
+import type { AIGeneratePayload, ProjectDetail } from '@/types/api'
 
 const primaryNavItems = [
   { to: '/workspace', label: '首页', icon: Home, end: true },
@@ -35,19 +45,19 @@ const primaryNavItems = [
 ]
 
 type UtilityTabKey = 'characters' | 'world' | 'ai'
+type AIChatMessageRole = 'assistant' | 'user'
+
+interface AIChatMessage {
+  id: string
+  role: AIChatMessageRole
+  content: string
+}
 
 const utilityTabs: Array<{ key: UtilityTabKey; label: string }> = [
   { key: 'characters', label: '角色' },
   { key: 'world', label: '设定' },
   { key: 'ai', label: 'AI' },
 ]
-
-const actionToToolboxTask = {
-  polish: 'rewrite',
-  expand: 'continue',
-  rewrite: 'rewrite',
-  consistency: 'consistency',
-} as const
 
 const actionLabelMap = {
   polish: 'AI 润色',
@@ -56,12 +66,20 @@ const actionLabelMap = {
   consistency: '一致性检查',
 } as const
 
-const utilityTaskActions = [
-  { action: 'polish', label: '润色', task: 'rewrite' },
-  { action: 'expand', label: '扩写', task: 'continue' },
-  { action: 'rewrite', label: '改写', task: 'rewrite' },
-  { action: 'consistency', label: '检查', task: 'consistency' },
-] as const
+const DEFAULT_CONTINUE_INSTRUCTION = '请基于当前正文继续写下去，保持风格一致，并自然衔接上一段。'
+
+const FALLBACK_MODEL_BY_PROVIDER: Record<string, string> = {
+  openai: 'gpt-4o',
+  anthropic: 'claude-3-5-sonnet-latest',
+}
+
+function getAIInstruction(context: EditorUtilityContext | null) {
+  if (!context || context.action !== 'expand') {
+    return DEFAULT_CONTINUE_INSTRUCTION
+  }
+
+  return `请围绕这段文字继续扩写，补足细节、情绪和动作，但保持与当前章节一致：“${context.selectedText}”`
+}
 
 const worldSectionMeta = [
   { key: 'overview', label: '概览', emptyLabel: '暂无概览' },
@@ -88,6 +106,20 @@ function getKeywordMatches(source: string, keywords: string[]) {
   return keywords.filter((keyword) => keyword.length >= 2 && normalizedSource.includes(keyword))
 }
 
+function getToolboxPath(task: string, projectId?: string, chapterId?: string) {
+  const searchParams = new URLSearchParams({ task })
+
+  if (projectId) {
+    searchParams.set('projectId', projectId)
+  }
+
+  if (chapterId) {
+    searchParams.set('chapterId', chapterId)
+  }
+
+  return `/ai-toolbox?${searchParams.toString()}`
+}
+
 export function AppShell() {
   const location = useLocation()
   const { projectId, chapterId } = useParams<{ projectId?: string; chapterId?: string }>()
@@ -99,6 +131,19 @@ export function AppShell() {
   const [editorUtilityContext, setEditorUtilityContext] = useState<EditorUtilityContext | null>(() =>
     typeof window === 'undefined' ? null : readEditorUtilityContext(),
   )
+  const [editorAIDraftContext, setEditorAIDraftContext] = useState<EditorAIDraftContext | null>(() =>
+    typeof window === 'undefined' ? null : readEditorAIDraftContext(),
+  )
+  const [availableModels, setAvailableModels] = useState<AIModelOption[]>([])
+  const [isLoadingModels, setIsLoadingModels] = useState(false)
+  const [aiState, setAIState] = useState({
+    instruction: DEFAULT_CONTINUE_INSTRUCTION,
+    modelId: '',
+    result: '',
+    isGenerating: false,
+    requestId: 0,
+  })
+  const [aiMessages, setAIMessages] = useState<AIChatMessage[]>([])
 
   const isProjectScoped = Boolean(projectId) && location.pathname.startsWith(`/projects/${projectId}`)
   const isEditorRoute = isProjectScoped && location.pathname.includes('/editor/')
@@ -107,6 +152,13 @@ export function AppShell() {
     queryKey: ['project', projectId],
     queryFn: () => getProject(projectId ?? ''),
     enabled: isProjectScoped,
+    staleTime: 60_000,
+  })
+
+  const runtimeSettingsQuery = useQuery({
+    queryKey: ['ai-runtime-settings'],
+    queryFn: getAIRuntimeSettings,
+    enabled: isEditorRoute,
     staleTime: 60_000,
   })
 
@@ -185,6 +237,26 @@ export function AppShell() {
   }, [dismissedUtilityContextAt, editorUtilityContext])
 
   useEffect(() => {
+    function syncAIDraftContext() {
+      const nextContext = readEditorAIDraftContext()
+      setEditorAIDraftContext(nextContext)
+    }
+
+    function handleCustomEvent(event: Event) {
+      const customEvent = event as CustomEvent<EditorAIDraftContext | null>
+      setEditorAIDraftContext(customEvent.detail ?? null)
+    }
+
+    syncAIDraftContext()
+    window.addEventListener('storage', syncAIDraftContext)
+    window.addEventListener(EDITOR_AI_DRAFT_EVENT, handleCustomEvent as EventListener)
+    return () => {
+      window.removeEventListener('storage', syncAIDraftContext)
+      window.removeEventListener(EDITOR_AI_DRAFT_EVENT, handleCustomEvent as EventListener)
+    }
+  }, [])
+
+  useEffect(() => {
     function handleKeydown(event: KeyboardEvent) {
       if (!(event.ctrlKey || event.metaKey)) {
         return
@@ -217,8 +289,13 @@ export function AppShell() {
 
     if (window.innerWidth < 1280) {
       setIsUtilityOpen(false)
+      return
     }
-  }, [location.pathname])
+
+    if (isEditorRoute) {
+      setIsUtilityOpen(true)
+    }
+  }, [isEditorRoute, location.pathname])
 
   const pageMeta = useMemo(() => {
     const project = projectQuery.data
@@ -355,6 +432,144 @@ export function AppShell() {
       : null
   const shouldRenderProjectTree = isProjectScoped && isProjectTreeOpen && !isZenMode
   const shouldRenderUtility = isProjectScoped && isUtilityOpen && !isZenMode
+  const scopedEditorAIDraft =
+    editorAIDraftContext?.projectId === projectId && editorAIDraftContext?.chapterId === chapterId
+      ? editorAIDraftContext
+      : null
+  const selectedModelId =
+    aiState.modelId.trim() ||
+    runtimeSettingsQuery.data?.model_id ||
+    FALLBACK_MODEL_BY_PROVIDER[runtimeSettingsQuery.data?.provider ?? 'openai'] ||
+    'gpt-4o'
+  const hasSavedRuntimeKey = Boolean(runtimeSettingsQuery.data?.api_key_masked)
+
+  useEffect(() => {
+    setAIState((prev) => ({
+      ...prev,
+      result: '',
+      instruction: getAIInstruction(scopedEditorUtilityContext),
+    }))
+    setAIMessages([])
+  }, [scopedEditorUtilityContext?.updatedAt, chapterId])
+
+  async function handleLoadModels() {
+    setIsLoadingModels(true)
+    try {
+      const response = await listAIRuntimeModels()
+      setAvailableModels(response.models)
+      toast.success(`已获取 ${response.models.length} 个可用模型`)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '获取模型列表失败')
+    } finally {
+      setIsLoadingModels(false)
+    }
+  }
+
+  function handleStopGeneration() {
+    setAIState((prev) => ({ ...prev, isGenerating: false, requestId: prev.requestId + 1 }))
+    toast.info('已停止本次 AI 续写')
+  }
+
+  async function handleGenerate() {
+    if (!projectId || !chapterId) {
+      return
+    }
+
+    const sourceText = (scopedEditorUtilityContext?.action === 'expand' ? scopedEditorUtilityContext.selectedText : scopedEditorAIDraft?.plainText)?.trim() ?? ''
+    if (!sourceText) {
+      toast.error('请先准备可续写的正文内容')
+      return
+    }
+
+    const submittedInstruction = aiState.instruction.trim() || DEFAULT_CONTINUE_INSTRUCTION
+    const requestId = aiState.requestId + 1
+    const assistantMessageId = `assistant-${requestId}`
+
+    setAIMessages((prev) => [
+      ...prev,
+      {
+        id: `user-${requestId}`,
+        role: 'user',
+        content: submittedInstruction,
+      },
+      {
+        id: assistantMessageId,
+        role: 'assistant',
+        content: '',
+      },
+    ])
+    setAIState((prev) => ({ ...prev, result: '', isGenerating: true, requestId }))
+
+    const payload: AIGeneratePayload = {
+      project_id: projectId,
+      chapter_id: chapterId,
+      text: sourceText,
+      instruction: submittedInstruction,
+      model_provider: runtimeSettingsQuery.data?.provider ?? 'openai',
+      model_id: selectedModelId,
+    }
+
+    try {
+      await streamGenerate(payload, (chunk) => {
+        setAIState((prev) => {
+          if (prev.requestId !== requestId || !prev.isGenerating) {
+            return prev
+          }
+
+          return {
+            ...prev,
+            result: `${prev.result}${chunk}`,
+          }
+        })
+        setAIMessages((prev) =>
+          prev.map((message) =>
+            message.id === assistantMessageId
+              ? { ...message, content: `${message.content}${chunk}` }
+              : message,
+          ),
+        )
+      })
+
+      setAIState((prev) => (prev.requestId === requestId ? { ...prev, isGenerating: false } : prev))
+    } catch (error) {
+      setAIState((prev) => (prev.requestId === requestId ? { ...prev, isGenerating: false } : prev))
+      setAIMessages((prev) =>
+        prev.map((message) =>
+          message.id === assistantMessageId && !message.content.trim()
+            ? { ...message, content: error instanceof Error ? error.message : 'AI 续写失败' }
+            : message,
+        ),
+      )
+      toast.error(error instanceof Error ? error.message : 'AI 续写失败')
+    }
+  }
+
+  function handleApplyGeneratedText() {
+    if (!projectId || !chapterId || !aiState.result.trim()) {
+      return
+    }
+
+    dispatchEditorAICommand({
+      projectId,
+      chapterId,
+      type: 'apply-generated-text',
+      text: aiState.result.trim(),
+      mode: scopedEditorUtilityContext?.action === 'expand' ? 'append-after-selection' : 'append-chapter',
+      selectionAction: scopedEditorUtilityContext?.action ?? null,
+    })
+    setAIState((prev) => ({ ...prev, result: '', isGenerating: false }))
+  }
+
+  function handleDiscardGeneratedText() {
+    if (projectId && chapterId) {
+      dispatchEditorAICommand({
+        projectId,
+        chapterId,
+        type: 'discard-generated-text',
+      })
+    }
+    setAIState((prev) => ({ ...prev, result: '', isGenerating: false }))
+  }
 
   function closeUtilityDrawer() {
     if (scopedEditorUtilityContext?.updatedAt) {
@@ -364,14 +579,333 @@ export function AppShell() {
     setIsUtilityOpen(false)
   }
 
+
+  function renderAIUtilityPanel(onClose?: () => void) {
+    if (true) {
+      const primaryLabel = scopedEditorUtilityContext?.action === 'expand' ? '选区扩写' : '章节续写'
+      const resultApplyLabel = scopedEditorUtilityContext?.action === 'expand' ? '插入到选区后' : '追加到正文'
+      const hasDraftSource =
+        scopedEditorUtilityContext?.action === 'expand' || Boolean(scopedEditorAIDraft?.plainText.trim())
+
+      return (
+        <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
+          <div className="mb-4 flex items-center justify-between">
+            <SectionLabel>AI 对话</SectionLabel>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleLoadModels}
+                disabled={isLoadingModels || !hasSavedRuntimeKey || runtimeSettingsQuery.isLoading}
+                className="inline-flex h-8 items-center justify-center rounded-full border border-[#d1d5db] bg-white px-3 text-[11px] text-[#4b5563] transition hover:border-[#9ca3af] hover:text-[#111827] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {isLoadingModels ? '加载中' : '模型'}
+              </button>
+              <button
+                type="button"
+                onClick={() => onClose?.()}
+                className="inline-flex h-8 items-center justify-center rounded-full border border-[#d1d5db] bg-white px-3 text-[11px] text-[#4b5563] transition hover:border-[#9ca3af] hover:text-[#111827]"
+              >
+                收起
+              </button>
+            </div>
+          </div>
+
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[24px] border border-[#e5e7eb] bg-[#fcfcfd] shadow-[0_12px_28px_rgba(15,23,42,0.04)]">
+            <div className="border-b border-[#eef0f3] px-4 py-4">
+              <div className="flex items-start gap-3">
+                <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
+                  <Bot className="size-4" />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold text-[#111827]">{primaryLabel}</div>
+                  <div className="mt-1 text-xs leading-5 text-[#6b7280]">
+                    当前模型：{selectedModelId}
+                    {!hasSavedRuntimeKey ? '，请先在设置中心保存 API Key。' : ''}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4">
+              <div className="space-y-4">
+                {scopedEditorUtilityContext ? (
+                  <div className="mr-8 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
+                    <div className="mb-1 text-[11px] uppercase tracking-[0.18em] text-amber-700">当前选区</div>
+                    <div className="text-sm leading-6 text-[#4b5563]">{scopedEditorUtilityContext.selectedText}</div>
+                  </div>
+                ) : null}
+
+                {aiMessages.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-[#d1d5db] bg-white px-4 py-4 text-sm leading-6 text-[#6b7280]">
+                    输入续写指令后发送。这里会按聊天消息流展示你的要求和 AI 返回内容，底部输入区固定保留。
+                  </div>
+                ) : null}
+
+                {aiMessages.map((message) => (
+                  <div
+                    key={message.id}
+                    className={clsx('flex', message.role === 'user' ? 'justify-end' : 'justify-start')}
+                  >
+                    <div
+                      className={clsx(
+                        'max-w-[88%] rounded-2xl px-4 py-3 text-sm leading-6',
+                        message.role === 'user'
+                          ? 'bg-[#111827] text-white'
+                          : 'border border-[#e5e7eb] bg-white text-[#374151]',
+                      )}
+                    >
+                      {message.content.trim() || (message.role === 'assistant' && aiState.isGenerating ? '正在生成...' : '')}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="border-t border-[#eef0f3] bg-white px-4 py-4">
+              <div className="mb-3 flex flex-wrap items-center gap-2">
+                <span className="rounded-full border border-[#d1d5db] bg-[#f9fafb] px-3 py-1 text-[11px] text-[#6b7280]">
+                  {primaryLabel}
+                </span>
+                <span className="rounded-full border border-[#d1d5db] bg-[#f9fafb] px-3 py-1 text-[11px] text-[#6b7280]">
+                  模型 {selectedModelId}
+                </span>
+                {availableModels.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {availableModels.slice(0, 4).map((model) => (
+                      <button
+                        key={model.id}
+                        type="button"
+                        onClick={() => setAIState((prev) => ({ ...prev, result: '', modelId: model.id }))}
+                        className={clsx(
+                          'rounded-full border px-3 py-1 text-[11px] transition',
+                          model.id === selectedModelId
+                            ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                            : 'border-[#d1d5db] bg-white text-[#6b7280] hover:border-[#9ca3af] hover:text-[#111827]',
+                        )}
+                      >
+                        {model.id}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+
+              <div className="rounded-[20px] border border-[#d1d5db] bg-[#fcfcfd] p-3">
+                <textarea
+                  value={aiState.instruction}
+                  onChange={(event) => setAIState((prev) => ({ ...prev, result: '', instruction: event.target.value }))}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' && !event.shiftKey) {
+                      event.preventDefault()
+                      if (!aiState.isGenerating && hasDraftSource) {
+                        void handleGenerate()
+                      }
+                    }
+                  }}
+                  rows={4}
+                  className="min-h-[96px] w-full resize-none border-none bg-transparent text-sm leading-6 text-[#111827] outline-none placeholder:text-[#9ca3af]"
+                  placeholder="描述续写目标、情绪、节奏或限制条件。按 Enter 发送，Shift+Enter 换行。"
+                />
+
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={handleStopGeneration}
+                    disabled={!aiState.isGenerating}
+                    className="inline-flex h-9 items-center justify-center rounded-xl border border-[#d1d5db] bg-white px-3 text-xs text-[#4b5563] transition hover:border-[#9ca3af] hover:text-[#111827] disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    停止
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDiscardGeneratedText}
+                    disabled={!aiState.result.trim() && !aiState.isGenerating}
+                    className="inline-flex h-9 items-center justify-center rounded-xl border border-[#d1d5db] bg-white px-3 text-xs text-[#4b5563] transition hover:border-[#9ca3af] hover:text-[#111827] disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    丢弃
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleApplyGeneratedText}
+                    disabled={!aiState.result.trim() || aiState.isGenerating}
+                    className="inline-flex h-9 items-center justify-center rounded-xl bg-[#111827] px-3 text-xs font-medium text-white transition hover:bg-[#1f2937] disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {resultApplyLabel}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleGenerate()}
+                    disabled={aiState.isGenerating || !hasDraftSource}
+                    className="inline-flex h-9 items-center justify-center gap-2 rounded-xl bg-emerald-500 px-3 text-xs font-medium text-white transition hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {aiState.isGenerating ? <LoaderCircle className="size-3.5 animate-spin" /> : <SendHorizontal className="size-3.5" />}
+                    发送
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )
+    }
+    const primaryLabel = scopedEditorUtilityContext?.action === 'expand' ? '选区扩写' : '章节续写'
+    const resultApplyLabel = scopedEditorUtilityContext?.action === 'expand' ? '插入到选区后' : '追加到正文'
+
+    return (
+      <div className="space-y-4">
+        <SectionLabel>AI</SectionLabel>
+        <div className="space-y-4 rounded-[24px] border border-border bg-card/95 p-4 shadow-[0_16px_36px_rgba(148,163,184,0.16)]">
+          <SidebarHint>
+            {scopedEditorUtilityContext?.action === 'expand'
+              ? '当前选区已进入扩写模式。模型选择、生成和写回都在这里完成。'
+              : '统一在这里处理章节续写。右侧编辑区不再单独放一块 AI。'}
+          </SidebarHint>
+
+          {scopedEditorUtilityContext ? (
+            <div className="rounded-2xl border border-primary/20 bg-primary/8 p-4">
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="text-sm font-medium text-foreground">当前选区</div>
+                <span className="rounded-full border border-primary/15 bg-background px-2 py-0.5 text-[11px] text-primary">
+                  {actionLabelMap[scopedEditorUtilityContext!.action]}
+                </span>
+              </div>
+              <div className="mt-2 line-clamp-4 text-sm leading-6 text-muted-foreground">{scopedEditorUtilityContext!.selectedText}</div>
+            </div>
+          ) : null}
+
+          <div className="rounded-2xl border border-border bg-background/90 p-4">
+            <div className="text-sm font-medium text-foreground">{primaryLabel}</div>
+            <div className="mt-1 text-xs leading-5 text-muted-foreground">提供商、API Key、Base URL 统一在设置中心维护，这里只切换当前续写模型。</div>
+            <div className="mt-3 flex flex-col gap-2">
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={handleLoadModels}
+                  disabled={isLoadingModels || !hasSavedRuntimeKey || runtimeSettingsQuery.isLoading}
+                  className="inline-flex h-9 items-center justify-center rounded-xl border border-border bg-background px-3 text-xs text-foreground transition hover:border-primary/30 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {isLoadingModels ? '获取中...' : '获取可用模型'}
+                </button>
+                <NavLink
+                  to="/settings"
+                  onClick={onClose}
+                  className="inline-flex h-9 items-center justify-center rounded-xl border border-border bg-muted/55 px-3 text-xs text-muted-foreground transition hover:border-primary/25 hover:text-foreground"
+                >
+                  设置中心
+                </NavLink>
+              </div>
+              {!hasSavedRuntimeKey ? <div className="text-xs leading-5 text-primary">请先在设置中心保存 API Key。</div> : null}
+              <div className="rounded-xl border border-border bg-muted/55 px-3 py-2 text-sm text-foreground">当前模型：{selectedModelId}</div>
+              {availableModels.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  {availableModels.slice(0, 16).map((model) => {
+                    const isSelected = model.id === selectedModelId
+                    return (
+                      <button
+                        key={model.id}
+                        type="button"
+                        onClick={() => setAIState((prev) => ({ ...prev, result: '', modelId: model.id }))}
+                        className={clsx(
+                          'rounded-full border px-3 py-1 text-xs transition',
+                          isSelected
+                            ? 'border-primary/20 bg-primary/10 text-primary'
+                            : 'border-border bg-background text-muted-foreground hover:border-primary/25 hover:text-foreground',
+                        )}
+                      >
+                        {model.id}
+                      </button>
+                    )
+                  })}
+                </div>
+              ) : (
+                <div className="rounded-xl border border-dashed border-border bg-muted/45 px-3 py-2 text-xs leading-5 text-muted-foreground">还没有加载模型列表。</div>
+              )}
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-xs uppercase tracking-[0.18em] text-muted-foreground">续写指令</label>
+            <textarea
+              value={aiState.instruction}
+              onChange={(event) => setAIState((prev) => ({ ...prev, result: '', instruction: event.target.value }))}
+              rows={5}
+              className="min-h-[112px] w-full rounded-2xl border border-border bg-background px-4 py-3 text-sm leading-6 text-foreground outline-none transition focus:border-primary/40"
+              placeholder="描述续写目标、情绪、节奏或限制条件。"
+            />
+          </div>
+
+          <div className="grid gap-2 sm:grid-cols-2">
+            <button
+              type="button"
+              onClick={handleGenerate}
+              disabled={aiState.isGenerating || !scopedEditorAIDraft?.plainText.trim() && scopedEditorUtilityContext?.action !== 'expand'}
+              className="inline-flex h-10 items-center justify-center rounded-xl bg-primary px-3 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {aiState.isGenerating ? '生成中...' : '开始 AI 续写'}
+            </button>
+            <button
+              type="button"
+              onClick={handleStopGeneration}
+              disabled={!aiState.isGenerating}
+              className="inline-flex h-10 items-center justify-center rounded-xl border border-border bg-background px-3 text-sm text-muted-foreground transition hover:border-primary/25 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              停止生成
+            </button>
+          </div>
+
+          <div className="rounded-2xl border border-border bg-background/90 p-4">
+            <div className="text-sm font-medium text-foreground">生成结果</div>
+            <div className="mt-2 max-h-[240px] overflow-y-auto whitespace-pre-wrap text-sm leading-6 text-foreground/85">{aiState.result || '暂无结果'}</div>
+          </div>
+
+          <div className="grid gap-2 sm:grid-cols-2">
+            <button
+              type="button"
+              onClick={handleApplyGeneratedText}
+              disabled={!aiState.result.trim() || aiState.isGenerating}
+              className="inline-flex h-10 items-center justify-center rounded-xl bg-primary px-3 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {resultApplyLabel}
+            </button>
+            <button
+              type="button"
+              onClick={handleDiscardGeneratedText}
+              disabled={!aiState.result.trim() && !aiState.isGenerating}
+              className="inline-flex h-10 items-center justify-center rounded-xl border border-border bg-background px-3 text-sm text-muted-foreground transition hover:border-primary/25 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              丢弃结果
+            </button>
+          </div>
+
+          <div className="grid gap-2">
+            <NavLink
+              to={getToolboxPath('continue', projectId, chapterId)}
+              onClick={onClose}
+              className="inline-flex h-9 items-center justify-center rounded-xl border border-border bg-background px-3 text-xs text-muted-foreground transition hover:border-primary/25 hover:text-foreground"
+            >
+              打开 AI 工具箱
+            </NavLink>
+            <button
+              type="button"
+              onClick={() => onClose?.()}
+              className="inline-flex h-9 items-center justify-center rounded-xl border border-border bg-muted/55 px-3 text-xs text-muted-foreground transition hover:border-primary/25 hover:text-foreground"
+            >
+              收起抽屉
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
-    <div className="flex h-screen bg-[#141416] text-[#E7E5E4] selection:bg-amber-500/30 selection:text-white">
-      <aside className="flex w-20 shrink-0 flex-col items-center border-r border-white/5 bg-[#0f0f10] px-2 py-4">
-        <div className="flex size-11 items-center justify-center rounded-md border border-amber-500/20 bg-amber-500/10 text-amber-300">
+    <div className="flex h-screen bg-background text-foreground selection:bg-primary/15 selection:text-foreground">
+      <aside className="flex w-[88px] shrink-0 flex-col items-center border-r border-border bg-[#f6f1e8] px-3 py-5">
+        <div className="flex size-12 items-center justify-center rounded-2xl border border-primary/15 bg-primary/10 text-primary shadow-[0_12px_30px_rgba(16,185,129,0.08)]">
           <Sparkles className="size-4" />
         </div>
 
-        <nav className="mt-6 flex flex-1 flex-col items-stretch gap-2">
+        <nav className="mt-8 flex flex-1 flex-col items-stretch gap-2">
           {primaryNavItems.map((item) => {
             const Icon = item.icon
             return (
@@ -382,10 +916,10 @@ export function AppShell() {
                 title={item.label}
                 className={({ isActive }) =>
                   clsx(
-                    'flex min-h-14 flex-col items-center justify-center gap-1 rounded-md px-2 py-2 text-center transition',
+                    'flex min-h-15 flex-col items-center justify-center gap-1.5 rounded-2xl px-2 py-2 text-center transition',
                     isActive
-                      ? 'bg-white/10 text-white'
-                      : 'text-[#A1A1AA] hover:bg-white/5 hover:text-white',
+                      ? 'bg-background text-foreground shadow-sm'
+                      : 'text-muted-foreground hover:bg-background/70 hover:text-foreground',
                   )
                 }
               >
@@ -396,19 +930,19 @@ export function AppShell() {
           })}
         </nav>
 
-        <div className="mt-4 rounded-md border border-emerald-500/20 bg-emerald-500/10 px-2 py-1 text-[10px] text-emerald-200">
+        <div className="mt-4 rounded-full border border-primary/15 bg-primary/10 px-2.5 py-1 text-[10px] text-primary">
           就绪
         </div>
       </aside>
 
       {shouldRenderProjectTree ? (
-        <aside className="hidden w-60 shrink-0 border-r border-white/5 bg-[#161618] md:flex md:flex-col">
-          <div className="border-b border-white/5 px-4 py-4">
-            <div className="text-[11px] uppercase tracking-[0.22em] text-[#52525B]">Project</div>
-            <div className="mt-2 text-sm font-semibold text-white">{project?.title ?? '正在加载项目...'}</div>
+        <aside className="hidden w-[280px] shrink-0 border-r border-border bg-sidebar md:flex md:flex-col">
+          <div className="border-b border-border px-6 py-6">
+            <div className="text-[11px] uppercase tracking-[0.24em] text-muted-foreground">Project</div>
+            <div className="mt-2 text-lg font-semibold text-foreground">{project?.title ?? '正在加载项目...'}</div>
           </div>
 
-          <div className="flex-1 overflow-y-auto px-3 py-3">
+          <div className="flex-1 overflow-y-auto px-4 py-5">
             <div className="space-y-1">
               <SectionLabel>导航</SectionLabel>
               <ProjectTreeLink to={`/projects/${projectId}`} label="项目大盘" active={location.pathname === `/projects/${projectId}`} />
@@ -419,7 +953,7 @@ export function AppShell() {
               />
             </div>
 
-            <div className="mt-5 space-y-1">
+            <div className="mt-6 space-y-1">
               <SectionLabel>章节树</SectionLabel>
               {projectQuery.isLoading ? (
                 <SidebarHint>正在加载章节结构...</SidebarHint>
@@ -438,7 +972,7 @@ export function AppShell() {
               )}
             </div>
 
-            <div className="mt-5 space-y-1">
+            <div className="mt-6 space-y-1">
               <SectionLabel>辅助入口</SectionLabel>
               <ProjectTreeLink to="/characters" label="全局角色库" active={location.pathname === '/characters'} />
               <ProjectTreeStatic label="回收站" meta="" />
@@ -448,14 +982,14 @@ export function AppShell() {
       ) : null}
 
       <div className="flex min-w-0 flex-1">
-        <div className="flex min-w-0 flex-1 flex-col">
-          <header className="sticky top-0 z-20 border-b border-white/5 bg-[#141416]/95 backdrop-blur">
+        <div className="flex min-w-0 flex-1 flex-col bg-transparent">
+          <header className="sticky top-0 z-20 border-b border-border bg-background/88 backdrop-blur">
             <div className="flex items-center justify-between gap-4 px-5 py-4">
               <div className="flex min-w-0 items-center gap-3">
                 {isProjectScoped && !isZenMode ? (
                   <button
                     type="button"
-                    className="inline-flex size-9 items-center justify-center rounded-md border border-white/8 bg-white/5 text-[#A1A1AA] transition hover:text-white"
+                    className="inline-flex size-10 items-center justify-center rounded-xl border border-border bg-background text-muted-foreground transition hover:border-primary/25 hover:text-foreground"
                     onClick={() => setIsProjectTreeOpen((prev) => !prev)}
                   >
                     {isProjectTreeOpen ? <PanelLeftClose className="size-4" /> : <PanelLeftOpen className="size-4" />}
@@ -463,9 +997,9 @@ export function AppShell() {
                 ) : null}
 
                 <div className="min-w-0">
-                  <div className="text-[11px] uppercase tracking-[0.22em] text-[#52525B]">{pageMeta.eyebrow}</div>
-                  <div className="truncate text-lg font-semibold text-white">{pageMeta.title}</div>
-                  {pageMeta.description ? <div className="truncate text-sm text-[#A1A1AA]">{pageMeta.description}</div> : null}
+                  <div className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">{pageMeta.eyebrow}</div>
+                  <div className="truncate text-lg font-semibold text-foreground">{pageMeta.title}</div>
+                  {pageMeta.description ? <div className="truncate text-sm text-muted-foreground">{pageMeta.description}</div> : null}
                 </div>
               </div>
 
@@ -476,14 +1010,14 @@ export function AppShell() {
                       <>
                         <button
                           type="button"
-                          className="inline-flex size-9 items-center justify-center rounded-md border border-white/8 bg-white/5 text-[#A1A1AA] transition hover:text-white md:hidden"
+                          className="inline-flex size-10 items-center justify-center rounded-xl border border-[#e5e7eb] bg-white text-[#6b7280] transition hover:border-[#d1d5db] hover:text-[#111827] md:hidden"
                           onClick={() => setIsZenMode((prev) => !prev)}
                         >
                           {isZenMode ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
                         </button>
                         <button
                           type="button"
-                          className="hidden h-9 items-center gap-2 rounded-md border border-white/8 bg-white/5 px-3 text-sm text-[#A1A1AA] transition hover:text-white md:inline-flex"
+                          className="hidden h-10 items-center gap-2 rounded-xl border border-[#e5e7eb] bg-white px-4 text-sm text-[#4b5563] transition hover:border-[#d1d5db] hover:text-[#111827] md:inline-flex"
                           onClick={() => setIsZenMode((prev) => !prev)}
                         >
                           {isZenMode ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
@@ -494,7 +1028,7 @@ export function AppShell() {
                     <>
                       <button
                         type="button"
-                        className="inline-flex size-9 items-center justify-center rounded-md border border-white/8 bg-white/5 text-[#A1A1AA] transition hover:text-white md:hidden"
+                        className="inline-flex size-10 items-center justify-center rounded-xl border border-[#e5e7eb] bg-white text-[#6b7280] transition hover:border-[#d1d5db] hover:text-[#111827] md:hidden"
                         onClick={() => {
                           if (isUtilityOpen) {
                             closeUtilityDrawer()
@@ -509,7 +1043,7 @@ export function AppShell() {
                       </button>
                       <button
                         type="button"
-                        className="hidden h-9 items-center gap-2 rounded-md border border-white/8 bg-white/5 px-3 text-sm text-[#A1A1AA] transition hover:text-white md:inline-flex"
+                        className="hidden h-10 items-center gap-2 rounded-xl border border-[#e5e7eb] bg-white px-4 text-sm text-[#4b5563] transition hover:border-[#d1d5db] hover:text-[#111827] md:inline-flex"
                         onClick={() => {
                           if (isUtilityOpen) {
                             closeUtilityDrawer()
@@ -525,11 +1059,11 @@ export function AppShell() {
                       </button>
                     </>
                     {!isZenMode ? (
-                      <div className="hidden rounded-md border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-200 xl:block">
+                      <div className="hidden rounded-xl border border-primary/15 bg-primary/10 px-3 py-2 text-xs text-primary xl:block">
                         Ctrl+B 侧栏 · Ctrl+J 抽屉
                       </div>
                     ) : (
-                      <div className="hidden rounded-md border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-200 xl:block">
+                      <div className="hidden rounded-xl border border-secondary bg-secondary px-3 py-2 text-xs text-secondary-foreground xl:block">
                         专注模式已启用
                       </div>
                     )}
@@ -545,19 +1079,19 @@ export function AppShell() {
         </div>
 
         {shouldRenderUtility ? (
-          <aside className="hidden w-[300px] shrink-0 border-l border-white/5 bg-[#161618] xl:flex xl:flex-col">
-            <div className="border-b border-white/5 px-4 py-4">
-              <div className="flex items-center gap-2">
+          <aside className="hidden w-[360px] shrink-0 border-l border-border bg-card/96 xl:flex xl:flex-col">
+            <div className="border-b border-border px-5 py-4">
+              <div className="grid grid-cols-3 rounded-2xl bg-muted/75 p-1">
                 {utilityTabs.map((tab) => (
                   <button
                     key={tab.key}
                     type="button"
                     onClick={() => setActiveUtilityTab(tab.key)}
                     className={clsx(
-                      'rounded-md px-3 py-1.5 text-sm transition',
+                      'rounded-xl px-3 py-2 text-sm font-medium transition',
                       activeUtilityTab === tab.key
-                        ? 'bg-white/10 text-white'
-                        : 'text-[#A1A1AA] hover:bg-white/5 hover:text-white',
+                        ? 'bg-background text-foreground shadow-sm'
+                        : 'text-muted-foreground hover:text-foreground',
                     )}
                   >
                     {tab.label}
@@ -566,23 +1100,23 @@ export function AppShell() {
               </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto px-4 py-4">
+            <div className={clsx('flex-1 px-5 py-5', activeUtilityTab === 'ai' ? 'flex min-h-0 flex-col overflow-hidden' : 'overflow-y-auto')}>
               {activeUtilityTab === 'characters' ? (
                 <div className="space-y-3">
                   <SectionLabel>角色速查</SectionLabel>
                   <SidebarHint>{chapterContextHint}</SidebarHint>
                   {contextualCharacters.length > 0 ? (
                     contextualCharacters.slice(0, 6).map(({ item, matches, score }) => (
-                      <div key={item.id} className="rounded-md border border-white/8 bg-white/3 p-3">
+                      <div key={item.id} className="rounded-2xl border border-[#e5e7eb] bg-white p-4">
                         <div className="flex flex-wrap items-center gap-2">
-                          <div className="text-sm font-medium text-white">{item.character.name}</div>
+                          <div className="text-sm font-medium text-[#111827]">{item.character.name}</div>
                           {score > 0 ? (
-                            <span className="rounded-full border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 text-[11px] text-amber-200">
+                            <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] text-amber-700">
                               当前章命中
                             </span>
                           ) : null}
                         </div>
-                        <div className="mt-1 text-xs text-[#A1A1AA]">
+                        <div className="mt-1 text-xs text-[#6b7280]">
                           {item.role_label || item.summary || item.character.personality || '暂无项目摘要'}
                         </div>
                         {matches.length > 0 ? (
@@ -590,7 +1124,7 @@ export function AppShell() {
                             {matches.map((keyword) => (
                               <span
                                 key={`${item.id}-${keyword}`}
-                                className="rounded-full border border-white/8 px-2 py-0.5 text-[11px] text-[#A1A1AA]"
+                                className="rounded-full border border-[#d1d5db] bg-[#f9fafb] px-2 py-0.5 text-[11px] text-[#6b7280]"
                               >
                                 {keyword}
                               </span>
@@ -602,6 +1136,12 @@ export function AppShell() {
                   ) : (
                     <SidebarHint>当前项目还没有已绑定角色。</SidebarHint>
                   )}
+                  <ProjectTreeLink
+                    to="/characters"
+                    label="打开角色库"
+                    meta="专页支持返回当前章节"
+                    active={location.pathname === '/characters'}
+                  />
                 </div>
               ) : null}
 
@@ -619,134 +1159,19 @@ export function AppShell() {
                       keywords={section.matches}
                     />
                   ))}
+                  <ProjectTreeLink
+                    to={`/projects/${projectId}/world`}
+                    label="打开完整设定页"
+                    meta="专页支持返回当前章节"
+                    active={location.pathname === `/projects/${projectId}/world`}
+                  />
                 </div>
               ) : null}
 
-              {activeUtilityTab === 'ai' ? (
-                <div className="space-y-3">
-                  <SectionLabel>AI 任务台</SectionLabel>
-                  {scopedEditorUtilityContext ? (
-                    <div className="rounded-md border border-amber-500/20 bg-amber-500/8 p-3">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <div className="text-sm font-medium text-white">当前选区</div>
-                        <span className="rounded-full border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 text-[11px] text-amber-200">
-                          {actionLabelMap[scopedEditorUtilityContext.action]}
-                        </span>
-                      </div>
-                      <div className="mt-2 text-xs leading-6 text-[#A1A1AA]">
-                        {scopedEditorUtilityContext.chapterTitle || '当前章节'}
-                      </div>
-                      <div className="mt-2 line-clamp-4 text-sm leading-6 text-[#E4E4E7]">
-                        {scopedEditorUtilityContext.selectedText}
-                      </div>
-                      <div className="mt-3 grid gap-2">
-                        <div className="grid grid-cols-2 gap-2">
-                          {utilityTaskActions.map((item) => (
-                            <NavLink
-                              key={item.action}
-                              to={`/ai-toolbox?task=${item.task}&projectId=${projectId}${chapterId ? `&chapterId=${chapterId}` : ''}`}
-                              onClick={() =>
-                                writeToolboxInputDraft({
-                                  task: item.task,
-                                  projectId: projectId || null,
-                                  chapterId: chapterId || null,
-                                  input: scopedEditorUtilityContext.selectedText,
-                                  createdAt: new Date().toISOString(),
-                                })
-                              }
-                              className={clsx(
-                                'inline-flex h-8 items-center justify-center rounded-md border px-3 text-xs transition',
-                                scopedEditorUtilityContext.action === item.action
-                                  ? 'border-amber-500/20 bg-amber-500/10 text-amber-100 hover:bg-amber-500/20'
-                                  : 'border-white/10 text-[#A1A1AA] hover:border-white/20 hover:text-white',
-                              )}
-                            >
-                              {item.label}
-                            </NavLink>
-                          ))}
-                        </div>
-                        <div className="flex flex-wrap gap-2">
-                          <NavLink
-                            to={`/ai-toolbox?task=${actionToToolboxTask[scopedEditorUtilityContext.action]}&projectId=${projectId}${chapterId ? `&chapterId=${chapterId}` : ''}`}
-                            onClick={() =>
-                              writeToolboxInputDraft({
-                                task: actionToToolboxTask[scopedEditorUtilityContext.action],
-                                projectId: projectId || null,
-                                chapterId: chapterId || null,
-                                input: scopedEditorUtilityContext.selectedText,
-                                createdAt: new Date().toISOString(),
-                              })
-                            }
-                            className="inline-flex h-8 items-center justify-center rounded-md border border-amber-500/20 bg-amber-500/10 px-3 text-xs text-amber-100 transition hover:bg-amber-500/20"
-                          >
-                            按当前动作打开
-                          </NavLink>
-                          <button
-                            type="button"
-                            onClick={closeUtilityDrawer}
-                            className="inline-flex h-8 items-center justify-center rounded-md border border-white/10 px-3 text-xs text-[#A1A1AA] transition hover:text-white"
-                          >
-                            收起抽屉
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="space-y-3 rounded-md border border-white/8 bg-white/3 p-3">
-                      <SidebarHint>选中文本后可直接带入当前选区。</SidebarHint>
-                      <div className="grid grid-cols-2 gap-2">
-                        <NavLink
-                          to={`/ai-toolbox?task=continue&projectId=${projectId}${chapterId ? `&chapterId=${chapterId}` : ''}`}
-                          className="inline-flex h-8 items-center justify-center rounded-md border border-white/10 px-3 text-xs text-[#A1A1AA] transition hover:border-white/20 hover:text-white"
-                        >
-                          章节续写
-                        </NavLink>
-                        <NavLink
-                          to={`/ai-toolbox?task=rewrite&projectId=${projectId}${chapterId ? `&chapterId=${chapterId}` : ''}`}
-                          className="inline-flex h-8 items-center justify-center rounded-md border border-white/10 px-3 text-xs text-[#A1A1AA] transition hover:border-white/20 hover:text-white"
-                        >
-                          全文改写
-                        </NavLink>
-                        <NavLink
-                          to={`/ai-toolbox?task=consistency&projectId=${projectId}${chapterId ? `&chapterId=${chapterId}` : ''}`}
-                          className="inline-flex h-8 items-center justify-center rounded-md border border-white/10 px-3 text-xs text-[#A1A1AA] transition hover:border-white/20 hover:text-white"
-                        >
-                          设定检查
-                        </NavLink>
-                        <button
-                          type="button"
-                          onClick={closeUtilityDrawer}
-                          className="inline-flex h-8 items-center justify-center rounded-md border border-white/10 px-3 text-xs text-[#A1A1AA] transition hover:border-white/20 hover:text-white"
-                        >
-                          收起抽屉
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                  <ProjectTreeLink
-                    to={`/ai-toolbox?task=continue&projectId=${projectId}${chapterId ? `&chapterId=${chapterId}` : ''}`}
-                    label="续写任务"
-                    meta="延续当前章节"
-                    active={false}
-                  />
-                  <ProjectTreeLink
-                    to={`/ai-toolbox?task=rewrite&projectId=${projectId}${chapterId ? `&chapterId=${chapterId}` : ''}`}
-                    label="改写任务"
-                    meta="聚焦当前段落"
-                    active={false}
-                  />
-                  <ProjectTreeLink
-                    to={`/ai-toolbox?task=consistency&projectId=${projectId}${chapterId ? `&chapterId=${chapterId}` : ''}`}
-                    label="设定检查"
-                    meta="检查角色与世界观"
-                    active={false}
-                  />
-                  <SidebarHint>从这里打开相关 AI 任务。</SidebarHint>
-                </div>
-              ) : null}
+              {activeUtilityTab === 'ai' ? renderAIUtilityPanel(closeUtilityDrawer) : null}
             </div>
 
-            <div className="border-t border-white/5 px-4 py-3 text-xs text-[#52525B]">
+            <div className="border-t border-border px-5 py-3 text-xs text-muted-foreground">
               {project ? `最近更新 ${formatDate(project.updated_at)}` : '等待项目上下文'}
             </div>
           </aside>
@@ -755,29 +1180,29 @@ export function AppShell() {
 
       {shouldRenderProjectTree ? (
         <div
-          className="fixed inset-0 z-30 bg-black/55 md:hidden"
+          className="fixed inset-0 z-30 bg-black/30 md:hidden"
           onClick={() => setIsProjectTreeOpen(false)}
           aria-hidden="true"
         >
           <aside
-            className="flex h-full w-[min(84vw,320px)] flex-col border-r border-white/8 bg-[#161618] shadow-2xl shadow-black/40"
+            className="flex h-full w-[min(84vw,320px)] flex-col border-r border-[#e5e7eb] bg-[#fafaf9] shadow-2xl shadow-black/10"
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="flex items-center justify-between border-b border-white/5 px-4 py-4">
+            <div className="flex items-center justify-between border-b border-[#ececec] px-5 py-5">
               <div>
-                <div className="text-[11px] uppercase tracking-[0.22em] text-[#52525B]">Project</div>
-                <div className="mt-2 text-sm font-semibold text-white">{project?.title ?? '加载中...'}</div>
+                <div className="text-[11px] uppercase tracking-[0.22em] text-[#9ca3af]">Project</div>
+                <div className="mt-2 text-sm font-semibold text-[#111827]">{project?.title ?? '加载中...'}</div>
               </div>
               <button
                 type="button"
-                className="inline-flex size-9 items-center justify-center rounded-md border border-white/8 bg-white/5 text-[#A1A1AA] transition hover:text-white"
+                className="inline-flex size-10 items-center justify-center rounded-xl border border-[#e5e7eb] bg-white text-[#6b7280] transition hover:text-[#111827]"
                 onClick={() => setIsProjectTreeOpen(false)}
               >
                 <PanelLeftClose className="size-4" />
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto px-3 py-3">
+            <div className="flex-1 overflow-y-auto px-4 py-5">
               <div className="space-y-1">
                 <SectionLabel>导航</SectionLabel>
                 <ProjectTreeLink
@@ -831,26 +1256,26 @@ export function AppShell() {
 
       {shouldRenderUtility ? (
         <div
-          className="fixed inset-0 z-30 bg-black/55 xl:hidden"
+          className="fixed inset-0 z-30 bg-black/30 xl:hidden"
           onClick={closeUtilityDrawer}
           aria-hidden="true"
         >
           <aside
-            className="ml-auto flex h-full w-[min(88vw,360px)] flex-col border-l border-white/8 bg-[#161618] shadow-2xl shadow-black/40"
+            className="ml-auto flex h-full w-[min(88vw,380px)] flex-col border-l border-[#e5e7eb] bg-white shadow-2xl shadow-black/10"
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="flex items-center justify-between border-b border-white/5 px-4 py-4">
-              <div className="flex items-center gap-2">
+            <div className="flex items-center justify-between border-b border-[#ececec] px-5 py-4">
+              <div className="grid flex-1 grid-cols-3 rounded-2xl bg-[#f3f4f6] p-1">
                 {utilityTabs.map((tab) => (
                   <button
                     key={tab.key}
                     type="button"
                     onClick={() => setActiveUtilityTab(tab.key)}
                     className={clsx(
-                      'rounded-md px-3 py-1.5 text-sm transition',
+                      'rounded-xl px-3 py-2 text-sm font-medium transition',
                       activeUtilityTab === tab.key
-                        ? 'bg-white/10 text-white'
-                        : 'text-[#A1A1AA] hover:bg-white/5 hover:text-white',
+                        ? 'bg-white text-[#111827] shadow-sm'
+                        : 'text-[#6b7280] hover:text-[#111827]',
                     )}
                   >
                     {tab.label}
@@ -859,30 +1284,30 @@ export function AppShell() {
               </div>
               <button
                 type="button"
-                className="inline-flex size-9 items-center justify-center rounded-md border border-white/8 bg-white/5 text-[#A1A1AA] transition hover:text-white"
+                className="ml-3 inline-flex size-10 items-center justify-center rounded-xl border border-[#e5e7eb] bg-white text-[#6b7280] transition hover:text-[#111827]"
                 onClick={closeUtilityDrawer}
               >
                 <PanelRightClose className="size-4" />
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto px-4 py-4">
+            <div className={clsx('flex-1 px-5 py-5', activeUtilityTab === 'ai' ? 'flex min-h-0 flex-col overflow-hidden' : 'overflow-y-auto')}>
               {activeUtilityTab === 'characters' ? (
                 <div className="space-y-3">
                   <SectionLabel>角色速查</SectionLabel>
                   <SidebarHint>{chapterContextHint}</SidebarHint>
                   {contextualCharacters.length > 0 ? (
                     contextualCharacters.slice(0, 6).map(({ item, matches, score }) => (
-                      <div key={item.id} className="rounded-md border border-white/8 bg-white/3 p-3">
+                      <div key={item.id} className="rounded-2xl border border-[#e5e7eb] bg-white p-4">
                         <div className="flex flex-wrap items-center gap-2">
-                          <div className="text-sm font-medium text-white">{item.character.name}</div>
+                          <div className="text-sm font-medium text-[#111827]">{item.character.name}</div>
                           {score > 0 ? (
-                            <span className="rounded-full border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 text-[11px] text-amber-200">
+                            <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] text-amber-700">
                               当前章命中
                             </span>
                           ) : null}
                         </div>
-                        <div className="mt-1 text-xs text-[#A1A1AA]">
+                        <div className="mt-1 text-xs text-[#6b7280]">
                           {item.role_label || item.summary || item.character.personality || '暂无项目摘要'}
                         </div>
                         {matches.length > 0 ? (
@@ -890,7 +1315,7 @@ export function AppShell() {
                             {matches.map((keyword) => (
                               <span
                                 key={`${item.id}-${keyword}`}
-                                className="rounded-full border border-white/8 px-2 py-0.5 text-[11px] text-[#A1A1AA]"
+                                className="rounded-full border border-[#d1d5db] bg-[#f9fafb] px-2 py-0.5 text-[11px] text-[#6b7280]"
                               >
                                 {keyword}
                               </span>
@@ -902,6 +1327,13 @@ export function AppShell() {
                   ) : (
                     <SidebarHint>当前项目还没有已绑定角色。</SidebarHint>
                   )}
+                  <ProjectTreeLink
+                    to="/characters"
+                    label="打开角色库"
+                    meta="专页支持返回当前章节"
+                    active={location.pathname === '/characters'}
+                    onNavigate={closeUtilityDrawer}
+                  />
                 </div>
               ) : null}
 
@@ -919,117 +1351,17 @@ export function AppShell() {
                       keywords={section.matches}
                     />
                   ))}
+                  <ProjectTreeLink
+                    to={`/projects/${projectId}/world`}
+                    label="打开完整设定页"
+                    meta="专页支持返回当前章节"
+                    active={location.pathname === `/projects/${projectId}/world`}
+                    onNavigate={closeUtilityDrawer}
+                  />
                 </div>
               ) : null}
 
-              {activeUtilityTab === 'ai' ? (
-                <div className="space-y-3">
-                  <SectionLabel>AI 任务台</SectionLabel>
-                  {scopedEditorUtilityContext ? (
-                    <div className="rounded-md border border-amber-500/20 bg-amber-500/8 p-3">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <div className="text-sm font-medium text-white">当前选区</div>
-                        <span className="rounded-full border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 text-[11px] text-amber-200">
-                          {actionLabelMap[scopedEditorUtilityContext.action]}
-                        </span>
-                      </div>
-                      <div className="mt-2 text-xs leading-6 text-[#A1A1AA]">
-                        {scopedEditorUtilityContext.chapterTitle || '当前章节'}
-                      </div>
-                      <div className="mt-2 line-clamp-4 text-sm leading-6 text-[#E4E4E7]">
-                        {scopedEditorUtilityContext.selectedText}
-                      </div>
-                      <div className="mt-3 grid gap-2">
-                        <div className="grid grid-cols-2 gap-2">
-                          {utilityTaskActions.map((item) => (
-                            <NavLink
-                              key={item.action}
-                              to={`/ai-toolbox?task=${item.task}&projectId=${projectId}${chapterId ? `&chapterId=${chapterId}` : ''}`}
-                              onClick={() => {
-                                writeToolboxInputDraft({
-                                  task: item.task,
-                                  projectId: projectId || null,
-                                  chapterId: chapterId || null,
-                                  input: scopedEditorUtilityContext.selectedText,
-                                  createdAt: new Date().toISOString(),
-                                })
-                                closeUtilityDrawer()
-                              }}
-                              className={clsx(
-                                'inline-flex h-8 items-center justify-center rounded-md border px-3 text-xs transition',
-                                scopedEditorUtilityContext.action === item.action
-                                  ? 'border-amber-500/20 bg-amber-500/10 text-amber-100 hover:bg-amber-500/20'
-                                  : 'border-white/10 text-[#A1A1AA] hover:border-white/20 hover:text-white',
-                              )}
-                            >
-                              {item.label}
-                            </NavLink>
-                          ))}
-                        </div>
-                        <div className="grid gap-2 sm:grid-cols-2">
-                          <NavLink
-                            to={`/ai-toolbox?task=${actionToToolboxTask[scopedEditorUtilityContext.action]}&projectId=${projectId}${chapterId ? `&chapterId=${chapterId}` : ''}`}
-                            onClick={() => {
-                              writeToolboxInputDraft({
-                                task: actionToToolboxTask[scopedEditorUtilityContext.action],
-                                projectId: projectId || null,
-                                chapterId: chapterId || null,
-                                input: scopedEditorUtilityContext.selectedText,
-                                createdAt: new Date().toISOString(),
-                              })
-                              closeUtilityDrawer()
-                            }}
-                            className="inline-flex h-8 items-center justify-center rounded-md border border-amber-500/20 bg-amber-500/10 px-3 text-xs text-amber-100 transition hover:bg-amber-500/20"
-                          >
-                            按当前动作打开
-                          </NavLink>
-                          <button
-                            type="button"
-                            onClick={closeUtilityDrawer}
-                            className="inline-flex h-8 items-center justify-center rounded-md border border-white/10 px-3 text-xs text-[#A1A1AA] transition hover:text-white"
-                          >
-                            收起抽屉
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="space-y-3 rounded-md border border-white/8 bg-white/3 p-3">
-                      <SidebarHint>选中文本后可直接带入当前选区。</SidebarHint>
-                      <div className="grid grid-cols-2 gap-2">
-                        <NavLink
-                          to={`/ai-toolbox?task=continue&projectId=${projectId}${chapterId ? `&chapterId=${chapterId}` : ''}`}
-                          onClick={closeUtilityDrawer}
-                          className="inline-flex h-8 items-center justify-center rounded-md border border-white/10 px-3 text-xs text-[#A1A1AA] transition hover:border-white/20 hover:text-white"
-                        >
-                          章节续写
-                        </NavLink>
-                        <NavLink
-                          to={`/ai-toolbox?task=rewrite&projectId=${projectId}${chapterId ? `&chapterId=${chapterId}` : ''}`}
-                          onClick={closeUtilityDrawer}
-                          className="inline-flex h-8 items-center justify-center rounded-md border border-white/10 px-3 text-xs text-[#A1A1AA] transition hover:border-white/20 hover:text-white"
-                        >
-                          全文改写
-                        </NavLink>
-                        <NavLink
-                          to={`/ai-toolbox?task=consistency&projectId=${projectId}${chapterId ? `&chapterId=${chapterId}` : ''}`}
-                          onClick={closeUtilityDrawer}
-                          className="inline-flex h-8 items-center justify-center rounded-md border border-white/10 px-3 text-xs text-[#A1A1AA] transition hover:border-white/20 hover:text-white"
-                        >
-                          设定检查
-                        </NavLink>
-                        <button
-                          type="button"
-                          onClick={closeUtilityDrawer}
-                          className="inline-flex h-8 items-center justify-center rounded-md border border-white/10 px-3 text-xs text-[#A1A1AA] transition hover:border-white/20 hover:text-white"
-                        >
-                          收起抽屉
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ) : null}
+              {activeUtilityTab === 'ai' ? renderAIUtilityPanel(closeUtilityDrawer) : null}
             </div>
           </aside>
         </div>
@@ -1039,11 +1371,11 @@ export function AppShell() {
 }
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
-  return <div className="px-2 text-[11px] uppercase tracking-[0.22em] text-[#52525B]">{children}</div>
+  return <div className="px-2 text-[11px] uppercase tracking-[0.22em] text-muted-foreground">{children}</div>
 }
 
 function SidebarHint({ children }: { children: React.ReactNode }) {
-  return <div className="rounded-md border border-dashed border-white/8 bg-white/[0.025] px-3 py-3 text-xs leading-6 text-[#A1A1AA]">{children}</div>
+  return <div className="rounded-2xl border border-dashed border-border bg-muted/45 px-4 py-3 text-xs leading-6 text-muted-foreground">{children}</div>
 }
 
 function ProjectTreeLink({
@@ -1064,22 +1396,22 @@ function ProjectTreeLink({
       to={to}
       onClick={onNavigate}
       className={clsx(
-        'flex items-center justify-between rounded-md px-3 py-2.5 transition',
-        active ? 'bg-white/10 text-white' : 'text-[#A1A1AA] hover:bg-white/5 hover:text-white',
+        'flex items-center justify-between rounded-2xl px-4 py-3 transition',
+        active ? 'bg-background text-foreground shadow-sm ring-1 ring-border' : 'text-muted-foreground hover:bg-background hover:text-foreground',
       )}
     >
       <div className="min-w-0">
-        <div className="truncate text-sm">{label}</div>
-        {meta ? <div className="truncate text-xs text-[#52525B]">{meta}</div> : null}
+        <div className="truncate text-sm font-medium">{label}</div>
+        {meta ? <div className="truncate text-xs text-muted-foreground">{meta}</div> : null}
       </div>
-      <ChevronRight className="size-4 shrink-0" />
+      <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
     </NavLink>
   )
 }
 
 function ProjectTreeStatic({ label, meta }: { label: string; meta?: string }) {
   return (
-    <div className="flex items-center justify-between rounded-md px-3 py-2.5 text-[#52525B]">
+    <div className="flex items-center justify-between rounded-2xl px-4 py-3 text-muted-foreground">
       <div>
         <div className="text-sm">{label}</div>
         {meta ? <div className="text-xs">{meta}</div> : null}
@@ -1103,16 +1435,16 @@ function UtilityInfoCard({
   return (
     <div
       className={clsx(
-        'rounded-md border p-3',
-        emphasis ? 'border-amber-500/20 bg-amber-500/8' : 'border-white/8 bg-white/[0.025]',
+        'rounded-2xl border p-4',
+        emphasis ? 'border-primary/18 bg-primary/8' : 'border-border bg-muted/45',
       )}
     >
-      <div className="text-xs uppercase tracking-[0.18em] text-[#52525B]">{title}</div>
-      <div className="mt-2 text-sm leading-6 text-[#E4E4E7]">{value}</div>
+      <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">{title}</div>
+      <div className="mt-2 text-sm leading-6 text-foreground/85">{value}</div>
       {keywords.length > 0 ? (
         <div className="mt-3 flex flex-wrap gap-1.5">
           {keywords.map((keyword) => (
-            <span key={`${title}-${keyword}`} className="rounded-full border border-white/8 px-2 py-0.5 text-[11px] text-[#A1A1AA]">
+            <span key={`${title}-${keyword}`} className="rounded-full border border-border bg-background px-2 py-0.5 text-[11px] text-muted-foreground">
               {keyword}
             </span>
           ))}
