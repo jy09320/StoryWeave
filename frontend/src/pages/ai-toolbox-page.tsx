@@ -3,7 +3,6 @@ import { useQuery } from '@tanstack/react-query'
 import {
   ArrowRight,
   BrainCircuit,
-  ChevronRight,
   FileText,
   LoaderCircle,
   Sparkles,
@@ -16,14 +15,6 @@ import { EmptyState } from '@/components/empty-state'
 import { LoadingState } from '@/components/loading-state'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { readToolboxInputDraft, writeToolboxInputDraft } from '@/lib/ai-toolbox-context'
 import { formatDate } from '@/lib/format'
@@ -36,58 +27,55 @@ const TASK_OPTIONS = [
     value: 'continue',
     label: '章节续写',
     title: '章节生成与续写',
-    description: '续写、扩写、补段。',
+    description: '把章节正文或片段拉进来，补全后续内容、过渡段或场景扩写。',
     icon: Sparkles,
     placeholder: '例如：让这一段自然推进到人物正面冲突爆发，但保留克制的语气。',
     defaultInstruction: '请基于当前正文继续写下去，保持风格一致，并自然衔接上一段。',
     submitLabel: '开始 AI 续写',
     resultTitle: '续写结果',
-    status: '已接入基础续写能力',
+    status: '适合补段、扩场景、推进章节',
     items: ['章节续写', '场景扩写', '段落补全'],
     presets: [
       '延续当前段落的节奏继续写下去',
       '补一段承上启下的过渡场景',
       '扩写冲突爆发前的情绪铺垫',
     ],
-    helper: '',
   },
   {
     value: 'rewrite',
     label: '文本改写',
     title: '文本改写与润色',
-    description: '改写、润色、统一风格。',
+    description: '聚焦表达重写、对白润色、语气统一，不直接污染正文。',
     icon: WandSparkles,
     placeholder: '例如：把这段对白改得更克制、更有潜台词，避免直接说破情绪。',
-    defaultInstruction: '请在不改变核心情节的前提下，改写输入文本，使语言更顺畅、节奏更稳定，并保留人物语气。',
+    defaultInstruction: '请在不改变核心情节的前提下，改写输入文本，让语言更顺、节奏更稳，并保留人物口吻。',
     submitLabel: '开始文本改写',
     resultTitle: '改写结果',
-    status: '先复用通用生成链路落地',
-    items: ['对白增强', '语气调整', '文风统一'],
+    status: '适合重写段落、收紧表达、统一风格',
+    items: ['对白增强', '语气调整', '风格统一'],
     presets: [
       '把这段对白改得更克制、更有潜台词',
       '压缩重复表达，让节奏更利落',
       '统一成更冷静的叙述语气',
     ],
-    helper: '',
   },
   {
     value: 'consistency',
     label: '设定检查',
-    title: '设定一致性辅助',
-    description: '检查设定与上下文一致性。',
+    title: '设定一致性检查',
+    description: '检查角色设定、世界规则、时间线和因果逻辑是否冲突。',
     icon: BrainCircuit,
-    placeholder: '例如：检查这段内容是否与当前章节摘要、备注和既有正文存在设定冲突，并列出风险点。',
-    defaultInstruction: '请从角色设定、世界观规则、叙事逻辑和时间线四个角度检查输入内容，列出潜在冲突、证据和修改建议。',
-    submitLabel: '开始一致性检查',
+    placeholder: '例如：检查这段内容是否与当前章节摘要、角色设定和世界规则冲突，并列出风险点。',
+    defaultInstruction: '请从角色设定、世界规则、叙事逻辑和时间线四个角度检查输入内容，列出冲突点、依据和修改建议。',
+    submitLabel: '开始设定检查',
     resultTitle: '检查结果',
-    status: '先基于项目/章节上下文给出分析结果',
-    items: ['角色设定检查', '世界观冲突检查', '时间线提醒'],
+    status: '适合在发散写作后做回收与校对',
+    items: ['角色口吻检查', '世界规则检查', '时间线提醒'],
     presets: [
       '检查角色口吻和既有设定是否冲突',
-      '检查世界观规则与当前情节是否冲突',
+      '检查世界规则与当前情节是否冲突',
       '检查时间线、动机和因果是否闭合',
     ],
-    helper: '',
   },
 ] as const
 
@@ -95,8 +83,8 @@ const TOOLBOX_RESULT_DRAFT_KEY = 'storyweave.toolbox-result-draft'
 const TOOLBOX_HISTORY_KEY = 'storyweave.toolbox-history'
 
 type ToolboxTaskType = (typeof TASK_OPTIONS)[number]['value']
-
 type ToolboxDraftApplyMode = 'append' | 'replace'
+type SendBackMode = ToolboxDraftApplyMode | null
 
 interface ToolboxResultDraft {
   projectId: string
@@ -129,17 +117,10 @@ interface GenerationHistoryItem {
   createdAt: string
 }
 
-type SendBackMode = ToolboxDraftApplyMode | null
-
 const FALLBACK_MODEL_BY_PROVIDER: Record<string, string> = {
   openai: 'gpt-4o',
   anthropic: 'claude-3-5-sonnet-latest',
 }
-
-const MODEL_PROVIDER_OPTIONS = [
-  { label: 'OpenAI', value: 'openai' },
-  { label: 'Anthropic', value: 'anthropic' },
-] as const
 
 function getTaskMeta(task: ToolboxTaskType) {
   return TASK_OPTIONS.find((item) => item.value === task) ?? TASK_OPTIONS[0]
@@ -192,7 +173,6 @@ export function AIToolboxPage() {
   const [activeTask, setActiveTask] = useState<ToolboxTaskType>(initialTask)
   const [availableModels, setAvailableModels] = useState<AIModelOption[]>([])
   const [isLoadingModels, setIsLoadingModels] = useState(false)
-  const [isAdvancedOpen, setIsAdvancedOpen] = useState(false)
   const [history, setHistory] = useState<GenerationHistoryItem[]>([])
   const [recommendedSendMode, setRecommendedSendMode] = useState<SendBackMode>(null)
   const [generation, setGeneration] = useState<GenerationState>({
@@ -268,7 +248,8 @@ export function AIToolboxPage() {
   }, [projectQuery.data, chapterId])
 
   const taskMeta = getTaskMeta(activeTask)
-  const selectedModelId = generation.modelId.trim() || runtimeSettingsQuery.data?.model_id || FALLBACK_MODEL_BY_PROVIDER[generation.provider] || 'gpt-4o'
+  const selectedModelId =
+    generation.modelId.trim() || runtimeSettingsQuery.data?.model_id || FALLBACK_MODEL_BY_PROVIDER[generation.provider] || 'gpt-4o'
   const selectedProvider = generation.provider || runtimeSettingsQuery.data?.provider || 'openai'
   const contextText = buildContextText(projectQuery.data, selectedChapter)
 
@@ -296,7 +277,7 @@ export function AIToolboxPage() {
     try {
       const response = await listAIRuntimeModels()
       setAvailableModels(response.models)
-      toast.success(`已获取 ${response.models.length} 个可用模型，可直接用于当前工具任务`)
+      toast.success(`已获取 ${response.models.length} 个可用模型，可直接用于当前任务`)
     } catch (error) {
       toast.error(error instanceof Error ? error.message : '获取模型列表失败')
     } finally {
@@ -475,47 +456,54 @@ export function AIToolboxPage() {
 
   return (
     <div className="space-y-6 pb-8">
-      <section className="grid gap-4 xl:grid-cols-[1.35fr_0.65fr]">
+      <section className="grid gap-6 xl:grid-cols-[minmax(0,1.25fr)_340px]">
         <Card className="border border-white/8 bg-[#161618]/92 shadow-lg shadow-black/10">
-          <CardHeader className="gap-4">
-            <CardDescription className="text-primary/80">AI 工具箱</CardDescription>
-            <CardTitle className="max-w-3xl text-3xl font-semibold leading-tight text-white">
-              AI 任务
-            </CardTitle>
+          <CardHeader className="gap-5">
+            <CardDescription className="text-primary/80">AI Toolbox</CardDescription>
+            <div className="space-y-3">
+              <CardTitle className="max-w-4xl text-3xl font-semibold leading-tight text-white">
+                这是独立的 AI 任务台，不是设置页，也不是编辑器镜像。
+              </CardTitle>
+              <p className="max-w-3xl text-sm leading-7 text-slate-300">
+                它的用途很直接：把一段文本或整章内容拉进来，集中做续写、改写、设定检查，先产出候选结果，再决定是否带回章节编辑器。
+              </p>
+            </div>
           </CardHeader>
-          <CardContent className="grid gap-3 sm:grid-cols-3">
-            <HighlightMetric label="当前任务" value={taskMeta.label} hint={taskMeta.status} />
-            <HighlightMetric
-              label="上下文来源"
-              value={selectedChapter ? '项目 + 章节上下文' : projectId ? '项目上下文' : '纯手动输入'}
-              hint=""
-            />
-            <HighlightMetric label="当前模型" value={selectedModelId} hint={`提供商：${selectedProvider}`} />
+          <CardContent className="space-y-5">
+            <div className="grid gap-3 sm:grid-cols-3">
+              <PurposeMetric title="适合什么时候用" description="需要脱离编辑器，大段尝试、多轮加工、集中比较结果时。" />
+              <PurposeMetric title="它不会直接改正文" description="先生成候选内容，只有你点“带回编辑器”后才会进入章节草稿。" />
+              <PurposeMetric title="支持两种进入方式" description="从编辑器带上下文进来，或直接粘贴任意文本单独处理。" />
+            </div>
+
+            <div className="grid gap-3 lg:grid-cols-4">
+              <WorkflowStep step="01" title="选择任务" description="续写、改写、设定检查三类模式。" />
+              <WorkflowStep step="02" title="放入材料" description="贴文本，或一键载入当前章节正文。" />
+              <WorkflowStep step="03" title="指定意图与模型" description="挑任务意图，再选本次要用的模型。" />
+              <WorkflowStep step="04" title="拿结果再回写" description="复制、继续加工，或带回编辑器。" />
+            </div>
           </CardContent>
         </Card>
 
         <Card className="border border-white/8 bg-[#161618]/92 shadow-lg shadow-black/10">
           <CardHeader>
-            <CardTitle className="text-xl text-white">任务上下文</CardTitle>
+            <CardTitle className="text-xl text-white">当前接入状态</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3 text-sm text-slate-300">
-            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-              <div className="text-xs uppercase tracking-[0.2em] text-slate-500">当前项目</div>
-              <div className="mt-2 text-base font-medium text-white">{projectQuery.data?.title || '未指定项目'}</div>
-              <div className="mt-2 text-xs leading-6 text-slate-400">
-                {projectQuery.data ? `最近更新 ${formatDate(projectQuery.data.updated_at)}` : '从首页或编辑器进入时会自动带入项目上下文。'}
-              </div>
-            </div>
-            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-              <div className="text-xs uppercase tracking-[0.2em] text-slate-500">当前章节</div>
-              <div className="mt-2 text-base font-medium text-white">{selectedChapter?.title || '未指定章节'}</div>
-              <div className="mt-2 text-xs leading-6 text-slate-400">
-                {selectedChapter ? `${selectedChapter.word_count} 字 · 可直接把正文带入当前任务` : '未带入章节时，可手动粘贴需要处理的文本。'}
-              </div>
-            </div>
+            <InfoPanel
+              label="当前任务"
+              title={taskMeta.label}
+              description={taskMeta.status}
+            />
+            <InfoPanel
+              label="上下文来源"
+              title={selectedChapter ? '项目 + 章节上下文' : projectId ? '仅项目上下文' : '纯手动输入'}
+              description={selectedChapter ? '已接入当前章节，可直接载入正文并回写结果。' : '当前没有章节绑定，更适合做单段文本处理。'}
+            />
+            <InfoPanel label="当前模型" title={selectedModelId} description={`提供商：${selectedProvider}`} />
             <Link
               to={projectId ? `/projects/${projectId}` : '/'}
-              className="inline-flex h-9 w-full items-center justify-center rounded-lg border border-white/10 bg-transparent px-3 text-sm font-medium text-white transition hover:bg-white/10"
+              className="inline-flex h-10 w-full items-center justify-center rounded-lg border border-white/10 bg-transparent px-3 text-sm font-medium text-white transition hover:bg-white/10"
             >
               返回上一工作区
             </Link>
@@ -523,11 +511,11 @@ export function AIToolboxPage() {
         </Card>
       </section>
 
-      <section className="grid gap-6 xl:grid-cols-[320px_minmax(0,1fr)_300px]">
+      <section className="grid gap-6 xl:grid-cols-[280px_minmax(0,1fr)_320px]">
         <aside className="space-y-4">
           <Card className="border border-white/8 bg-[#161618]/92 shadow-lg shadow-black/10">
             <CardHeader>
-              <CardTitle className="text-xl text-white">工具分组</CardTitle>
+              <CardTitle className="text-xl text-white">任务类型</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
               {TASK_OPTIONS.map((task) => {
@@ -540,7 +528,7 @@ export function AIToolboxPage() {
                     type="button"
                     onClick={() => handleTaskChange(task.value)}
                     className={[
-                      'w-full rounded-3xl border p-4 text-left transition',
+                      'w-full rounded-2xl border p-4 text-left transition',
                       isActive
                         ? 'border-primary/50 bg-primary/10 shadow-lg shadow-primary/10'
                         : 'border-white/10 bg-white/[0.03] hover:border-white/20 hover:bg-white/[0.06]',
@@ -567,6 +555,17 @@ export function AIToolboxPage() {
               })}
             </CardContent>
           </Card>
+
+          <Card className="border border-white/8 bg-[#161618]/92 shadow-lg shadow-black/10">
+            <CardHeader>
+              <CardTitle className="text-lg text-white">这页最适合</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3 text-sm leading-6 text-slate-300">
+              <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">需要大段试写，不想在正文里反复改。</div>
+              <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">需要把 AI 结果和原文并排比较，再决定采纳方式。</div>
+              <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">需要连续加工几轮，把历史结果当素材继续打磨。</div>
+            </CardContent>
+          </Card>
         </aside>
 
         <section className="space-y-4">
@@ -575,7 +574,9 @@ export function AIToolboxPage() {
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <CardTitle className="text-xl text-white">{taskMeta.title}</CardTitle>
-                  {taskMeta.helper ? <CardDescription className="mt-2 max-w-3xl text-sm leading-7 text-slate-300">{taskMeta.helper}</CardDescription> : null}
+                  <CardDescription className="mt-2 max-w-3xl text-sm leading-7 text-slate-300">
+                    先准备材料，再给出任务意图与模型，最后统一生成候选结果。
+                  </CardDescription>
                 </div>
                 <div className="inline-flex max-w-full items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-xs text-slate-400">
                   <FileText className="size-4 text-primary" />
@@ -584,10 +585,10 @@ export function AIToolboxPage() {
               </div>
             </CardHeader>
             <CardContent className="space-y-5">
-              <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_240px]">
+              <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_260px]">
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-slate-200" htmlFor="toolbox-input">
-                    {activeTask === 'continue' ? '待续写正文' : '待处理文本'}
+                    第一步：准备要处理的文本
                   </label>
                   <Textarea
                     id="toolbox-input"
@@ -597,19 +598,24 @@ export function AIToolboxPage() {
                     placeholder={taskMeta.placeholder}
                     className="min-h-[360px] leading-7"
                   />
+                  <div className="text-xs leading-6 text-slate-400">
+                    {activeTask === 'continue'
+                      ? '续写模式下，如果当前已绑定章节，可以直接从右侧载入正文。'
+                      : '把想改写或检查的文本粘进来即可，不必先回到编辑器。'}
+                  </div>
                 </div>
 
                 <div className="space-y-4">
                   <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                    <div className="text-sm font-medium text-white">上下文摘要</div>
-                    <div className="mt-3 text-xs leading-6 text-slate-400 whitespace-pre-wrap">
-                      {contextText || '当前未带入项目或章节上下文，任务将仅基于手动输入内容执行。'}
+                    <div className="text-sm font-medium text-white">当前上下文</div>
+                    <div className="mt-3 whitespace-pre-wrap text-xs leading-6 text-slate-400">
+                      {contextText || '当前没有带入项目或章节上下文，本次任务只会依据你手动输入的文本执行。'}
                     </div>
                   </div>
 
                   {selectedChapter ? (
                     <Button variant="outline" className="w-full" onClick={handleFillFromChapter}>
-                      从当前章节载入正文
+                      载入当前章节正文
                     </Button>
                   ) : null}
 
@@ -627,11 +633,13 @@ export function AIToolboxPage() {
               <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4 space-y-4">
                 <div className="flex items-center gap-2 text-sm font-medium text-white">
                   <WandSparkles className="size-4 text-primary" />
-                  AI 任务配置
+                  第二步：定义本次任务
                 </div>
+
                 <div className="space-y-3 rounded-xl border border-white/10 bg-white/[0.03] p-3">
                   <div className="space-y-1">
-                    <div className="text-sm font-medium text-white">常用意图</div>
+                    <div className="text-sm font-medium text-white">常用任务意图</div>
+                    <div className="text-xs leading-5 text-slate-400">先选一个接近的意图，再按需要补充自己的要求。</div>
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {taskMeta.presets.map((preset) => {
@@ -656,91 +664,63 @@ export function AIToolboxPage() {
                   </div>
                 </div>
 
-                <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
-                  <button
-                    type="button"
-                    onClick={() => setIsAdvancedOpen((prev) => !prev)}
-                    className="flex w-full items-center justify-between gap-3 text-left"
-                  >
-                    <div className="space-y-1">
-                      <div className="text-sm font-medium text-white">高级参数</div>
+                <div className="space-y-4 rounded-xl border border-white/10 bg-white/[0.03] p-3">
+                  <div className="space-y-1">
+                    <div className="text-sm font-medium text-white">本次任务模型</div>
+                    <div className="text-xs leading-5 text-slate-400">
+                      提供商与 Key 统一在设置中心维护，这里只切换当前任务要用的可用模型。
                     </div>
-                    <div className="flex min-w-0 items-center gap-2 text-xs text-slate-400">
-                      <span className="shrink-0">{selectedProvider}</span>
-                      <span className="truncate">{selectedModelId}</span>
-                      <ChevronRight className={`size-4 transition ${isAdvancedOpen ? 'rotate-90 text-white' : ''}`} />
-                    </div>
-                  </button>
+                  </div>
+                  <div className="rounded-xl border border-white/10 bg-black/10 px-3 py-2 text-sm text-white">
+                    当前选择：{selectedModelId}
+                  </div>
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <Button variant="outline" className="sm:w-auto" onClick={handleLoadModels} disabled={isLoadingModels}>
+                      {isLoadingModels ? '获取中...' : '获取可用模型'}
+                    </Button>
+                    <Link
+                      to="/settings"
+                      className="inline-flex h-9 items-center justify-center rounded-md border border-white/10 px-3 text-sm text-white transition hover:bg-white/10"
+                    >
+                      前往设置中心
+                    </Link>
+                  </div>
 
-                  {isAdvancedOpen ? (
-                    <div className="mt-4 space-y-4">
-                      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                        <div className="space-y-2">
-                          <label className="text-sm font-medium text-slate-200">模型提供商</label>
-                          <Select value={selectedProvider} onValueChange={(value) => setGeneration((prev) => ({ ...prev, provider: value, result: '' }))}>
-                            <SelectTrigger>
-                              <SelectValue placeholder="选择模型提供商" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {MODEL_PROVIDER_OPTIONS.map((option) => (
-                                <SelectItem key={option.value} value={option.value}>
-                                  {option.label}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
+                  {availableModels.length > 0 ? (
+                    <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-xs text-slate-300">
+                      <div className="mb-2">点击下方模型可直接用于本次生成：</div>
+                      <div className="flex flex-wrap gap-2">
+                        {availableModels.slice(0, 20).map((model) => {
+                          const isSelected = model.id === selectedModelId
 
-                        <div className="space-y-2">
-                          <label className="text-sm font-medium text-slate-200" htmlFor="toolbox-model-id">
-                            当前任务模型
-                          </label>
-                          <Input
-                            id="toolbox-model-id"
-                            value={selectedModelId}
-                            onChange={(event) => setGeneration((prev) => ({ ...prev, modelId: event.target.value, result: '' }))}
-                            placeholder="例如 openai/gpt-5.4"
-                          />
-                        </div>
-
-                        <div className="space-y-2">
-                          <label className="text-sm font-medium text-slate-200">模型列表</label>
-                          <Button variant="outline" className="w-full" onClick={handleLoadModels} disabled={isLoadingModels}>
-                            {isLoadingModels ? '获取中...' : '获取可选模型'}
-                          </Button>
-                        </div>
+                          return (
+                            <button
+                              key={model.id}
+                              type="button"
+                              className={`rounded-full border px-3 py-1 transition ${
+                                isSelected ? 'border-primary bg-primary/20 text-white' : 'border-white/10 hover:border-primary hover:text-white'
+                              }`}
+                              onClick={() => {
+                                setGeneration((prev) => ({ ...prev, modelId: model.id, result: '' }))
+                                toast.success(`下一次生成将使用模型：${model.id}`)
+                              }}
+                            >
+                              {model.id}
+                            </button>
+                          )
+                        })}
                       </div>
-
-                      {availableModels.length > 0 ? (
-                        <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-xs text-slate-300">
-                          <div className="mb-2">点击下方模型可直接使用：</div>
-                          <div className="flex flex-wrap gap-2">
-                            {availableModels.slice(0, 20).map((model) => {
-                              const isSelected = model.id === selectedModelId
-
-                              return (
-                                <button
-                                  key={model.id}
-                                  type="button"
-                                  className={`rounded-full border px-3 py-1 transition ${
-                                    isSelected ? 'border-primary bg-primary/20 text-white' : 'border-white/10 hover:border-primary hover:text-white'
-                                  }`}
-                                  onClick={() => setGeneration((prev) => ({ ...prev, modelId: model.id, result: '' }))}
-                                >
-                                  {model.id}
-                                </button>
-                              )
-                            })}
-                          </div>
-                        </div>
-                      ) : null}
                     </div>
-                  ) : null}
+                  ) : (
+                    <div className="rounded-xl border border-dashed border-white/10 bg-black/5 p-3 text-xs leading-5 text-slate-400">
+                      还没有加载模型列表。点击上方“获取可用模型”后即可切换。
+                    </div>
+                  )}
                 </div>
 
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-slate-200" htmlFor="toolbox-instruction">
-                    任务指令
+                    补充要求
                   </label>
                   <Textarea
                     id="toolbox-instruction"
@@ -749,6 +729,9 @@ export function AIToolboxPage() {
                     rows={5}
                     placeholder={taskMeta.placeholder}
                   />
+                  <div className="text-xs leading-6 text-slate-400">
+                    这里写的是“怎么做”，不是“处理什么文本”。文本本身请放在上面的输入区。
+                  </div>
                 </div>
 
                 <div className="flex flex-wrap gap-3">
@@ -766,7 +749,14 @@ export function AIToolboxPage() {
 
           <Card className="border border-white/8 bg-[#161618]/92 shadow-lg shadow-black/10">
             <CardHeader>
-              <CardTitle className="text-xl text-white">{taskMeta.resultTitle}</CardTitle>
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <CardTitle className="text-xl text-white">{taskMeta.resultTitle}</CardTitle>
+                  <CardDescription className="mt-2 text-sm leading-7 text-slate-300">
+                    这里先给你候选结果和差异预览。满意后再决定复制、继续加工，还是带回编辑器。
+                  </CardDescription>
+                </div>
+              </div>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="min-h-[260px] rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm leading-7 text-slate-200">
@@ -812,9 +802,12 @@ export function AIToolboxPage() {
                     </div>
                   </div>
                 ) : (
-                  <div className="whitespace-pre-wrap">暂无结果</div>
+                  <div className="flex min-h-[220px] items-center justify-center text-sm text-slate-500">
+                    这里会显示本次任务的候选结果。
+                  </div>
                 )}
               </div>
+
               <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
                 <Button
                   variant="outline"
@@ -832,34 +825,27 @@ export function AIToolboxPage() {
                 >
                   复制结果
                 </Button>
+
                 {selectedChapter && projectId ? (
                   <>
                     <div className="grid w-full gap-3 xl:grid-cols-2">
                       <div
                         className={[
                           'rounded-2xl border p-4 text-sm',
-                          recommendedSendMode === 'append'
-                            ? 'border-primary/30 bg-primary/10'
-                            : 'border-white/10 bg-white/[0.03]',
+                          recommendedSendMode === 'append' ? 'border-primary/30 bg-primary/10' : 'border-white/10 bg-white/[0.03]',
                         ].join(' ')}
                       >
                         <div className="text-sm font-medium text-white">追加到正文</div>
-                        <div className="mt-2 text-xs leading-6 text-slate-400">
-                          目标章节：{selectedChapter.title}
-                        </div>
+                        <div className="mt-2 text-xs leading-6 text-slate-400">目标章节：{selectedChapter.title}</div>
                       </div>
                       <div
                         className={[
                           'rounded-2xl border p-4 text-sm',
-                          recommendedSendMode === 'replace'
-                            ? 'border-primary/30 bg-primary/10'
-                            : 'border-white/10 bg-white/[0.03]',
+                          recommendedSendMode === 'replace' ? 'border-primary/30 bg-primary/10' : 'border-white/10 bg-white/[0.03]',
                         ].join(' ')}
                       >
                         <div className="text-sm font-medium text-white">覆盖当前草稿</div>
-                        <div className="mt-2 text-xs leading-6 text-slate-400">
-                          目标章节：{selectedChapter.title}
-                        </div>
+                        <div className="mt-2 text-xs leading-6 text-slate-400">目标章节：{selectedChapter.title}</div>
                       </div>
                     </div>
                     <Button
@@ -882,6 +868,24 @@ export function AIToolboxPage() {
         </section>
 
         <aside className="space-y-4">
+          <Card className="border border-white/8 bg-[#161618]/92 shadow-lg shadow-black/10">
+            <CardHeader>
+              <CardTitle className="text-xl text-white">当前项目上下文</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3 text-sm text-slate-300">
+              <InfoPanel
+                label="项目"
+                title={projectQuery.data?.title || '未指定项目'}
+                description={projectQuery.data ? `最近更新 ${formatDate(projectQuery.data.updated_at)}` : '从首页或编辑器进入时会自动带入项目上下文。'}
+              />
+              <InfoPanel
+                label="章节"
+                title={selectedChapter?.title || '未指定章节'}
+                description={selectedChapter ? `${selectedChapter.word_count} 字，可直接带回该章节。` : '未带入章节时，这页会作为通用文本任务台使用。'}
+              />
+            </CardContent>
+          </Card>
+
           <Card className="border border-white/8 bg-[#161618]/92 shadow-lg shadow-black/10">
             <CardHeader>
               <CardTitle className="text-xl text-white">生成历史</CardTitle>
@@ -907,11 +911,9 @@ export function AIToolboxPage() {
                       清空历史
                     </Button>
                   </div>
+
                   {history.map((item) => (
-                    <div
-                      key={item.id}
-                      className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 transition hover:border-white/20 hover:bg-white/[0.06]"
-                    >
+                    <div key={item.id} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 transition hover:border-white/20 hover:bg-white/[0.06]">
                       <button
                         type="button"
                         onClick={() => {
@@ -941,14 +943,7 @@ export function AIToolboxPage() {
                       </button>
 
                       <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="w-full"
-                          onClick={async () => {
-                            await handleCopyHistoryResult(item.result)
-                          }}
-                        >
+                        <Button variant="ghost" size="sm" className="w-full" onClick={async () => await handleCopyHistoryResult(item.result)}>
                           复制
                         </Button>
                         <Button
@@ -1005,30 +1000,35 @@ export function AIToolboxPage() {
           </Card>
         </aside>
       </section>
-
-      <EmptyState
-        title="AI 工具箱已升级为可执行任务页"
-        description="当前暂无可用任务。"
-        action={
-          <Link
-            to={projectId ? `/projects/${projectId}` : '/'}
-            className="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground transition hover:opacity-90"
-          >
-            返回创作工作区
-            <ChevronRight className="size-4" />
-          </Link>
-        }
-      />
     </div>
   )
 }
 
-function HighlightMetric({ label, value, hint }: { label: string; value: string; hint?: string }) {
+function PurposeMetric({ title, description }: { title: string; description: string }) {
   return (
     <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-      <p className="text-xs uppercase tracking-[0.2em] text-slate-500">{label}</p>
-      <p className="mt-2 break-all text-lg font-semibold text-white">{value}</p>
-      {hint ? <p className="mt-2 text-xs leading-5 text-slate-400">{hint}</p> : null}
+      <div className="text-sm font-medium text-white">{title}</div>
+      <div className="mt-2 text-xs leading-6 text-slate-400">{description}</div>
+    </div>
+  )
+}
+
+function WorkflowStep({ step, title, description }: { step: string; title: string; description: string }) {
+  return (
+    <div className="rounded-2xl border border-primary/20 bg-primary/8 p-4">
+      <div className="text-xs uppercase tracking-[0.18em] text-primary/80">{step}</div>
+      <div className="mt-2 text-sm font-medium text-white">{title}</div>
+      <div className="mt-2 text-xs leading-6 text-slate-400">{description}</div>
+    </div>
+  )
+}
+
+function InfoPanel({ label, title, description }: { label: string; title: string; description: string }) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+      <div className="text-xs uppercase tracking-[0.2em] text-slate-500">{label}</div>
+      <div className="mt-2 break-all text-base font-medium text-white">{title}</div>
+      <div className="mt-2 text-xs leading-6 text-slate-400">{description}</div>
     </div>
   )
 }
