@@ -14,13 +14,13 @@ const statusConfig: Record<
     className?: string
   }
 > = {
-  draft: { label: '草稿', variant: 'secondary', className: 'border-white/10 bg-white/[0.03] text-slate-300' },
-  active: { label: '进行中', variant: 'default', className: 'border-amber-500/20 bg-amber-500/10 text-amber-200' },
-  paused: { label: '暂停', variant: 'outline', className: 'border-white/10 bg-white/[0.03] text-slate-300' },
-  completed: { label: '已完成', variant: 'default', className: 'border-emerald-500/20 bg-emerald-500/10 text-emerald-200' },
-  writing: { label: '写作中', variant: 'default', className: 'border-amber-500/20 bg-amber-500/10 text-amber-200' },
-  review: { label: '待审阅', variant: 'outline', className: 'border-white/10 bg-white/[0.03] text-slate-300' },
-  done: { label: '已定稿', variant: 'default', className: 'border-emerald-500/20 bg-emerald-500/10 text-emerald-200' },
+  draft: { label: '草稿', variant: 'secondary', className: 'border-border bg-background text-muted-foreground' },
+  active: { label: '进行中', variant: 'default', className: 'border-amber-200 bg-amber-50 text-amber-700' },
+  paused: { label: '暂停', variant: 'outline', className: 'border-border bg-background text-muted-foreground' },
+  completed: { label: '已完成', variant: 'default', className: 'border-primary/18 bg-primary/10 text-primary' },
+  writing: { label: '写作中', variant: 'default', className: 'border-amber-200 bg-amber-50 text-amber-700' },
+  review: { label: '待审阅', variant: 'outline', className: 'border-border bg-background text-muted-foreground' },
+  done: { label: '已定稿', variant: 'default', className: 'border-primary/18 bg-primary/10 text-primary' },
 }
 
 export function StatusBadge({ status, className }: StatusBadgeProps) {

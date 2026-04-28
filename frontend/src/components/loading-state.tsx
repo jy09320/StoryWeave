@@ -11,7 +11,7 @@ export function LoadingState({ label = '正在加载数据...', className }: Loa
   return (
     <div
       className={cn(
-        'flex min-h-[220px] flex-col items-center justify-center gap-3 rounded-3xl border border-white/10 bg-white/5 text-slate-300',
+        'flex min-h-[220px] flex-col items-center justify-center gap-3 rounded-3xl border border-border bg-card/90 text-muted-foreground shadow-sm',
         className,
       )}
     >

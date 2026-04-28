@@ -21,14 +21,14 @@ function SelectTrigger({ className, children, ...props }: React.ComponentProps<t
     <SelectPrimitive.Trigger
       data-slot="select-trigger"
       className={cn(
-        "flex h-10 w-full items-center justify-between rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white shadow-sm transition outline-none data-[placeholder]:text-slate-400 focus:ring-2 focus:ring-primary/50 disabled:cursor-not-allowed disabled:opacity-50",
+        "flex h-10 w-full items-center justify-between rounded-xl border border-border bg-background/90 px-3 py-2 text-sm text-foreground shadow-sm transition outline-none data-[placeholder]:text-muted-foreground focus:ring-2 focus:ring-primary/25 disabled:cursor-not-allowed disabled:opacity-50",
         className,
       )}
       {...props}
     >
       {children}
       <SelectPrimitive.Icon asChild>
-        <ChevronDown className="size-4 text-slate-400" />
+        <ChevronDown className="size-4 text-muted-foreground" />
       </SelectPrimitive.Icon>
     </SelectPrimitive.Trigger>
   )
@@ -41,7 +41,7 @@ function SelectContent({ className, children, position = "popper", ...props }: R
         data-slot="select-content"
         position={position}
         className={cn(
-          "relative z-50 max-h-96 min-w-[8rem] overflow-hidden rounded-xl border border-white/10 bg-slate-950 text-white shadow-2xl data-[state=open]:animate-in data-[state=closed]:animate-out",
+          "relative z-50 max-h-96 min-w-[8rem] overflow-hidden rounded-xl border border-border bg-popover text-popover-foreground shadow-2xl shadow-slate-200/50 data-[state=open]:animate-in data-[state=closed]:animate-out",
           position === "popper" &&
             "data-[side=bottom]:translate-y-1 data-[side=left]:-translate-x-1 data-[side=right]:translate-x-1 data-[side=top]:-translate-y-1",
           className,
@@ -65,7 +65,7 @@ function SelectContent({ className, children, position = "popper", ...props }: R
 }
 
 function SelectLabel({ className, ...props }: React.ComponentProps<typeof SelectPrimitive.Label>) {
-  return <SelectPrimitive.Label className={cn("px-2 py-1.5 text-xs font-medium text-slate-400", className)} {...props} />
+  return <SelectPrimitive.Label className={cn("px-2 py-1.5 text-xs font-medium text-muted-foreground", className)} {...props} />
 }
 
 function SelectItem({ className, children, ...props }: React.ComponentProps<typeof SelectPrimitive.Item>) {
@@ -73,7 +73,7 @@ function SelectItem({ className, children, ...props }: React.ComponentProps<type
     <SelectPrimitive.Item
       data-slot="select-item"
       className={cn(
-        "relative flex w-full cursor-default select-none items-center rounded-lg py-2 pr-8 pl-3 text-sm outline-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50 data-[highlighted]:bg-primary/15 data-[highlighted]:text-white",
+        "relative flex w-full cursor-default select-none items-center rounded-lg py-2 pr-8 pl-3 text-sm outline-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50 data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground",
         className,
       )}
       {...props}
@@ -89,7 +89,7 @@ function SelectItem({ className, children, ...props }: React.ComponentProps<type
 }
 
 function SelectSeparator({ className, ...props }: React.ComponentProps<typeof SelectPrimitive.Separator>) {
-  return <SelectPrimitive.Separator className={cn("-mx-1 my-1 h-px bg-white/10", className)} {...props} />
+  return <SelectPrimitive.Separator className={cn("-mx-1 my-1 h-px bg-border", className)} {...props} />
 }
 
 function SelectScrollUpButton({ className, ...props }: React.ComponentProps<typeof SelectPrimitive.ScrollUpButton>) {

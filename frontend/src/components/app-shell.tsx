@@ -21,6 +21,7 @@ import {
 import { NavLink, Outlet, useLocation, useParams } from 'react-router-dom'
 import { toast } from 'sonner'
 
+import { ModelPickerDialog } from '@/components/ai/model-picker-dialog'
 import {
   EDITOR_AI_DRAFT_EVENT,
   dispatchEditorAICommand,
@@ -136,6 +137,7 @@ export function AppShell() {
   )
   const [availableModels, setAvailableModels] = useState<AIModelOption[]>([])
   const [isLoadingModels, setIsLoadingModels] = useState(false)
+  const [isModelDialogOpen, setIsModelDialogOpen] = useState(false)
   const [aiState, setAIState] = useState({
     instruction: DEFAULT_CONTINUE_INSTRUCTION,
     modelId: '',
@@ -462,6 +464,13 @@ export function AppShell() {
       toast.error(error instanceof Error ? error.message : '获取模型列表失败')
     } finally {
       setIsLoadingModels(false)
+    }
+  }
+
+  function handleOpenModelDialog() {
+    setIsModelDialogOpen(true)
+    if (availableModels.length === 0 && !isLoadingModels && hasSavedRuntimeKey) {
+      void handleLoadModels()
     }
   }
 
