@@ -95,6 +95,7 @@ export function AppShell() {
   const [isUtilityOpen, setIsUtilityOpen] = useState(false)
   const [activeUtilityTab, setActiveUtilityTab] = useState<UtilityTabKey>('characters')
   const [isZenMode, setIsZenMode] = useState(false)
+  const [dismissedUtilityContextAt, setDismissedUtilityContextAt] = useState<string | null>(null)
   const [editorUtilityContext, setEditorUtilityContext] = useState<EditorUtilityContext | null>(() =>
     typeof window === 'undefined' ? null : readEditorUtilityContext(),
   )
@@ -138,13 +139,6 @@ export function AppShell() {
     function syncUtilityContext() {
       const nextContext = readEditorUtilityContext()
       setEditorUtilityContext(nextContext)
-
-      if (!nextContext || nextContext.projectId !== projectId || nextContext.chapterId !== chapterId || isZenMode) {
-        return
-      }
-
-      setActiveUtilityTab('ai')
-      setIsUtilityOpen(true)
     }
 
     function handleCustomEvent(event: Event) {
@@ -152,7 +146,17 @@ export function AppShell() {
       const nextContext = customEvent.detail ?? null
       setEditorUtilityContext(nextContext)
 
-      if (!nextContext || nextContext.projectId !== projectId || nextContext.chapterId !== chapterId || isZenMode) {
+      if (!nextContext) {
+        setDismissedUtilityContextAt(null)
+        return
+      }
+
+      if (
+        nextContext.projectId !== projectId ||
+        nextContext.chapterId !== chapterId ||
+        isZenMode ||
+        nextContext.updatedAt === dismissedUtilityContextAt
+      ) {
         return
       }
 
@@ -167,7 +171,18 @@ export function AppShell() {
       window.removeEventListener('storage', syncUtilityContext)
       window.removeEventListener(EDITOR_UTILITY_CONTEXT_EVENT, handleCustomEvent as EventListener)
     }
-  }, [chapterId, isZenMode, projectId])
+  }, [chapterId, dismissedUtilityContextAt, isZenMode, projectId])
+
+  useEffect(() => {
+    if (!editorUtilityContext) {
+      setDismissedUtilityContextAt(null)
+      return
+    }
+
+    if (dismissedUtilityContextAt && dismissedUtilityContextAt !== editorUtilityContext.updatedAt) {
+      setDismissedUtilityContextAt(null)
+    }
+  }, [dismissedUtilityContextAt, editorUtilityContext])
 
   useEffect(() => {
     function handleKeydown(event: KeyboardEvent) {
@@ -341,6 +356,14 @@ export function AppShell() {
   const shouldRenderProjectTree = isProjectScoped && isProjectTreeOpen && !isZenMode
   const shouldRenderUtility = isProjectScoped && isUtilityOpen && !isZenMode
 
+  function closeUtilityDrawer() {
+    if (scopedEditorUtilityContext?.updatedAt) {
+      setDismissedUtilityContextAt(scopedEditorUtilityContext.updatedAt)
+    }
+
+    setIsUtilityOpen(false)
+  }
+
   return (
     <div className="flex h-screen bg-[#141416] text-[#E7E5E4] selection:bg-amber-500/30 selection:text-white">
       <aside className="flex w-20 shrink-0 flex-col items-center border-r border-white/5 bg-[#0f0f10] px-2 py-4">
@@ -472,7 +495,14 @@ export function AppShell() {
                       <button
                         type="button"
                         className="inline-flex size-9 items-center justify-center rounded-md border border-white/8 bg-white/5 text-[#A1A1AA] transition hover:text-white md:hidden"
-                        onClick={() => setIsUtilityOpen((prev) => !prev)}
+                        onClick={() => {
+                          if (isUtilityOpen) {
+                            closeUtilityDrawer()
+                            return
+                          }
+
+                          setIsUtilityOpen(true)
+                        }}
                         disabled={isZenMode}
                       >
                         {isUtilityOpen ? <PanelRightClose className="size-4" /> : <PanelRightOpen className="size-4" />}
@@ -480,7 +510,14 @@ export function AppShell() {
                       <button
                         type="button"
                         className="hidden h-9 items-center gap-2 rounded-md border border-white/8 bg-white/5 px-3 text-sm text-[#A1A1AA] transition hover:text-white md:inline-flex"
-                        onClick={() => setIsUtilityOpen((prev) => !prev)}
+                        onClick={() => {
+                          if (isUtilityOpen) {
+                            closeUtilityDrawer()
+                            return
+                          }
+
+                          setIsUtilityOpen(true)
+                        }}
                         disabled={isZenMode}
                       >
                         {isUtilityOpen ? <PanelRightClose className="size-4" /> : <PanelRightOpen className="size-4" />}
@@ -646,7 +683,7 @@ export function AppShell() {
                           </NavLink>
                           <button
                             type="button"
-                            onClick={() => setIsUtilityOpen(false)}
+                            onClick={closeUtilityDrawer}
                             className="inline-flex h-8 items-center justify-center rounded-md border border-white/10 px-3 text-xs text-[#A1A1AA] transition hover:text-white"
                           >
                             收起抽屉
@@ -678,7 +715,7 @@ export function AppShell() {
                         </NavLink>
                         <button
                           type="button"
-                          onClick={() => setIsUtilityOpen(false)}
+                          onClick={closeUtilityDrawer}
                           className="inline-flex h-8 items-center justify-center rounded-md border border-white/10 px-3 text-xs text-[#A1A1AA] transition hover:border-white/20 hover:text-white"
                         >
                           收起抽屉
@@ -795,7 +832,7 @@ export function AppShell() {
       {shouldRenderUtility ? (
         <div
           className="fixed inset-0 z-30 bg-black/55 xl:hidden"
-          onClick={() => setIsUtilityOpen(false)}
+          onClick={closeUtilityDrawer}
           aria-hidden="true"
         >
           <aside
@@ -823,7 +860,7 @@ export function AppShell() {
               <button
                 type="button"
                 className="inline-flex size-9 items-center justify-center rounded-md border border-white/8 bg-white/5 text-[#A1A1AA] transition hover:text-white"
-                onClick={() => setIsUtilityOpen(false)}
+                onClick={closeUtilityDrawer}
               >
                 <PanelRightClose className="size-4" />
               </button>
@@ -916,7 +953,7 @@ export function AppShell() {
                                   input: scopedEditorUtilityContext.selectedText,
                                   createdAt: new Date().toISOString(),
                                 })
-                                setIsUtilityOpen(false)
+                                closeUtilityDrawer()
                               }}
                               className={clsx(
                                 'inline-flex h-8 items-center justify-center rounded-md border px-3 text-xs transition',
@@ -940,7 +977,7 @@ export function AppShell() {
                                 input: scopedEditorUtilityContext.selectedText,
                                 createdAt: new Date().toISOString(),
                               })
-                              setIsUtilityOpen(false)
+                              closeUtilityDrawer()
                             }}
                             className="inline-flex h-8 items-center justify-center rounded-md border border-amber-500/20 bg-amber-500/10 px-3 text-xs text-amber-100 transition hover:bg-amber-500/20"
                           >
@@ -948,7 +985,7 @@ export function AppShell() {
                           </NavLink>
                           <button
                             type="button"
-                            onClick={() => setIsUtilityOpen(false)}
+                            onClick={closeUtilityDrawer}
                             className="inline-flex h-8 items-center justify-center rounded-md border border-white/10 px-3 text-xs text-[#A1A1AA] transition hover:text-white"
                           >
                             收起抽屉
@@ -962,28 +999,28 @@ export function AppShell() {
                       <div className="grid grid-cols-2 gap-2">
                         <NavLink
                           to={`/ai-toolbox?task=continue&projectId=${projectId}${chapterId ? `&chapterId=${chapterId}` : ''}`}
-                          onClick={() => setIsUtilityOpen(false)}
+                          onClick={closeUtilityDrawer}
                           className="inline-flex h-8 items-center justify-center rounded-md border border-white/10 px-3 text-xs text-[#A1A1AA] transition hover:border-white/20 hover:text-white"
                         >
                           章节续写
                         </NavLink>
                         <NavLink
                           to={`/ai-toolbox?task=rewrite&projectId=${projectId}${chapterId ? `&chapterId=${chapterId}` : ''}`}
-                          onClick={() => setIsUtilityOpen(false)}
+                          onClick={closeUtilityDrawer}
                           className="inline-flex h-8 items-center justify-center rounded-md border border-white/10 px-3 text-xs text-[#A1A1AA] transition hover:border-white/20 hover:text-white"
                         >
                           全文改写
                         </NavLink>
                         <NavLink
                           to={`/ai-toolbox?task=consistency&projectId=${projectId}${chapterId ? `&chapterId=${chapterId}` : ''}`}
-                          onClick={() => setIsUtilityOpen(false)}
+                          onClick={closeUtilityDrawer}
                           className="inline-flex h-8 items-center justify-center rounded-md border border-white/10 px-3 text-xs text-[#A1A1AA] transition hover:border-white/20 hover:text-white"
                         >
                           设定检查
                         </NavLink>
                         <button
                           type="button"
-                          onClick={() => setIsUtilityOpen(false)}
+                          onClick={closeUtilityDrawer}
                           className="inline-flex h-8 items-center justify-center rounded-md border border-white/10 px-3 text-xs text-[#A1A1AA] transition hover:border-white/20 hover:text-white"
                         >
                           收起抽屉
