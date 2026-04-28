@@ -127,9 +127,20 @@ function getTaskMeta(task: ToolboxTaskType) {
 }
 
 function buildContextText(project: ProjectDetail | undefined, chapter: Chapter | null) {
+  const world = project?.world_setting
+  const worldParts = world
+    ? [
+        world.overview?.trim() ? `世界概述：${world.overview.trim()}` : '',
+        world.rules?.trim() ? `世界规则：${world.rules.trim()}` : '',
+        world.factions?.trim() ? `势力：${world.factions.trim()}` : '',
+        world.timeline?.trim() ? `时间线：${world.timeline.trim()}` : '',
+      ].filter(Boolean)
+    : []
+
   const parts = [
     project?.title ? `项目标题：${project.title}` : '',
     project?.description?.trim() ? `项目简介：${project.description.trim()}` : '',
+    worldParts.length > 0 ? `【世界观设定】\n${worldParts.join('\n')}` : '',
     chapter?.title ? `章节标题：${chapter.title}` : '',
     chapter?.summary?.trim() ? `章节摘要：${chapter.summary.trim()}` : '',
     chapter?.notes?.trim() ? `章节备注：${chapter.notes.trim()}` : '',
@@ -357,18 +368,10 @@ export function AIToolboxPage() {
     const requestId = generation.requestId + 1
     setGeneration((prev) => ({ ...prev, result: '', isGenerating: true, requestId }))
 
-    const promptHeader = [
-      `当前任务：${taskMeta.label}`,
-      contextText ? `上下文信息：\n${contextText}` : '',
-      `用户输入：\n${input}`,
-    ]
-      .filter(Boolean)
-      .join('\n\n')
-
     const payload: AIGeneratePayload = {
       project_id: projectId || 'toolbox',
       chapter_id: chapterId || null,
-      text: promptHeader,
+      text: input,
       instruction: generation.instruction.trim() || taskMeta.defaultInstruction,
       model_provider: selectedProvider,
       model_id: selectedModelId,
@@ -499,6 +502,11 @@ export function AIToolboxPage() {
               label="上下文来源"
               title={selectedChapter ? '项目 + 章节上下文' : projectId ? '仅项目上下文' : '纯手动输入'}
               description={selectedChapter ? '已接入当前章节，可直接载入正文并回写结果。' : '当前没有章节绑定，更适合做单段文本处理。'}
+            />
+            <InfoPanel
+              label="世界观"
+              title={projectQuery.data?.world_setting ? projectQuery.data.world_setting.title : '未设定'}
+              description={projectQuery.data?.world_setting ? '后端生成时将自动注入世界观上下文。' : '当前项目尚未维护世界观，可在项目工作台中补充。'}
             />
             <InfoPanel label="当前模型" title={selectedModelId} description={`提供商：${selectedProvider}`} />
             <Link
@@ -877,6 +885,21 @@ export function AIToolboxPage() {
                 label="项目"
                 title={projectQuery.data?.title || '未指定项目'}
                 description={projectQuery.data ? `最近更新 ${formatDate(projectQuery.data.updated_at)}` : '从首页或编辑器进入时会自动带入项目上下文。'}
+              />
+              <InfoPanel
+                label="世界观"
+                title={projectQuery.data?.world_setting ? projectQuery.data.world_setting.title : '未设定'}
+                description={
+                  projectQuery.data?.world_setting
+                    ? [
+                        projectQuery.data.world_setting.overview?.trim() ? `概述：${projectQuery.data.world_setting.overview.trim().slice(0, 60)}…` : '',
+                        projectQuery.data.world_setting.rules?.trim() ? '已设定世界规则' : '',
+                        projectQuery.data.world_setting.factions?.trim() ? '已设定势力' : '',
+                      ]
+                        .filter(Boolean)
+                        .join('　') || '已维护，生成时自动注入。'
+                    : '暂无世界观，可在项目工作台中补充。'
+                }
               />
               <InfoPanel
                 label="章节"

@@ -1291,6 +1291,38 @@ export function ProjectEditorPage() {
               </section>
 
               <section className="space-y-3">
+                <div className="text-xs uppercase tracking-[0.2em] text-slate-500">上下文资产</div>
+                <AiPanelInfoCard
+                  title="世界观"
+                  description=""
+                  items={
+                    projectQuery.data?.world_setting
+                      ? [
+                          `标题：${projectQuery.data.world_setting.title}`,
+                          projectQuery.data.world_setting.overview?.trim() ? '概述：已维护' : '概述：未填写',
+                          projectQuery.data.world_setting.rules?.trim() ? '世界规则：已维护' : '世界规则：未填写',
+                          '生成时后端自动注入到 system prompt',
+                        ]
+                      : ['当前项目尚未设置世界观', '可在工作台的"世界观"板块中补充']
+                  }
+                />
+                <AiPanelInfoCard
+                  title="已关联角色"
+                  description=""
+                  items={
+                    (projectQuery.data?.project_characters ?? []).length > 0
+                      ? [
+                          ...(projectQuery.data?.project_characters ?? []).slice(0, 4).map((pc) => pc.character.name),
+                          (projectQuery.data?.project_characters ?? []).length > 4
+                            ? `……共 ${projectQuery.data?.project_characters.length} 个角色`
+                            : '生成时后端自动注入角色设定',
+                        ]
+                      : ['当前项目暂未关联角色', '可在工作台的"角色"板块中关联']
+                  }
+                />
+              </section>
+
+              <section className="space-y-3">
                 <div className="text-xs uppercase tracking-[0.2em] text-slate-500">运行方式</div>
                 <AiPanelInfoCard
                   title="全局配置入口"
