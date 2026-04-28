@@ -177,6 +177,7 @@ export function AIToolboxPage() {
   const [activeTask, setActiveTask] = useState<ToolboxTaskType>(initialTask)
   const [availableModels, setAvailableModels] = useState<AIModelOption[]>([])
   const [isLoadingModels, setIsLoadingModels] = useState(false)
+  const [isAdvancedOpen, setIsAdvancedOpen] = useState(false)
   const [history, setHistory] = useState<GenerationHistoryItem[]>([])
   const [recommendedSendMode, setRecommendedSendMode] = useState<SendBackMode>(null)
   const [generation, setGeneration] = useState<GenerationState>({
@@ -618,66 +619,90 @@ export function AIToolboxPage() {
                   <WandSparkles className="size-4 text-primary" />
                   AI 任务配置
                 </div>
-                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-slate-200">模型提供商</label>
-                    <Select value={selectedProvider} onValueChange={(value) => setGeneration((prev) => ({ ...prev, provider: value, result: '' }))}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="选择模型提供商" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {MODEL_PROVIDER_OPTIONS.map((option) => (
-                          <SelectItem key={option.value} value={option.value}>
-                            {option.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-slate-200" htmlFor="toolbox-model-id">
-                      当前任务模型
-                    </label>
-                    <Input
-                      id="toolbox-model-id"
-                      value={selectedModelId}
-                      onChange={(event) => setGeneration((prev) => ({ ...prev, modelId: event.target.value, result: '' }))}
-                      placeholder="例如 openai/gpt-5.4"
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-slate-200">模型列表</label>
-                    <Button variant="outline" className="w-full" onClick={handleLoadModels} disabled={isLoadingModels}>
-                      {isLoadingModels ? '获取中...' : '获取可选模型'}
-                    </Button>
-                  </div>
-                </div>
-
-                {availableModels.length > 0 ? (
-                  <div className="rounded-xl border border-white/10 bg-black/10 p-3 text-xs text-slate-300">
-                    <div className="mb-2">点击下方模型，直接设为当前任务模型：</div>
-                    <div className="flex flex-wrap gap-2">
-                      {availableModels.slice(0, 20).map((model) => {
-                        const isSelected = model.id === selectedModelId
-
-                        return (
-                          <button
-                            key={model.id}
-                            type="button"
-                            className={`rounded-full border px-3 py-1 transition ${
-                              isSelected ? 'border-primary bg-primary/20 text-white' : 'border-white/10 hover:border-primary hover:text-white'
-                            }`}
-                            onClick={() => setGeneration((prev) => ({ ...prev, modelId: model.id, result: '' }))}
-                          >
-                            {model.id}
-                          </button>
-                        )
-                      })}
+                <div className="rounded-xl border border-white/10 bg-black/10 p-3">
+                  <button
+                    type="button"
+                    onClick={() => setIsAdvancedOpen((prev) => !prev)}
+                    className="flex w-full items-center justify-between gap-3 text-left"
+                  >
+                    <div className="space-y-1">
+                      <div className="text-sm font-medium text-white">高级参数</div>
+                      <div className="text-xs leading-5 text-slate-400">
+                        默认沿用当前运行时配置。需要切换提供商、模型或拉取可选模型时再展开。
+                      </div>
                     </div>
-                  </div>
-                ) : null}
+                    <div className="flex items-center gap-2 text-xs text-slate-400">
+                      <span>{selectedProvider}</span>
+                      <span className="max-w-[180px] truncate">{selectedModelId}</span>
+                      <ChevronRight className={`size-4 transition ${isAdvancedOpen ? 'rotate-90 text-white' : ''}`} />
+                    </div>
+                  </button>
+
+                  {isAdvancedOpen ? (
+                    <div className="mt-4 space-y-4">
+                      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium text-slate-200">模型提供商</label>
+                          <Select value={selectedProvider} onValueChange={(value) => setGeneration((prev) => ({ ...prev, provider: value, result: '' }))}>
+                            <SelectTrigger>
+                              <SelectValue placeholder="选择模型提供商" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {MODEL_PROVIDER_OPTIONS.map((option) => (
+                                <SelectItem key={option.value} value={option.value}>
+                                  {option.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium text-slate-200" htmlFor="toolbox-model-id">
+                            当前任务模型
+                          </label>
+                          <Input
+                            id="toolbox-model-id"
+                            value={selectedModelId}
+                            onChange={(event) => setGeneration((prev) => ({ ...prev, modelId: event.target.value, result: '' }))}
+                            placeholder="例如 openai/gpt-5.4"
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium text-slate-200">模型列表</label>
+                          <Button variant="outline" className="w-full" onClick={handleLoadModels} disabled={isLoadingModels}>
+                            {isLoadingModels ? '获取中...' : '获取可选模型'}
+                          </Button>
+                        </div>
+                      </div>
+
+                      {availableModels.length > 0 ? (
+                        <div className="rounded-xl border border-white/10 bg-black/10 p-3 text-xs text-slate-300">
+                          <div className="mb-2">点击下方模型，直接设为当前任务模型：</div>
+                          <div className="flex flex-wrap gap-2">
+                            {availableModels.slice(0, 20).map((model) => {
+                              const isSelected = model.id === selectedModelId
+
+                              return (
+                                <button
+                                  key={model.id}
+                                  type="button"
+                                  className={`rounded-full border px-3 py-1 transition ${
+                                    isSelected ? 'border-primary bg-primary/20 text-white' : 'border-white/10 hover:border-primary hover:text-white'
+                                  }`}
+                                  onClick={() => setGeneration((prev) => ({ ...prev, modelId: model.id, result: '' }))}
+                                >
+                                  {model.id}
+                                </button>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </div>
 
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-slate-200" htmlFor="toolbox-instruction">
