@@ -1137,9 +1137,10 @@ export function ProjectEditorPage() {
                       <div className="text-sm font-medium text-white">当前选区的 AI 候选结果已就绪</div>
                       <p className="text-xs leading-6 text-slate-300">对比后决定接受或丢弃。</p>
                     </div>
-                    <div className="flex flex-wrap gap-2">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
                       <Button
                         size="sm"
+                        className="w-full sm:w-auto"
                         onClick={handleAcceptGeneratedText}
                         disabled={!generation.result.trim() || generation.isGenerating}
                       >
@@ -1148,6 +1149,7 @@ export function ProjectEditorPage() {
                       <Button
                         size="sm"
                         variant="outline"
+                        className="w-full sm:w-auto"
                         onClick={handleDiscardGeneratedText}
                         disabled={!generation.result.trim() && !generation.isGenerating}
                       >
@@ -1265,22 +1267,22 @@ export function ProjectEditorPage() {
                     需要更大工作区时可切到 AI 工具箱。
                   </p>
                 </div>
-                <div className="mt-3 flex flex-wrap gap-2">
+                <div className="mt-3 grid gap-2 sm:grid-cols-3">
                   <Link
                     to={`/ai-toolbox?task=continue&projectId=${projectId}&chapterId=${chapterId}`}
-                    className="inline-flex h-8 items-center justify-center rounded-md bg-primary px-3 text-xs font-medium text-primary-foreground transition hover:opacity-90"
+                    className="inline-flex h-8 w-full items-center justify-center rounded-md bg-primary px-3 text-xs font-medium text-primary-foreground transition hover:opacity-90"
                   >
                     续写任务
                   </Link>
                   <Link
                     to={`/ai-toolbox?task=rewrite&projectId=${projectId}&chapterId=${chapterId}`}
-                    className="inline-flex h-8 items-center justify-center rounded-md border border-white/10 px-3 text-xs text-white transition hover:bg-white/10"
+                    className="inline-flex h-8 w-full items-center justify-center rounded-md border border-white/10 px-3 text-xs text-white transition hover:bg-white/10"
                   >
                     改写任务
                   </Link>
                   <Link
                     to={`/ai-toolbox?task=consistency&projectId=${projectId}&chapterId=${chapterId}`}
-                    className="inline-flex h-8 items-center justify-center rounded-md border border-white/10 px-3 text-xs text-white transition hover:bg-white/10"
+                    className="inline-flex h-8 w-full items-center justify-center rounded-md border border-white/10 px-3 text-xs text-white transition hover:bg-white/10"
                   >
                     设定检查
                   </Link>
@@ -1309,13 +1311,14 @@ export function ProjectEditorPage() {
               </section>
             </div>
 
-            <div className="flex flex-wrap gap-2">
-              <Button variant="outline" size="sm" onClick={() => setIsProviderConfigOpen(true)}>
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+              <Button className="w-full sm:w-auto" variant="outline" size="sm" onClick={() => setIsProviderConfigOpen(true)}>
                 配置运行时默认值
               </Button>
               <Button
                 variant="outline"
                 size="sm"
+                className="w-full sm:w-auto"
                 onClick={async () => {
                   setIsLoadingModels(true)
                   try {
@@ -1428,12 +1431,12 @@ export function ProjectEditorPage() {
                 />
               </div>
 
-              <div className="flex flex-wrap gap-3">
-                <Button className="flex-1" onClick={handleGenerate} disabled={generation.isGenerating || saveChapterMutation.isPending}>
+              <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+                <Button className="w-full sm:flex-1" onClick={handleGenerate} disabled={generation.isGenerating || saveChapterMutation.isPending}>
                   {generation.isGenerating ? <LoaderCircle className="size-4 animate-spin" /> : <Bot className="size-4" />}
                   {generation.isGenerating ? '生成中...' : '开始 AI 续写'}
                 </Button>
-                <Button variant="outline" onClick={handleStopGeneration} disabled={!generation.isGenerating}>
+                <Button className="w-full sm:w-auto" variant="outline" onClick={handleStopGeneration} disabled={!generation.isGenerating}>
                   停止生成
                 </Button>
               </div>
@@ -1568,11 +1571,16 @@ export function ProjectEditorPage() {
 
             <section className="space-y-3">
               <div className="text-xs uppercase tracking-[0.2em] text-slate-500">执行结果</div>
-              <div className="flex flex-wrap gap-3">
-                <Button onClick={handleAcceptGeneratedText} disabled={!generation.result.trim() || generation.isGenerating}>
+              <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+                <Button className="w-full sm:w-auto" onClick={handleAcceptGeneratedText} disabled={!generation.result.trim() || generation.isGenerating}>
                   {getAcceptButtonLabel(generationOrigin, selectionContext)}
                 </Button>
-                <Button variant="outline" onClick={handleDiscardGeneratedText} disabled={!generation.result.trim() && !generation.isGenerating}>
+                <Button
+                  className="w-full sm:w-auto"
+                  variant="outline"
+                  onClick={handleDiscardGeneratedText}
+                  disabled={!generation.result.trim() && !generation.isGenerating}
+                >
                   丢弃结果
                 </Button>
               </div>
