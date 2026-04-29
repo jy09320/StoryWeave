@@ -259,7 +259,12 @@ class AIService:
             f"{context_block}"
         )
 
-    async def resolve_runtime_config(self, db: AsyncSession, requested_provider: str, requested_model_id: str) -> dict[str, str | None]:
+    async def resolve_runtime_config(
+        self,
+        db: AsyncSession,
+        requested_provider: str | None,
+        requested_model_id: str | None,
+    ) -> dict[str, str | None]:
         config = await runtime_ai_config_service.get_effective_config(db)
         provider = requested_provider or str(config["provider"] or "openai")
         model_id = requested_model_id or str(config["model_id"] or "gpt-4o")
@@ -482,6 +487,38 @@ class AIService:
             async for text_chunk in stream.text_stream:
                 yield text_chunk
 
+    async def generate_text_anthropic(
+        self,
+        *,
+        api_key: str | None,
+        base_url: str | None,
+        text: str,
+        instruction: str,
+        model: str,
+        temperature: float,
+        max_tokens: int,
+    ) -> str:
+        client = self.get_anthropic_client(api_key, base_url)
+        response = await client.messages.create(
+            model=model,
+            system=instruction,
+            messages=[{"role": "user", "content": text}],
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
+
+        content = getattr(response, "content", None) or []
+        texts: list[str] = []
+        for item in content:
+            text_value = getattr(item, "text", None)
+            if isinstance(text_value, str) and text_value:
+                texts.append(text_value)
+
+        if texts:
+            return "".join(texts)
+
+        raise RuntimeError("Anthropic response content is empty")
+
     async def generate_stream(
         self,
         db: AsyncSession,
@@ -531,6 +568,53 @@ class AIService:
             max_tokens=max_tokens,
         ):
             yield chunk
+
+    async def generate_text(
+        self,
+        db: AsyncSession,
+        *,
+        project_id: str,
+        chapter_id: str | None,
+        text: str,
+        instruction: str,
+        model_provider: str | None,
+        model_id: str | None,
+        temperature: float,
+        max_tokens: int,
+    ) -> str:
+        resolved_instruction = await self.build_generation_instruction(
+            db,
+            project_id=project_id,
+            chapter_id=chapter_id,
+            text=text,
+            instruction=instruction,
+        )
+        runtime_config = await self.resolve_runtime_config(db, model_provider, model_id)
+        provider = str(runtime_config["provider"])
+        resolved_model_id = str(runtime_config["model_id"])
+        api_key = runtime_config["api_key"]
+        base_url = runtime_config["base_url"]
+
+        if provider == "anthropic":
+            return await self.generate_text_anthropic(
+                api_key=api_key,
+                base_url=base_url,
+                text=text,
+                instruction=resolved_instruction,
+                model=resolved_model_id,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+
+        return await self._generate_openai_non_stream_text(
+            api_key=api_key,
+            base_url=base_url,
+            text=text,
+            instruction=resolved_instruction,
+            model=resolved_model_id,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
 
 
 ai_service = AIService()

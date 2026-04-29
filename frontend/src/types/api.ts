@@ -139,6 +139,24 @@ export interface WorldSettingPayload {
   extra_notes?: string | null
 }
 
+export interface ProjectImportPayload {
+  source_text: string
+  guidance?: string | null
+  model_provider?: string | null
+  model_id?: string | null
+}
+
+export interface ProjectImportResult {
+  created_character_count: number
+  updated_character_count: number
+  linked_character_count: number
+  imported_character_count: number
+  world_setting_updated: boolean
+  notes: string[]
+  characters: ProjectCharacter[]
+  world_setting: WorldSetting | null
+}
+
 export interface ChapterReorderItem {
   id: string
   order_index: number

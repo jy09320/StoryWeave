@@ -161,6 +161,7 @@ export function AIToolboxPage() {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const initialTask = (searchParams.get('task') as ToolboxTaskType | null) ?? 'continue'
+  const initialInstruction = searchParams.get('instruction')?.trim() ?? ''
   const projectId = searchParams.get('projectId') ?? ''
   const chapterId = searchParams.get('chapterId') ?? ''
 
@@ -171,7 +172,7 @@ export function AIToolboxPage() {
   const [history, setHistory] = useState<GenerationHistoryItem[]>([])
   const [recommendedSendMode, setRecommendedSendMode] = useState<SendBackMode>(null)
   const [generation, setGeneration] = useState<GenerationState>({
-    instruction: getTaskMeta(initialTask).defaultInstruction,
+    instruction: initialInstruction || getTaskMeta(initialTask).defaultInstruction,
     provider: 'openai',
     modelId: 'gpt-4o',
     input: '',
@@ -284,6 +285,7 @@ export function AIToolboxPage() {
   function syncSearchParams(nextTask: ToolboxTaskType) {
     const next = new URLSearchParams(searchParams)
     next.set('task', nextTask)
+    next.delete('instruction')
     setSearchParams(next, { replace: true })
   }
 
@@ -299,6 +301,18 @@ export function AIToolboxPage() {
       input: task === 'continue' ? selectedChapter?.plain_text ?? prev.input : prev.input,
     }))
   }
+
+  useEffect(() => {
+    const nextInstruction = searchParams.get('instruction')?.trim()
+    if (!nextInstruction) {
+      return
+    }
+
+    setGeneration((prev) => ({
+      ...prev,
+      instruction: nextInstruction,
+    }))
+  }, [searchParams])
 
   async function handleLoadModels() {
     setIsLoadingModels(true)

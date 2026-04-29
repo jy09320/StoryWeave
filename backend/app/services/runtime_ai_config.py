@@ -1,4 +1,4 @@
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -68,14 +68,29 @@ class RuntimeAIConfigService:
     ) -> AIRuntimeSetting:
         current = await self.get_active_setting(db)
         latest_saved_api_key = await self.get_latest_saved_api_key(db)
+        resolved_api_key = api_key or (current.api_key if current else None) or latest_saved_api_key
+
+        await db.execute(
+            update(AIRuntimeSetting)
+            .where(AIRuntimeSetting.is_active.is_(True))
+            .values(is_active=False)
+        )
+
         if current:
-            current.is_active = False
+            current.provider = provider
+            current.model_id = model_id
+            current.base_url = base_url
+            current.api_key = resolved_api_key
+            current.is_active = True
+            await db.commit()
+            await db.refresh(current)
+            return current
 
         next_setting = AIRuntimeSetting(
             provider=provider,
             model_id=model_id,
             base_url=base_url,
-            api_key=api_key or (current.api_key if current else None) or latest_saved_api_key,
+            api_key=resolved_api_key,
             is_active=True,
         )
         db.add(next_setting)

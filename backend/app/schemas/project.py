@@ -267,6 +267,89 @@ class WorldSettingUpsert(BaseModel):
         return normalize_optional_text(value)
 
 
+class ProjectImportCharacterDraft(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+    alias: str | None = Field(default=None, max_length=200)
+    description: str | None = Field(default=None, max_length=4000)
+    profile: str | None = Field(default=None, max_length=4000)
+    personality: str | None = Field(default=None, max_length=4000)
+    background: str | None = Field(default=None, max_length=4000)
+    relationship_notes: str | None = Field(default=None, max_length=4000)
+    tags: str | None = Field(default=None, max_length=500)
+    role_label: str | None = Field(default=None, max_length=100)
+    project_summary: str | None = Field(default=None, max_length=2000)
+
+    @field_validator("name")
+    @classmethod
+    def validate_import_character_name(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("Character name cannot be empty")
+        return stripped
+
+    @field_validator(
+        "alias",
+        "description",
+        "profile",
+        "personality",
+        "background",
+        "relationship_notes",
+        "tags",
+        "role_label",
+        "project_summary",
+        mode="before",
+    )
+    @classmethod
+    def normalize_import_character_fields(cls, value: str | None) -> str | None:
+        return normalize_optional_text(value)
+
+
+class ProjectImportWorldSettingDraft(BaseModel):
+    title: str | None = Field(default=None, max_length=200)
+    overview: str | None = Field(default=None, max_length=8000)
+    rules: str | None = Field(default=None, max_length=8000)
+    factions: str | None = Field(default=None, max_length=8000)
+    locations: str | None = Field(default=None, max_length=8000)
+    timeline: str | None = Field(default=None, max_length=8000)
+    extra_notes: str | None = Field(default=None, max_length=8000)
+
+    @field_validator("title", mode="before")
+    @classmethod
+    def normalize_import_world_title(cls, value: str | None) -> str | None:
+        return normalize_optional_text(value)
+
+    @field_validator("overview", "rules", "factions", "locations", "timeline", "extra_notes", mode="before")
+    @classmethod
+    def normalize_import_world_fields(cls, value: str | None) -> str | None:
+        return normalize_optional_text(value)
+
+
+class ProjectImportAnalysisResult(BaseModel):
+    characters: list[ProjectImportCharacterDraft] = Field(default_factory=list)
+    world_setting: ProjectImportWorldSettingDraft | None = None
+    notes: list[str] = Field(default_factory=list)
+
+
+class ProjectImportRequest(BaseModel):
+    source_text: str = Field(min_length=1, max_length=30000)
+    guidance: str | None = Field(default=None, max_length=2000)
+    model_provider: str | None = Field(default=None, max_length=50)
+    model_id: str | None = Field(default=None, max_length=100)
+
+    @field_validator("source_text")
+    @classmethod
+    def validate_import_source_text(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("Import source text cannot be empty")
+        return stripped
+
+    @field_validator("guidance", "model_provider", "model_id", mode="before")
+    @classmethod
+    def normalize_import_request_fields(cls, value: str | None) -> str | None:
+        return normalize_optional_text(value)
+
+
 class ChapterResponse(BaseModel):
     id: str
     project_id: str
@@ -340,6 +423,17 @@ class WorldSettingResponse(BaseModel):
     updated_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class ProjectImportResponse(BaseModel):
+    created_character_count: int
+    updated_character_count: int
+    linked_character_count: int
+    imported_character_count: int
+    world_setting_updated: bool
+    notes: list[str] = Field(default_factory=list)
+    characters: list[ProjectCharacterResponse] = Field(default_factory=list)
+    world_setting: WorldSettingResponse | None = None
 
 
 class ProjectResponse(BaseModel):

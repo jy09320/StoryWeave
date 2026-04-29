@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { ChevronLeft, History, LoaderCircle, Save } from 'lucide-react'
+import { ChevronDown, ChevronLeft, History, LoaderCircle, Save } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { RichTextEditor, type RichTextEditorHandle } from '@/components/editor/rich-text-editor'
@@ -61,6 +61,10 @@ interface ToolboxResultDraft {
   sourceInput: string
   createdAt: string
   mode: ToolboxDraftApplyMode
+}
+
+function getChapterStatusLabel(status: ChapterStatus) {
+  return CHAPTER_STATUS_OPTIONS.find((option) => option.value === status)?.label ?? '草稿'
 }
 
 function getChapterById(project: ProjectDetail | undefined, chapterId: string | undefined) {
@@ -135,6 +139,7 @@ export function ProjectEditorPage() {
   const autosaveTimerRef = useRef<number | null>(null)
   const allowNextNavigationRef = useRef(false)
   const editorRef = useRef<RichTextEditorHandle | null>(null)
+  const statusMenuRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
     return () => {
@@ -147,6 +152,7 @@ export function ProjectEditorPage() {
   const [drafts, setDrafts] = useState<Record<string, EditorFormState>>({})
   const [dirtyChapterIds, setDirtyChapterIds] = useState<Record<string, boolean>>({})
   const [isVersionDialogOpen, setIsVersionDialogOpen] = useState(false)
+  const [isStatusMenuOpen, setIsStatusMenuOpen] = useState(false)
 
   const projectQuery = useQuery<ProjectDetail, Error>({
     queryKey: ['project', projectId],
@@ -421,7 +427,6 @@ export function ProjectEditorPage() {
   const activeForm = chapter ? drafts[chapter.id] ?? buildEditorForm(chapter) : buildEditorForm(null)
   const isDirty = chapter ? (dirtyChapterIds[chapter.id] ?? false) : false
   const shouldBlockNavigation = Boolean(chapter) && (isDirty || saveChapterMutation.isPending)
-  const wordCount = countWords(activeForm.plainText)
 
   useEffect(() => {
     if (!projectId || !chapter?.id) {
@@ -601,6 +606,23 @@ ${nextText}` : nextText
     }
   }, [shouldBlockNavigation])
 
+  useEffect(() => {
+    if (!isStatusMenuOpen) {
+      return
+    }
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!statusMenuRef.current?.contains(event.target as Node)) {
+        setIsStatusMenuOpen(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handlePointerDown)
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown)
+    }
+  }, [isStatusMenuOpen])
+
 
   if (!projectId || !chapterId) {
     return (
@@ -657,7 +679,7 @@ ${nextText}` : nextText
         <Card className="overflow-hidden border border-border bg-card/95 shadow-[0_18px_44px_rgba(148,163,184,0.18)]">
           <CardHeader className="gap-5 border-b border-border bg-background/72 px-6 py-5">
             <div className="space-y-4">
-              <div className="space-y-3">
+              <div className="space-y-4">
                 <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                   <Link to={`/projects/${projectId}`} className="inline-flex items-center gap-1 hover:text-foreground">
                     <ChevronLeft className="size-4" />
@@ -666,99 +688,105 @@ ${nextText}` : nextText
                   <span>·</span>
                   <span>{projectQuery.data.title}</span>
                 </div>
-                <div className="flex justify-center">
-                  <input
-                    value={activeForm.title}
-                    onChange={(event) => updateFormField('title', event.target.value)}
-                    placeholder="????????"
-                    maxLength={200}
-                    className="w-full max-w-4xl border-none bg-transparent px-0 text-center text-4xl font-semibold tracking-tight text-foreground outline-none placeholder:text-muted-foreground"
-                  />
-                </div>
-              </div>
-              <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground">
-                <div className="flex flex-wrap items-center gap-3 rounded-[20px] border border-border bg-background/92 px-3 py-2">
-                  <span className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">章节状态</span>
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    {CHAPTER_STATUS_OPTIONS.map((option) => {
-                      const active = activeForm.status === option.value
-
-                      return (
+                <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-start">
+                  <div className="min-w-0 space-y-3 md:pr-4">
+                    <input
+                      value={activeForm.title}
+                      onChange={(event) => updateFormField('title', event.target.value)}
+                      placeholder="未命名章节"
+                      maxLength={200}
+                      className="w-full border-none bg-transparent px-0 text-3xl font-semibold tracking-tight text-foreground outline-none placeholder:text-muted-foreground md:text-center md:text-4xl"
+                    />
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-muted-foreground md:justify-center">
+                      <div className="relative" ref={statusMenuRef}>
                         <button
-                          key={option.value}
                           type="button"
-                          onClick={() => handleStatusChange(option.value)}
-                          className={cn(
-                            'rounded-full px-3 py-1.5 text-xs font-medium transition',
-                            active
-                              ? 'bg-primary text-primary-foreground'
-                              : 'text-muted-foreground hover:bg-muted hover:text-foreground',
-                          )}
+                          onClick={() => setIsStatusMenuOpen((open) => !open)}
+                          className="inline-flex h-8 items-center gap-2 rounded-full border border-border/80 bg-background px-3 text-sm font-medium text-foreground transition hover:border-primary/35 hover:bg-background"
                         >
-                          {option.label}
+                          <span className="rounded-full bg-primary px-2.5 py-0.5 text-xs font-medium text-primary-foreground">
+                            {getChapterStatusLabel(activeForm.status)}
+                          </span>
+                          <ChevronDown
+                            className={cn('size-4 text-muted-foreground transition', isStatusMenuOpen && 'rotate-180')}
+                          />
                         </button>
-                      )
-                    })}
+                        {isStatusMenuOpen ? (
+                          <div className="absolute left-0 top-[calc(100%+10px)] z-20 min-w-[220px] rounded-2xl border border-border bg-popover/98 p-2 text-sm text-popover-foreground shadow-[0_22px_54px_rgba(15,23,42,0.18)] backdrop-blur">
+                            <div className="px-2 pb-1 pt-1 text-[11px] tracking-[0.18em] text-muted-foreground">切换章节状态</div>
+                            <div className="space-y-1">
+                              {CHAPTER_STATUS_OPTIONS.map((option) => {
+                                const active = activeForm.status === option.value
+
+                                return (
+                                  <button
+                                    key={option.value}
+                                    type="button"
+                                    onClick={() => handleStatusChange(option.value)}
+                                    className={cn(
+                                      'flex w-full items-center justify-between rounded-xl px-3 py-2 text-left transition',
+                                      active ? 'bg-primary/10 text-primary' : 'text-foreground/85 hover:bg-accent hover:text-accent-foreground',
+                                    )}
+                                  >
+                                    <span>{option.label}</span>
+                                    {active ? <span className="text-xs font-medium">当前</span> : null}
+                                  </button>
+                                )
+                              })}
+                            </div>
+                          </div>
+                        ) : null}
+                      </div>
+                      <span className="text-sm text-muted-foreground/90">最近更新 {formatDate(chapter.updated_at)}</span>
+                    </div>
+                  </div>
+                  <div className="flex justify-start md:justify-end">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-10 rounded-xl border-border bg-background px-4 text-foreground/85"
+                      onClick={() => setIsVersionDialogOpen(true)}
+                    >
+                      <History className="size-4" />
+                      版本历史
+                    </Button>
                   </div>
                 </div>
-                <span className="rounded-full border border-border bg-background px-3 py-1.5">{wordCount} 字</span>
-                <span className="rounded-full border border-border bg-background px-3 py-1.5">最近更新 {formatDate(chapter.updated_at)}</span>
-                <Button variant="outline" size="sm" className="h-10 rounded-xl border-border bg-background px-4 text-foreground/85" onClick={() => setIsVersionDialogOpen(true)}>
-                  <History className="size-4" />
-                  版本历史
-                </Button>
               </div>
             </div>
           </CardHeader>
-          <CardContent className="space-y-5 bg-transparent p-5">
-            <div className="rounded-[24px] border border-border bg-background/92 p-5 shadow-sm">
-              <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-[20px] border border-border bg-muted/45 px-4 py-3">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="rounded-xl bg-primary/10 px-3 py-2 text-sm font-medium text-primary">续写正文</span>
-                  <span className="rounded-xl bg-background px-3 py-2 text-sm text-muted-foreground ring-1 ring-border">AI检测</span>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="rounded-full border border-border bg-background px-3 py-1.5 text-xs text-muted-foreground">跨章滚动</span>
-                  <span className="rounded-full border border-border bg-background px-3 py-1.5 text-xs text-muted-foreground">智能补全</span>
-                </div>
-              </div>
-              <div className="space-y-3">
-                <label className="text-sm font-medium text-foreground/85" htmlFor="chapter-content">
-                  写作区
-                </label>
-                <RichTextEditor
-                  ref={editorRef}
-                  value={activeForm.contentHtml}
-                  mentionItems={mentionItems}
-                  onSelectionChange={() => {}}
-                  onBubbleAction={handleBubbleAction}
-                  onSlashCommand={(command) => {
-                    writeEditorUtilityContext(null)
-                    if (command === 'continue') {
-                      toast.success('已切换到章节续写模式')
-                      return
-                    }
+          <CardContent className="space-y-0 bg-transparent px-0 py-0">
+            <section className="px-6 py-8">
+              <RichTextEditor
+                ref={editorRef}
+                value={activeForm.contentHtml}
+                mentionItems={mentionItems}
+                onSelectionChange={() => {}}
+                onBubbleAction={handleBubbleAction}
+                onSlashCommand={(command) => {
+                  writeEditorUtilityContext(null)
+                  if (command === 'continue') {
+                    toast.success('已切换到章节续写模式')
+                    return
+                  }
 
-                    const task = command === 'consistency' ? 'consistency' : 'rewrite'
-                    writeToolboxInputDraft({
-                      task,
-                      projectId: projectId ?? null,
-                      chapterId: chapterId ?? null,
-                      input: activeForm.plainText,
-                      createdAt: new Date().toISOString(),
-                    })
-                    navigate(`/ai-toolbox?task=${task}&projectId=${projectId}&chapterId=${chapterId}`)
-                  }}
-                  onChange={handleEditorChange}
-                  className="border-0 bg-transparent"
-                  placeholder="从这一行开始写标题后的正文。右侧的 AI 面板和参考抽屉会作为辅助层存在，不再挤占主写作区。"
-                />
-              </div>
+                  const task = command === 'consistency' ? 'consistency' : 'rewrite'
+                  writeToolboxInputDraft({
+                    task,
+                    projectId: projectId ?? null,
+                    chapterId: chapterId ?? null,
+                    input: activeForm.plainText,
+                    createdAt: new Date().toISOString(),
+                  })
+                  navigate(`/ai-toolbox?task=${task}&projectId=${projectId}&chapterId=${chapterId}`)
+                }}
+                onChange={handleEditorChange}
+                className="bg-[#fffdfa] shadow-[0_1px_2px_rgba(16,34,53,0.04)]"
+                placeholder="从这里开始写正文。右侧 AI 面板和参考抽屉作为辅助层存在，不再挤占主写作空间。"
+              />
+            </section>
 
-
-            </div>
-
-            <div className="rounded-[24px] border border-border bg-background/92 p-5 shadow-sm">
+            <section className="border-t border-border px-6 py-6">
               <label className="mb-2 block text-sm font-medium text-foreground/85" htmlFor="chapter-notes">
                 章节备注
               </label>
@@ -770,7 +798,7 @@ ${nextText}` : nextText
                 className="min-h-[132px] rounded-2xl border-border bg-background text-foreground placeholder:text-muted-foreground"
                 placeholder="记录当前章节目标、伏笔提醒或 AI 指令草稿。"
               />
-            </div>
+            </section>
           </CardContent>
           <CardFooter className="flex flex-wrap items-center justify-between gap-3 border-t border-border bg-background/88 px-6 py-4">
             <div className="text-xs text-muted-foreground">

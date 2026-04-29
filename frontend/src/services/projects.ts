@@ -12,6 +12,8 @@ import type {
   ProjectCharacterPayload,
   ProjectCharacterUpdatePayload,
   ProjectDetail,
+  ProjectImportPayload,
+  ProjectImportResult,
   ProjectPayload,
   WorldSetting,
   WorldSettingPayload,
@@ -121,5 +123,10 @@ export async function getProjectWorldSetting(projectId: string) {
 
 export async function updateProjectWorldSetting(projectId: string, payload: WorldSettingPayload) {
   const { data } = await apiClient.put<WorldSetting>(`/projects/${projectId}/world-setting`, payload)
+  return data
+}
+
+export async function importProjectKnowledge(projectId: string, payload: ProjectImportPayload) {
+  const { data } = await apiClient.post<ProjectImportResult>(`/projects/${projectId}/import`, payload)
   return data
 }
