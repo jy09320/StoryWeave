@@ -406,7 +406,15 @@ export function AppShell() {
     if (location.pathname === '/characters') {
       return {
         eyebrow: 'Characters',
-        title: '角色资产库',
+        title: '全局角色库',
+        description: '',
+      }
+    }
+
+    if (isProjectScoped && location.pathname.endsWith('/characters')) {
+      return {
+        eyebrow: project?.title ?? '项目角色库',
+        title: '角色库',
         description: '',
       }
     }
@@ -913,6 +921,11 @@ export function AppShell() {
               <SectionLabel>导航</SectionLabel>
               <ProjectTreeLink to={`/projects/${projectId}`} label="项目大盘" active={location.pathname === `/projects/${projectId}`} />
               <ProjectTreeLink
+                to={`/projects/${projectId}/characters`}
+                label="角色库"
+                active={location.pathname === `/projects/${projectId}/characters`}
+              />
+              <ProjectTreeLink
                 to={`/projects/${projectId}/world`}
                 label="世界观设定"
                 active={location.pathname === `/projects/${projectId}/world`}
@@ -940,7 +953,6 @@ export function AppShell() {
 
             <div className="mt-6 space-y-1">
               <SectionLabel>辅助入口</SectionLabel>
-              <ProjectTreeLink to="/characters" label="全局角色库" active={location.pathname === '/characters'} />
               <ProjectTreeStatic label="回收站" meta="" />
             </div>
           </div>
@@ -1122,10 +1134,10 @@ export function AppShell() {
                     <SidebarHint>当前项目还没有已绑定角色。</SidebarHint>
                   )}
                   <ProjectTreeLink
-                    to="/characters"
-                    label="打开角色库"
+                    to={`/projects/${projectId}/characters`}
+                    label="打开项目角色库"
                     meta="专页支持返回当前章节"
-                    active={location.pathname === '/characters'}
+                    active={location.pathname === `/projects/${projectId}/characters`}
                   />
                 </div>
               ) : null}
@@ -1216,6 +1228,12 @@ export function AppShell() {
                   onNavigate={() => setIsProjectTreeOpen(false)}
                 />
                 <ProjectTreeLink
+                  to={`/projects/${projectId}/characters`}
+                  label="角色库"
+                  active={location.pathname === `/projects/${projectId}/characters`}
+                  onNavigate={() => setIsProjectTreeOpen(false)}
+                />
+                <ProjectTreeLink
                   to={`/projects/${projectId}/world`}
                   label="世界观设定"
                   active={location.pathname === `/projects/${projectId}/world`}
@@ -1245,12 +1263,6 @@ export function AppShell() {
 
               <div className="mt-5 space-y-1">
                 <SectionLabel>辅助入口</SectionLabel>
-                <ProjectTreeLink
-                  to="/characters"
-                  label="全局角色库"
-                  active={location.pathname === '/characters'}
-                  onNavigate={() => setIsProjectTreeOpen(false)}
-                />
                 <ProjectTreeStatic label="回收站" meta="" />
               </div>
             </div>
@@ -1332,10 +1344,10 @@ export function AppShell() {
                     <SidebarHint>当前项目还没有已绑定角色。</SidebarHint>
                   )}
                   <ProjectTreeLink
-                    to="/characters"
-                    label="打开角色库"
+                    to={`/projects/${projectId}/characters`}
+                    label="打开项目角色库"
                     meta="专页支持返回当前章节"
-                    active={location.pathname === '/characters'}
+                    active={location.pathname === `/projects/${projectId}/characters`}
                     onNavigate={closeUtilityDrawer}
                   />
                 </div>

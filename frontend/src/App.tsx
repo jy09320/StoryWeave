@@ -37,6 +37,10 @@ const router = createBrowserRouter([
         element: <ProjectWorkspacePage />,
       },
       {
+        path: 'projects/:projectId/characters',
+        element: <CharactersPage />,
+      },
+      {
         path: 'projects/:projectId/editor/:chapterId',
         element: <ProjectEditorPage />,
       },
