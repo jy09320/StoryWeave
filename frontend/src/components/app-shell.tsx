@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { clsx } from 'clsx'
 import {
+  ArrowLeft,
   Bot,
   BookCopy,
   ChevronRight,
@@ -12,13 +13,12 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   PanelRightClose,
-  PanelRightOpen,
   SendHorizontal,
   Settings2,
   Sparkles,
   Users2,
 } from 'lucide-react'
-import { NavLink, Outlet, useLocation, useParams } from 'react-router-dom'
+import { Link, NavLink, Outlet, useLocation, useParams } from 'react-router-dom'
 import { toast } from 'sonner'
 
 import { ModelPickerDialog } from '@/components/ai/model-picker-dialog'
@@ -45,7 +45,7 @@ const primaryNavItems = [
   { to: '/settings', label: '设置', icon: Settings2, end: false },
 ]
 
-type UtilityTabKey = 'characters' | 'world' | 'ai'
+type UtilityTabKey = 'characters' | 'world'
 type AIChatMessageRole = 'assistant' | 'user'
 
 interface AIChatMessage {
@@ -57,7 +57,6 @@ interface AIChatMessage {
 const utilityTabs: Array<{ key: UtilityTabKey; label: string }> = [
   { key: 'characters', label: '角色' },
   { key: 'world', label: '设定' },
-  { key: 'ai', label: 'AI' },
 ]
 
 const actionLabelMap = {
@@ -73,6 +72,11 @@ const FALLBACK_MODEL_BY_PROVIDER: Record<string, string> = {
   openai: 'gpt-4o',
   anthropic: 'claude-3-5-sonnet-latest',
 }
+
+const DEFAULT_AI_PANEL_WIDTH = 420
+const MIN_AI_PANEL_WIDTH = 320
+const MAX_AI_PANEL_WIDTH = 640
+const EDITOR_SHORTCUT_HINT_STORAGE_KEY = 'storyweave-editor-shortcut-hint-dismissed'
 
 function getAIInstruction(context: EditorUtilityContext | null) {
   if (!context || context.action !== 'expand') {
@@ -126,7 +130,10 @@ export function AppShell() {
   const { projectId, chapterId } = useParams<{ projectId?: string; chapterId?: string }>()
   const [isProjectTreeOpen, setIsProjectTreeOpen] = useState(true)
   const [isUtilityOpen, setIsUtilityOpen] = useState(false)
+  const [isAIPanelOpen, setIsAIPanelOpen] = useState(false)
   const [activeUtilityTab, setActiveUtilityTab] = useState<UtilityTabKey>('characters')
+  const [aiPanelWidth, setAIPanelWidth] = useState(DEFAULT_AI_PANEL_WIDTH)
+  const [aiResizeState, setAIResizeState] = useState<{ startX: number; startWidth: number } | null>(null)
   const [isZenMode, setIsZenMode] = useState(false)
   const [dismissedUtilityContextAt, setDismissedUtilityContextAt] = useState<string | null>(null)
   const [editorUtilityContext, setEditorUtilityContext] = useState<EditorUtilityContext | null>(() =>
@@ -138,6 +145,7 @@ export function AppShell() {
   const [availableModels, setAvailableModels] = useState<AIModelOption[]>([])
   const [isLoadingModels, setIsLoadingModels] = useState(false)
   const [isModelDialogOpen, setIsModelDialogOpen] = useState(false)
+  const [isShortcutMenuOpen, setIsShortcutMenuOpen] = useState(false)
   const [aiState, setAIState] = useState({
     instruction: DEFAULT_CONTINUE_INSTRUCTION,
     modelId: '',
@@ -146,6 +154,7 @@ export function AppShell() {
     requestId: 0,
   })
   const [aiMessages, setAIMessages] = useState<AIChatMessage[]>([])
+  const shortcutMenuRef = useRef<HTMLDivElement | null>(null)
 
   const isProjectScoped = Boolean(projectId) && location.pathname.startsWith(`/projects/${projectId}`)
   const isEditorRoute = isProjectScoped && location.pathname.includes('/editor/')
@@ -168,6 +177,7 @@ export function AppShell() {
     if (!isProjectScoped) {
       setIsProjectTreeOpen(false)
       setIsUtilityOpen(false)
+      setIsAIPanelOpen(false)
       setIsZenMode(false)
     } else {
       setIsProjectTreeOpen(true)
@@ -181,13 +191,63 @@ export function AppShell() {
   }, [isEditorRoute, isZenMode])
 
   useEffect(() => {
+    if (!isEditorRoute) {
+      setIsShortcutMenuOpen(false)
+    }
+  }, [isEditorRoute])
+
+  useEffect(() => {
+    if (!isEditorRoute || typeof window === 'undefined') {
+      return
+    }
+
+    if (window.localStorage.getItem(EDITOR_SHORTCUT_HINT_STORAGE_KEY) === '1') {
+      return
+    }
+
+    toast('快捷键已启用', {
+      id: 'editor-shortcut-hint',
+      description: 'Ctrl+B 项目栏，Ctrl+J 参考栏，Ctrl+L AI 面板',
+      duration: 5000,
+    })
+    window.localStorage.setItem(EDITOR_SHORTCUT_HINT_STORAGE_KEY, '1')
+  }, [isEditorRoute])
+
+  useEffect(() => {
     if (!isZenMode) {
       return
     }
 
     setIsProjectTreeOpen(false)
     setIsUtilityOpen(false)
+    setIsAIPanelOpen(false)
+    setIsShortcutMenuOpen(false)
   }, [isZenMode])
+
+  useEffect(() => {
+    if (!isShortcutMenuOpen) {
+      return
+    }
+
+    function handlePointerDown(event: PointerEvent) {
+      if (!shortcutMenuRef.current?.contains(event.target as Node)) {
+        setIsShortcutMenuOpen(false)
+      }
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        setIsShortcutMenuOpen(false)
+      }
+    }
+
+    window.addEventListener('pointerdown', handlePointerDown)
+    window.addEventListener('keydown', handleKeyDown)
+    return () => {
+      window.removeEventListener('pointerdown', handlePointerDown)
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [isShortcutMenuOpen])
 
   useEffect(() => {
     function syncUtilityContext() {
@@ -214,8 +274,7 @@ export function AppShell() {
         return
       }
 
-      setActiveUtilityTab('ai')
-      setIsUtilityOpen(true)
+      setIsAIPanelOpen(true)
     }
 
     syncUtilityContext()
@@ -274,11 +333,16 @@ export function AppShell() {
         event.preventDefault()
         setIsUtilityOpen((prev) => !prev)
       }
+
+      if (key === 'l' && isEditorRoute && !isZenMode) {
+        event.preventDefault()
+        setIsAIPanelOpen((prev) => !prev)
+      }
     }
 
     window.addEventListener('keydown', handleKeydown)
     return () => window.removeEventListener('keydown', handleKeydown)
-  }, [isProjectScoped, isZenMode])
+  }, [isEditorRoute, isProjectScoped, isZenMode])
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -293,11 +357,39 @@ export function AppShell() {
       setIsUtilityOpen(false)
       return
     }
-
-    if (isEditorRoute) {
-      setIsUtilityOpen(true)
-    }
   }, [isEditorRoute, location.pathname])
+
+  useEffect(() => {
+    if (!aiResizeState) {
+      return
+    }
+
+    const { startX, startWidth } = aiResizeState
+
+    function handlePointerMove(event: PointerEvent) {
+      const delta = startX - event.clientX
+      const nextWidth = Math.min(MAX_AI_PANEL_WIDTH, Math.max(MIN_AI_PANEL_WIDTH, startWidth + delta))
+      setAIPanelWidth(nextWidth)
+    }
+
+    function handlePointerUp() {
+      setAIResizeState(null)
+    }
+
+    const previousCursor = document.body.style.cursor
+    const previousUserSelect = document.body.style.userSelect
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+
+    window.addEventListener('pointermove', handlePointerMove)
+    window.addEventListener('pointerup', handlePointerUp)
+    return () => {
+      document.body.style.cursor = previousCursor
+      document.body.style.userSelect = previousUserSelect
+      window.removeEventListener('pointermove', handlePointerMove)
+      window.removeEventListener('pointerup', handlePointerUp)
+    }
+  }, [aiResizeState])
 
   const pageMeta = useMemo(() => {
     const project = projectQuery.data
@@ -434,6 +526,7 @@ export function AppShell() {
       : null
   const shouldRenderProjectTree = isProjectScoped && isProjectTreeOpen && !isZenMode
   const shouldRenderUtility = isProjectScoped && isUtilityOpen && !isZenMode
+  const shouldRenderAIPanel = isEditorRoute && isAIPanelOpen && !isZenMode
   const scopedEditorAIDraft =
     editorAIDraftContext?.projectId === projectId && editorAIDraftContext?.chapterId === chapterId
       ? editorAIDraftContext
@@ -588,279 +681,166 @@ export function AppShell() {
     setIsUtilityOpen(false)
   }
 
-
-  function renderAIUtilityPanel(onClose?: () => void) {
-    if (true) {
-      const primaryLabel = scopedEditorUtilityContext?.action === 'expand' ? '选区扩写' : '章节续写'
-      const resultApplyLabel = scopedEditorUtilityContext?.action === 'expand' ? '插入到选区后' : '追加到正文'
-      const hasDraftSource =
-        scopedEditorUtilityContext?.action === 'expand' || Boolean(scopedEditorAIDraft?.plainText.trim())
-
-      return (
-        <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
-          <div className="mb-4 flex items-center justify-between">
-            <SectionLabel>AI 对话</SectionLabel>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={handleOpenModelDialog}
-                disabled={isLoadingModels || !hasSavedRuntimeKey || runtimeSettingsQuery.isLoading}
-                className="inline-flex h-8 items-center justify-center rounded-full border border-[#d1d5db] bg-white px-3 text-[11px] text-[#4b5563] transition hover:border-[#9ca3af] hover:text-[#111827] disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {isLoadingModels ? '加载中' : '模型'}
-              </button>
-              <button
-                type="button"
-                onClick={() => onClose?.()}
-                className="inline-flex h-8 items-center justify-center rounded-full border border-[#d1d5db] bg-white px-3 text-[11px] text-[#4b5563] transition hover:border-[#9ca3af] hover:text-[#111827]"
-              >
-                收起
-              </button>
-            </div>
-          </div>
-
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[24px] border border-[#e5e7eb] bg-[#fcfcfd] shadow-[0_12px_28px_rgba(15,23,42,0.04)]">
-            <div className="border-b border-[#eef0f3] px-4 py-4">
-              <div className="flex items-start gap-3">
-                <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
-                  <Bot className="size-4" />
-                </div>
-                <div className="min-w-0">
-                  <div className="text-sm font-semibold text-[#111827]">{primaryLabel}</div>
-                  <div className="mt-1 text-xs leading-5 text-[#6b7280]">
-                    当前模型：{selectedModelId}
-                    {!hasSavedRuntimeKey ? '，请先在设置中心保存 API Key。' : ''}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4">
-              <div className="space-y-4">
-                {scopedEditorUtilityContext ? (
-                  <div className="mr-8 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
-                    <div className="mb-1 text-[11px] uppercase tracking-[0.18em] text-amber-700">当前选区</div>
-                    <div className="text-sm leading-6 text-[#4b5563]">{scopedEditorUtilityContext.selectedText}</div>
-                  </div>
-                ) : null}
-
-                {aiMessages.length === 0 ? (
-                  <div className="rounded-2xl border border-dashed border-[#d1d5db] bg-white px-4 py-4 text-sm leading-6 text-[#6b7280]">
-                    输入续写指令后发送。这里会按聊天消息流展示你的要求和 AI 返回内容，底部输入区固定保留。
-                  </div>
-                ) : null}
-
-                {aiMessages.map((message) => (
-                  <div
-                    key={message.id}
-                    className={clsx('flex', message.role === 'user' ? 'justify-end' : 'justify-start')}
-                  >
-                    <div
-                      className={clsx(
-                        'max-w-[88%] rounded-2xl px-4 py-3 text-sm leading-6',
-                        message.role === 'user'
-                          ? 'bg-[#111827] text-white'
-                          : 'border border-[#e5e7eb] bg-white text-[#374151]',
-                      )}
-                    >
-                      {message.content.trim() || (message.role === 'assistant' && aiState.isGenerating ? '正在生成...' : '')}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="border-t border-[#eef0f3] bg-white px-4 py-4">
-              <div className="mb-3 flex flex-wrap items-center gap-2">
-                <span className="rounded-full border border-[#d1d5db] bg-[#f9fafb] px-3 py-1 text-[11px] text-[#6b7280]">
-                  {primaryLabel}
-                </span>
-                <span className="rounded-full border border-[#d1d5db] bg-[#f9fafb] px-3 py-1 text-[11px] text-[#6b7280]">
-                  模型 {selectedModelId}
-                </span>
-              </div>
-
-              <div className="rounded-[20px] border border-[#d1d5db] bg-[#fcfcfd] p-3">
-                <textarea
-                  value={aiState.instruction}
-                  onChange={(event) => setAIState((prev) => ({ ...prev, result: '', instruction: event.target.value }))}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter' && !event.shiftKey) {
-                      event.preventDefault()
-                      if (!aiState.isGenerating && hasDraftSource) {
-                        void handleGenerate()
-                      }
-                    }
-                  }}
-                  rows={4}
-                  className="min-h-[96px] w-full resize-none border-none bg-transparent text-sm leading-6 text-[#111827] outline-none placeholder:text-[#9ca3af]"
-                  placeholder="描述续写目标、情绪、节奏或限制条件。按 Enter 发送，Shift+Enter 换行。"
-                />
-
-                <div className="mt-3 grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={handleStopGeneration}
-                    disabled={!aiState.isGenerating}
-                    className="inline-flex h-9 items-center justify-center rounded-xl border border-[#d1d5db] bg-white px-3 text-xs text-[#4b5563] transition hover:border-[#9ca3af] hover:text-[#111827] disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    停止
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleDiscardGeneratedText}
-                    disabled={!aiState.result.trim() && !aiState.isGenerating}
-                    className="inline-flex h-9 items-center justify-center rounded-xl border border-[#d1d5db] bg-white px-3 text-xs text-[#4b5563] transition hover:border-[#9ca3af] hover:text-[#111827] disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    丢弃
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleApplyGeneratedText}
-                    disabled={!aiState.result.trim() || aiState.isGenerating}
-                    className="inline-flex h-9 items-center justify-center rounded-xl bg-[#111827] px-3 text-xs font-medium text-white transition hover:bg-[#1f2937] disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {resultApplyLabel}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => void handleGenerate()}
-                    disabled={aiState.isGenerating || !hasDraftSource}
-                    className="inline-flex h-9 items-center justify-center gap-2 rounded-xl bg-emerald-500 px-3 text-xs font-medium text-white transition hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {aiState.isGenerating ? <LoaderCircle className="size-3.5 animate-spin" /> : <SendHorizontal className="size-3.5" />}
-                    发送
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )
+  function closeAIPanel() {
+    if (scopedEditorUtilityContext?.updatedAt) {
+      setDismissedUtilityContextAt(scopedEditorUtilityContext.updatedAt)
     }
+
+    setIsAIPanelOpen(false)
+  }
+
+  function renderAIPanel(onClose?: () => void) {
     const primaryLabel = scopedEditorUtilityContext?.action === 'expand' ? '选区扩写' : '章节续写'
     const resultApplyLabel = scopedEditorUtilityContext?.action === 'expand' ? '插入到选区后' : '追加到正文'
+    const hasDraftSource =
+      scopedEditorUtilityContext?.action === 'expand' || Boolean(scopedEditorAIDraft?.plainText.trim())
 
     return (
-      <div className="space-y-4">
-        <SectionLabel>AI</SectionLabel>
-        <div className="space-y-4 rounded-[24px] border border-border bg-card/95 p-4 shadow-[0_16px_36px_rgba(148,163,184,0.16)]">
-          <SidebarHint>
-            {scopedEditorUtilityContext?.action === 'expand'
-              ? '当前选区已进入扩写模式。模型选择、生成和写回都在这里完成。'
-              : '统一在这里处理章节续写。右侧编辑区不再单独放一块 AI。'}
-          </SidebarHint>
-
-          {scopedEditorUtilityContext ? (
-            <div className="rounded-2xl border border-primary/20 bg-primary/8 p-4">
-              <div className="flex flex-wrap items-center gap-2">
-                <div className="text-sm font-medium text-foreground">当前选区</div>
-                <span className="rounded-full border border-primary/15 bg-background px-2 py-0.5 text-[11px] text-primary">
-                  {actionLabelMap[scopedEditorUtilityContext!.action]}
-                </span>
-              </div>
-              <div className="mt-2 line-clamp-4 text-sm leading-6 text-muted-foreground">{scopedEditorUtilityContext!.selectedText}</div>
-            </div>
-          ) : null}
-
-          <div className="rounded-2xl border border-border bg-background/90 p-4">
-            <div className="text-sm font-medium text-foreground">{primaryLabel}</div>
-            <div className="mt-1 text-xs leading-5 text-muted-foreground">提供商、API Key、Base URL 统一在设置中心维护，这里只切换当前续写模型。</div>
-            <div className="mt-3 flex flex-col gap-2">
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={handleOpenModelDialog}
-                  disabled={isLoadingModels || !hasSavedRuntimeKey || runtimeSettingsQuery.isLoading}
-                  className="inline-flex h-9 items-center justify-center rounded-xl border border-border bg-background px-3 text-xs text-foreground transition hover:border-primary/30 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {isLoadingModels ? '加载中...' : '选择模型'}
-                </button>
-                <NavLink
-                  to="/settings"
-                  onClick={onClose}
-                  className="inline-flex h-9 items-center justify-center rounded-xl border border-border bg-muted/55 px-3 text-xs text-muted-foreground transition hover:border-primary/25 hover:text-foreground"
-                >
-                  设置中心
-                </NavLink>
-              </div>
-              {!hasSavedRuntimeKey ? <div className="text-xs leading-5 text-primary">请先在设置中心保存 API Key。</div> : null}
-              <div className="rounded-xl border border-border bg-muted/55 px-3 py-2 text-sm text-foreground">当前模型：{selectedModelId}</div>
-              <div className="rounded-xl border border-dashed border-border bg-muted/45 px-3 py-2 text-xs leading-5 text-muted-foreground">
-                模型列表已收纳到弹窗里，点击上方“选择模型”即可切换。
-              </div>
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-xs uppercase tracking-[0.18em] text-muted-foreground">续写指令</label>
-            <textarea
-              value={aiState.instruction}
-              onChange={(event) => setAIState((prev) => ({ ...prev, result: '', instruction: event.target.value }))}
-              rows={5}
-              className="min-h-[112px] w-full rounded-2xl border border-border bg-background px-4 py-3 text-sm leading-6 text-foreground outline-none transition focus:border-primary/40"
-              placeholder="描述续写目标、情绪、节奏或限制条件。"
-            />
-          </div>
-
-          <div className="grid gap-2 sm:grid-cols-2">
+      <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
+        <div className="mb-4 flex items-center justify-between">
+          <SectionLabel>AI 侧栏</SectionLabel>
+          <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={handleGenerate}
-              disabled={aiState.isGenerating || !scopedEditorAIDraft?.plainText.trim() && scopedEditorUtilityContext?.action !== 'expand'}
-              className="inline-flex h-10 items-center justify-center rounded-xl bg-primary px-3 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+              onClick={handleOpenModelDialog}
+              disabled={isLoadingModels || !hasSavedRuntimeKey || runtimeSettingsQuery.isLoading}
+              className="inline-flex h-8 items-center justify-center rounded-full border border-[#d1d5db] bg-white px-3 text-[11px] text-[#4b5563] transition hover:border-[#9ca3af] hover:text-[#111827] disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {aiState.isGenerating ? '生成中...' : '开始 AI 续写'}
+              {isLoadingModels ? '加载中' : '模型'}
             </button>
-            <button
-              type="button"
-              onClick={handleStopGeneration}
-              disabled={!aiState.isGenerating}
-              className="inline-flex h-10 items-center justify-center rounded-xl border border-border bg-background px-3 text-sm text-muted-foreground transition hover:border-primary/25 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              停止生成
-            </button>
-          </div>
-
-          <div className="rounded-2xl border border-border bg-background/90 p-4">
-            <div className="text-sm font-medium text-foreground">生成结果</div>
-            <div className="mt-2 max-h-[240px] overflow-y-auto whitespace-pre-wrap text-sm leading-6 text-foreground/85">{aiState.result || '暂无结果'}</div>
-          </div>
-
-          <div className="grid gap-2 sm:grid-cols-2">
-            <button
-              type="button"
-              onClick={handleApplyGeneratedText}
-              disabled={!aiState.result.trim() || aiState.isGenerating}
-              className="inline-flex h-10 items-center justify-center rounded-xl bg-primary px-3 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {resultApplyLabel}
-            </button>
-            <button
-              type="button"
-              onClick={handleDiscardGeneratedText}
-              disabled={!aiState.result.trim() && !aiState.isGenerating}
-              className="inline-flex h-10 items-center justify-center rounded-xl border border-border bg-background px-3 text-sm text-muted-foreground transition hover:border-primary/25 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              丢弃结果
-            </button>
-          </div>
-
-          <div className="grid gap-2">
-            <NavLink
-              to={getToolboxPath('continue', projectId, chapterId)}
-              onClick={onClose}
-              className="inline-flex h-9 items-center justify-center rounded-xl border border-border bg-background px-3 text-xs text-muted-foreground transition hover:border-primary/25 hover:text-foreground"
-            >
-              打开 AI 工具箱
-            </NavLink>
             <button
               type="button"
               onClick={() => onClose?.()}
-              className="inline-flex h-9 items-center justify-center rounded-xl border border-border bg-muted/55 px-3 text-xs text-muted-foreground transition hover:border-primary/25 hover:text-foreground"
+              className="inline-flex h-8 items-center justify-center rounded-full border border-[#d1d5db] bg-white px-3 text-[11px] text-[#4b5563] transition hover:border-[#9ca3af] hover:text-[#111827]"
             >
-              收起抽屉
+              收起
             </button>
+          </div>
+        </div>
+
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[24px] border border-[#e5e7eb] bg-[#fcfcfd] shadow-[0_12px_28px_rgba(15,23,42,0.04)]">
+          <div className="border-b border-[#eef0f3] px-4 py-4">
+            <div className="flex items-start gap-3">
+              <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
+                <Bot className="size-4" />
+              </div>
+              <div className="min-w-0">
+                <div className="text-sm font-semibold text-[#111827]">{primaryLabel}</div>
+                <div className="mt-1 text-xs leading-5 text-[#6b7280]">
+                  当前模型：{selectedModelId}
+                  {!hasSavedRuntimeKey ? '，请先在设置中心保存 API Key。' : ''}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4">
+            <div className="space-y-4">
+              {scopedEditorUtilityContext ? (
+                <div className="mr-8 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
+                  <div className="mb-1 text-[11px] uppercase tracking-[0.18em] text-amber-700">
+                    {actionLabelMap[scopedEditorUtilityContext.action]}
+                  </div>
+                  <div className="text-sm leading-6 text-[#4b5563]">{scopedEditorUtilityContext.selectedText}</div>
+                </div>
+              ) : null}
+
+              {aiMessages.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-[#d1d5db] bg-white px-4 py-4 text-sm leading-6 text-[#6b7280]">
+                  输入续写指令后发送。这里会按聊天消息流展示你的要求和 AI 返回内容，底部输入区固定保留。
+                </div>
+              ) : null}
+
+              {aiMessages.map((message) => (
+                <div key={message.id} className={clsx('flex', message.role === 'user' ? 'justify-end' : 'justify-start')}>
+                  <div
+                    className={clsx(
+                      'max-w-[88%] rounded-2xl px-4 py-3 text-sm leading-6',
+                      message.role === 'user'
+                        ? 'bg-[#111827] text-white'
+                        : 'border border-[#e5e7eb] bg-white text-[#374151]',
+                    )}
+                  >
+                    {message.content.trim() || (message.role === 'assistant' && aiState.isGenerating ? '正在生成...' : '')}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="border-t border-[#eef0f3] bg-white px-4 py-4">
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              <span className="rounded-full border border-[#d1d5db] bg-[#f9fafb] px-3 py-1 text-[11px] text-[#6b7280]">
+                {primaryLabel}
+              </span>
+              <span className="rounded-full border border-[#d1d5db] bg-[#f9fafb] px-3 py-1 text-[11px] text-[#6b7280]">
+                模型 {selectedModelId}
+              </span>
+            </div>
+
+            <div className="rounded-[20px] border border-[#d1d5db] bg-[#fcfcfd] p-3">
+              <textarea
+                value={aiState.instruction}
+                onChange={(event) => setAIState((prev) => ({ ...prev, result: '', instruction: event.target.value }))}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' && !event.shiftKey) {
+                    event.preventDefault()
+                    if (!aiState.isGenerating && hasDraftSource) {
+                      void handleGenerate()
+                    }
+                  }
+                }}
+                rows={4}
+                className="min-h-[96px] w-full resize-none border-none bg-transparent text-sm leading-6 text-[#111827] outline-none placeholder:text-[#9ca3af]"
+                placeholder="描述续写目标、情绪、节奏或限制条件。按 Enter 发送，Shift+Enter 换行。"
+              />
+
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={handleStopGeneration}
+                  disabled={!aiState.isGenerating}
+                  className="inline-flex h-9 items-center justify-center rounded-xl border border-[#d1d5db] bg-white px-3 text-xs text-[#4b5563] transition hover:border-[#9ca3af] hover:text-[#111827] disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  停止
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDiscardGeneratedText}
+                  disabled={!aiState.result.trim() && !aiState.isGenerating}
+                  className="inline-flex h-9 items-center justify-center rounded-xl border border-[#d1d5db] bg-white px-3 text-xs text-[#4b5563] transition hover:border-[#9ca3af] hover:text-[#111827] disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  丢弃
+                </button>
+                <button
+                  type="button"
+                  onClick={handleApplyGeneratedText}
+                  disabled={!aiState.result.trim() || aiState.isGenerating}
+                  className="inline-flex h-9 items-center justify-center rounded-xl bg-[#111827] px-3 text-xs font-medium text-white transition hover:bg-[#1f2937] disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {resultApplyLabel}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleGenerate()}
+                  disabled={aiState.isGenerating || !hasDraftSource}
+                  className="inline-flex h-9 items-center justify-center gap-2 rounded-xl bg-emerald-500 px-3 text-xs font-medium text-white transition hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {aiState.isGenerating ? <LoaderCircle className="size-3.5 animate-spin" /> : <SendHorizontal className="size-3.5" />}
+                  发送
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-3 grid gap-2">
+              <NavLink
+                to={getToolboxPath('continue', projectId, chapterId)}
+                onClick={onClose}
+                className="inline-flex h-9 items-center justify-center rounded-xl border border-[#d1d5db] bg-white px-3 text-xs text-[#4b5563] transition hover:border-[#9ca3af] hover:text-[#111827]"
+              >
+                打开 AI 工具箱
+              </NavLink>
+            </div>
           </div>
         </div>
       </div>
@@ -973,13 +953,19 @@ export function AppShell() {
             <div className="flex items-center justify-between gap-4 px-5 py-4">
               <div className="flex min-w-0 items-center gap-3">
                 {isProjectScoped && !isZenMode ? (
-                  <button
-                    type="button"
-                    className="inline-flex size-10 items-center justify-center rounded-xl border border-border bg-background text-muted-foreground transition hover:border-primary/25 hover:text-foreground"
-                    onClick={() => setIsProjectTreeOpen((prev) => !prev)}
-                  >
-                    {isProjectTreeOpen ? <PanelLeftClose className="size-4" /> : <PanelLeftOpen className="size-4" />}
-                  </button>
+                  <div className="group relative">
+                    <button
+                      type="button"
+                      aria-label="切换项目栏，快捷键 Ctrl+B"
+                      className="inline-flex size-10 items-center justify-center rounded-xl border border-border bg-background text-muted-foreground transition hover:border-primary/25 hover:text-foreground"
+                      onClick={() => setIsProjectTreeOpen((prev) => !prev)}
+                    >
+                      {isProjectTreeOpen ? <PanelLeftClose className="size-4" /> : <PanelLeftOpen className="size-4" />}
+                    </button>
+                    <div className="pointer-events-none absolute left-1/2 top-full z-30 mt-2 hidden -translate-x-1/2 whitespace-nowrap rounded-md border border-border bg-popover px-2.5 py-1 text-xs text-popover-foreground shadow-lg group-hover:block">
+                      项目栏 Ctrl+B
+                    </div>
+                  </div>
                 ) : null}
 
                 <div className="min-w-0">
@@ -994,6 +980,56 @@ export function AppShell() {
                   <>
                     {isEditorRoute ? (
                       <>
+                        <Link
+                          to={`/projects/${projectId}`}
+                          className="inline-flex h-10 items-center gap-2 rounded-xl border border-[#e5e7eb] bg-white px-4 text-sm text-[#4b5563] transition hover:border-[#d1d5db] hover:text-[#111827]"
+                        >
+                          <ArrowLeft className="size-4" />
+                          返回写作台
+                        </Link>
+                        {!isZenMode ? (
+                          <>
+                            <HeaderIconButton
+                              icon={BookCopy}
+                              label="参考栏"
+                              shortcut="Ctrl+J"
+                              active={isUtilityOpen}
+                              onClick={() => setIsUtilityOpen((prev) => !prev)}
+                            />
+                            <HeaderIconButton
+                              icon={Bot}
+                              label="AI 面板"
+                              shortcut="Ctrl+L"
+                              active={isAIPanelOpen}
+                              onClick={() => setIsAIPanelOpen((prev) => !prev)}
+                            />
+                            <div className="relative" ref={shortcutMenuRef}>
+                              <button
+                                type="button"
+                                aria-label="查看完整快捷键"
+                                onClick={() => setIsShortcutMenuOpen((prev) => !prev)}
+                                className={clsx(
+                                  'inline-flex h-10 items-center rounded-xl px-3 text-xs transition',
+                                  isShortcutMenuOpen
+                                    ? 'bg-primary/10 text-primary'
+                                    : 'text-muted-foreground hover:bg-background hover:text-foreground',
+                                )}
+                              >
+                                快捷键
+                              </button>
+                              {isShortcutMenuOpen ? (
+                                <div className="absolute right-0 top-full z-30 mt-2 w-56 rounded-2xl border border-border bg-popover p-3 shadow-xl">
+                                  <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Shortcuts</div>
+                                  <div className="mt-3 space-y-2 text-sm text-popover-foreground">
+                                    <ShortcutRow label="项目栏" shortcut="Ctrl+B" />
+                                    <ShortcutRow label="参考栏" shortcut="Ctrl+J" />
+                                    <ShortcutRow label="AI 面板" shortcut="Ctrl+L" />
+                                  </div>
+                                </div>
+                              ) : null}
+                            </div>
+                          </>
+                        ) : null}
                         <button
                           type="button"
                           className="inline-flex size-10 items-center justify-center rounded-xl border border-[#e5e7eb] bg-white text-[#6b7280] transition hover:border-[#d1d5db] hover:text-[#111827] md:hidden"
@@ -1011,48 +1047,11 @@ export function AppShell() {
                         </button>
                       </>
                     ) : null}
-                    <>
-                      <button
-                        type="button"
-                        className="inline-flex size-10 items-center justify-center rounded-xl border border-[#e5e7eb] bg-white text-[#6b7280] transition hover:border-[#d1d5db] hover:text-[#111827] md:hidden"
-                        onClick={() => {
-                          if (isUtilityOpen) {
-                            closeUtilityDrawer()
-                            return
-                          }
-
-                          setIsUtilityOpen(true)
-                        }}
-                        disabled={isZenMode}
-                      >
-                        {isUtilityOpen ? <PanelRightClose className="size-4" /> : <PanelRightOpen className="size-4" />}
-                      </button>
-                      <button
-                        type="button"
-                        className="hidden h-10 items-center gap-2 rounded-xl border border-[#e5e7eb] bg-white px-4 text-sm text-[#4b5563] transition hover:border-[#d1d5db] hover:text-[#111827] md:inline-flex"
-                        onClick={() => {
-                          if (isUtilityOpen) {
-                            closeUtilityDrawer()
-                            return
-                          }
-
-                          setIsUtilityOpen(true)
-                        }}
-                        disabled={isZenMode}
-                      >
-                        {isUtilityOpen ? <PanelRightClose className="size-4" /> : <PanelRightOpen className="size-4" />}
-                        参考抽屉
-                      </button>
-                    </>
-                    {!isZenMode ? (
-                      <div className="hidden rounded-xl border border-primary/15 bg-primary/10 px-3 py-2 text-xs text-primary xl:block">
-                        Ctrl+B 侧栏 · Ctrl+J 抽屉
-                      </div>
-                    ) : (
+                    {isZenMode ? (
                       <div className="hidden rounded-xl border border-secondary bg-secondary px-3 py-2 text-xs text-secondary-foreground xl:block">
                         专注模式已启用
                       </div>
-                    )}
+                    ) : null}
                   </>
                 ) : null}
               </div>
@@ -1067,7 +1066,7 @@ export function AppShell() {
         {shouldRenderUtility ? (
           <aside className="hidden w-[360px] shrink-0 border-l border-border bg-card/96 xl:flex xl:flex-col">
             <div className="border-b border-border px-5 py-4">
-              <div className="grid grid-cols-3 rounded-2xl bg-muted/75 p-1">
+              <div className="grid grid-cols-2 rounded-2xl bg-muted/75 p-1">
                 {utilityTabs.map((tab) => (
                   <button
                     key={tab.key}
@@ -1086,7 +1085,7 @@ export function AppShell() {
               </div>
             </div>
 
-            <div className={clsx('flex-1 px-5 py-5', activeUtilityTab === 'ai' ? 'flex min-h-0 flex-col overflow-hidden' : 'overflow-y-auto')}>
+            <div className="flex-1 overflow-y-auto px-5 py-5">
               {activeUtilityTab === 'characters' ? (
                 <div className="space-y-3">
                   <SectionLabel>角色速查</SectionLabel>
@@ -1153,14 +1152,33 @@ export function AppShell() {
                   />
                 </div>
               ) : null}
-
-              {activeUtilityTab === 'ai' ? renderAIUtilityPanel(closeUtilityDrawer) : null}
             </div>
 
             <div className="border-t border-border px-5 py-3 text-xs text-muted-foreground">
               {project ? `最近更新 ${formatDate(project.updated_at)}` : '等待项目上下文'}
             </div>
           </aside>
+        ) : null}
+
+        {shouldRenderAIPanel ? (
+          <div className="relative hidden shrink-0 xl:block" style={{ width: aiPanelWidth }}>
+            <div
+              role="separator"
+              aria-orientation="vertical"
+              aria-label="调整 AI 侧栏宽度"
+              className="absolute inset-y-0 left-0 z-10 w-3 cursor-col-resize"
+              onPointerDown={(event) => {
+                event.preventDefault()
+                setAIResizeState({ startX: event.clientX, startWidth: aiPanelWidth })
+              }}
+            />
+            <aside
+              className="ml-3 flex h-full flex-col border-l border-border bg-card/96"
+              style={{ width: aiPanelWidth - 12 }}
+            >
+              <div className="min-h-0 flex-1 px-5 py-5">{renderAIPanel(closeAIPanel)}</div>
+            </aside>
+          </div>
         ) : null}
       </div>
 
@@ -1251,7 +1269,7 @@ export function AppShell() {
             onClick={(event) => event.stopPropagation()}
           >
             <div className="flex items-center justify-between border-b border-[#ececec] px-5 py-4">
-              <div className="grid flex-1 grid-cols-3 rounded-2xl bg-[#f3f4f6] p-1">
+              <div className="grid flex-1 grid-cols-2 rounded-2xl bg-[#f3f4f6] p-1">
                 {utilityTabs.map((tab) => (
                   <button
                     key={tab.key}
@@ -1277,7 +1295,7 @@ export function AppShell() {
               </button>
             </div>
 
-            <div className={clsx('flex-1 px-5 py-5', activeUtilityTab === 'ai' ? 'flex min-h-0 flex-col overflow-hidden' : 'overflow-y-auto')}>
+            <div className="flex-1 overflow-y-auto px-5 py-5">
               {activeUtilityTab === 'characters' ? (
                 <div className="space-y-3">
                   <SectionLabel>角色速查</SectionLabel>
@@ -1346,9 +1364,22 @@ export function AppShell() {
                   />
                 </div>
               ) : null}
-
-              {activeUtilityTab === 'ai' ? renderAIUtilityPanel(closeUtilityDrawer) : null}
             </div>
+          </aside>
+        </div>
+      ) : null}
+
+      {shouldRenderAIPanel ? (
+        <div
+          className="fixed inset-0 z-40 bg-black/30 xl:hidden"
+          onClick={closeAIPanel}
+          aria-hidden="true"
+        >
+          <aside
+            className="ml-auto flex h-full w-[min(92vw,440px)] flex-col border-l border-[#e5e7eb] bg-white shadow-2xl shadow-black/10"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="min-h-0 flex-1 px-5 py-5">{renderAIPanel(closeAIPanel)}</div>
           </aside>
         </div>
       ) : null}
@@ -1358,6 +1389,50 @@ export function AppShell() {
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return <div className="px-2 text-[11px] uppercase tracking-[0.22em] text-muted-foreground">{children}</div>
+}
+
+function HeaderIconButton({
+  icon: Icon,
+  label,
+  shortcut,
+  active = false,
+  onClick,
+}: {
+  icon: React.ComponentType<{ className?: string }>
+  label: string
+  shortcut: string
+  active?: boolean
+  onClick: () => void
+}) {
+  return (
+    <div className="group relative">
+      <button
+        type="button"
+        aria-label={`${label}，快捷键 ${shortcut}`}
+        onClick={onClick}
+        className={clsx(
+          'inline-flex size-10 items-center justify-center rounded-xl border bg-white transition',
+          active
+            ? 'border-primary/35 bg-primary/10 text-primary'
+            : 'border-[#e5e7eb] text-[#6b7280] hover:border-[#d1d5db] hover:text-[#111827]',
+        )}
+      >
+        <Icon className="size-4" />
+      </button>
+      <div className="pointer-events-none absolute left-1/2 top-full z-30 mt-2 hidden -translate-x-1/2 whitespace-nowrap rounded-md border border-border bg-popover px-2.5 py-1 text-xs text-popover-foreground shadow-lg group-hover:block">
+        {label} {shortcut}
+      </div>
+    </div>
+  )
+}
+
+function ShortcutRow({ label, shortcut }: { label: string; shortcut: string }) {
+  return (
+    <div className="flex items-center justify-between rounded-xl border border-border bg-background px-3 py-2">
+      <span>{label}</span>
+      <span className="text-xs text-muted-foreground">{shortcut}</span>
+    </div>
+  )
 }
 
 function SidebarHint({ children }: { children: React.ReactNode }) {

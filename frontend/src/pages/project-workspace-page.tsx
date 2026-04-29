@@ -6,6 +6,7 @@ import {
   BookOpen,
   ChevronRight,
   FilePlus2,
+  FileUp,
   PenSquare,
   Trash2,
   UserPlus,
@@ -32,7 +33,6 @@ import {
   Card,
   CardContent,
   CardDescription,
-  CardFooter,
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
@@ -47,6 +47,7 @@ import {
   deleteChapter,
   deleteProjectCharacter,
   getProject,
+  importProjectKnowledge,
   listCharacters,
   reorderChapters,
   updateChapter,
@@ -57,6 +58,7 @@ import type {
   ChapterReorderItem,
   ChapterUpdatePayload,
   Character,
+  ProjectImportResult,
   ProjectCharacter,
   ProjectCharacterUpdatePayload,
   ProjectDetail,
@@ -77,6 +79,11 @@ interface CharacterLinkEditState {
   summary: string
 }
 
+interface ProjectImportDraftState {
+  sourceText: string
+  guidance: string
+}
+
 const defaultChapterDraft: ChapterDraftState = {
   title: '',
 }
@@ -90,6 +97,11 @@ const defaultCharacterLinkDraft: CharacterLinkDraftState = {
 const defaultCharacterLinkEditState: CharacterLinkEditState = {
   roleLabel: '',
   summary: '',
+}
+
+const defaultProjectImportDraft: ProjectImportDraftState = {
+  sourceText: '',
+  guidance: '',
 }
 
 function buildCharacterLinkUpdatePayload(editState: CharacterLinkEditState): ProjectCharacterUpdatePayload {
@@ -125,6 +137,22 @@ function getLatestUpdatedChapter(chapters: Chapter[]) {
   return [...chapters].sort((left, right) => new Date(right.updated_at).getTime() - new Date(left.updated_at).getTime())[0]
 }
 
+function getChapterStatusSummary(chapter: Chapter | null) {
+  if (!chapter) {
+    return '待开始'
+  }
+
+  return chapter.content ? '已有草稿' : '待开始'
+}
+
+function getNextActionLabel(chapter: Chapter | null) {
+  if (!chapter) {
+    return '先创建一个章节'
+  }
+
+  return chapter.content ? '直接进入编辑器续写' : '进入编辑器建立正文'
+}
+
 export function ProjectWorkspacePage() {
   const { projectId } = useParams<{ projectId: string }>()
   const [selectedChapterId, setSelectedChapterId] = useState<string | null>(null)
@@ -132,6 +160,9 @@ export function ProjectWorkspacePage() {
   const [characterLinkDraft, setCharacterLinkDraft] = useState<CharacterLinkDraftState>(defaultCharacterLinkDraft)
   const [editingProjectCharacter, setEditingProjectCharacter] = useState<ProjectCharacter | null>(null)
   const [characterLinkEditDraft, setCharacterLinkEditDraft] = useState<CharacterLinkEditState>(defaultCharacterLinkEditState)
+  const [isImportDialogOpen, setIsImportDialogOpen] = useState(false)
+  const [projectImportDraft, setProjectImportDraft] = useState<ProjectImportDraftState>(defaultProjectImportDraft)
+  const [latestImportResult, setLatestImportResult] = useState<ProjectImportResult | null>(null)
 
   const projectQuery = useQuery<ProjectDetail, Error>({
     queryKey: ['project', projectId],
@@ -216,12 +247,8 @@ export function ProjectWorkspacePage() {
   })
 
   const attachCharacterMutation = useMutation({
-    mutationFn: ({ characterId, roleLabel, summary }: CharacterLinkDraftState) =>
-      attachProjectCharacter(projectId ?? '', {
-        character_id: characterId,
-        role_label: roleLabel.trim() || null,
-        summary: summary.trim() || null,
-      }),
+    mutationFn: ({ projectId, payload }: { projectId: string; payload: Parameters<typeof attachProjectCharacter>[1] }) =>
+      attachProjectCharacter(projectId, payload),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['project', projectId] })
       setCharacterLinkDraft(defaultCharacterLinkDraft)
@@ -233,8 +260,15 @@ export function ProjectWorkspacePage() {
   })
 
   const updateProjectCharacterMutation = useMutation({
-    mutationFn: ({ linkId, payload }: { linkId: string; payload: ProjectCharacterUpdatePayload }) =>
-      updateProjectCharacter(projectId ?? '', linkId, payload),
+    mutationFn: ({
+      projectId,
+      linkId,
+      payload,
+    }: {
+      projectId: string
+      linkId: string
+      payload: ProjectCharacterUpdatePayload
+    }) => updateProjectCharacter(projectId, linkId, payload),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['project', projectId] })
       setEditingProjectCharacter(null)
@@ -247,7 +281,7 @@ export function ProjectWorkspacePage() {
   })
 
   const detachCharacterMutation = useMutation({
-    mutationFn: (linkId: string) => deleteProjectCharacter(projectId ?? '', linkId),
+    mutationFn: ({ projectId, linkId }: { projectId: string; linkId: string }) => deleteProjectCharacter(projectId, linkId),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['project', projectId] })
       toast.success('角色已移出项目')
@@ -257,22 +291,34 @@ export function ProjectWorkspacePage() {
     },
   })
 
+  const importProjectKnowledgeMutation = useMutation({
+    mutationFn: async () =>
+      importProjectKnowledge(projectId ?? '', {
+        source_text: projectImportDraft.sourceText,
+        guidance: projectImportDraft.guidance.trim() || null,
+      }),
+    onSuccess: async (result) => {
+      await queryClient.invalidateQueries({ queryKey: ['project', projectId] })
+      setLatestImportResult(result)
+      setProjectImportDraft(defaultProjectImportDraft)
+      toast.success(
+        `已导入 ${result.imported_character_count} 个角色，新增 ${result.created_character_count} 个，并${result.world_setting_updated ? '同步更新了世界观' : '保留了现有世界观'}`,
+      )
+    },
+    onError: (error: Error) => {
+      toast.error(error.message)
+    },
+  })
+
   function handleCreateChapter(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-
     const title = newChapter.title.trim()
     if (!projectId || !title) {
       toast.error('请输入章节标题')
       return
     }
 
-    createChapterMutation.mutate({
-      project_id: projectId,
-      title,
-      order_index: 0,
-      content: '',
-      plain_text: '',
-    })
+    createChapterMutation.mutate({ project_id: projectId, title })
   }
 
   function handleDeleteChapter(chapter: Chapter) {
@@ -315,7 +361,14 @@ export function ProjectWorkspacePage() {
       return
     }
 
-    attachCharacterMutation.mutate(characterLinkDraft)
+    attachCharacterMutation.mutate({
+      projectId: projectId ?? '',
+      payload: {
+        character_id: characterLinkDraft.characterId,
+        role_label: characterLinkDraft.roleLabel.trim() || null,
+        summary: characterLinkDraft.summary.trim() || null,
+      },
+    })
   }
 
   function handleDetachCharacter(linkId: string, name: string) {
@@ -324,7 +377,7 @@ export function ProjectWorkspacePage() {
       return
     }
 
-    detachCharacterMutation.mutate(linkId)
+    detachCharacterMutation.mutate({ projectId: projectId ?? '', linkId })
   }
 
   function openEditProjectCharacterDialog(projectCharacter: ProjectCharacter) {
@@ -343,9 +396,21 @@ export function ProjectWorkspacePage() {
     }
 
     updateProjectCharacterMutation.mutate({
+      projectId: projectId ?? '',
       linkId: editingProjectCharacter.id,
       payload: buildCharacterLinkUpdatePayload(characterLinkEditDraft),
     })
+  }
+
+  function handleImportProjectKnowledge(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+
+    if (!projectImportDraft.sourceText.trim()) {
+      toast.error('请先粘贴要导入的项目资料')
+      return
+    }
+
+    importProjectKnowledgeMutation.mutate()
   }
 
   if (!projectId) {
@@ -387,245 +452,347 @@ export function ProjectWorkspacePage() {
   const activityMap = buildActivityMap(chapters)
   const activeDays = activityMap.filter((item) => item.count > 0).length
   const totalWords = chapters.reduce((sum, chapter) => sum + chapter.word_count, 0)
+  const summaryActions = [
+    {
+      label: '继续当前章节',
+      to: selectedChapter ? `/projects/${project.id}/editor/${selectedChapter.id}` : null,
+      tone: 'primary' as const,
+      icon: <PenSquare className="size-4" />,
+    },
+    {
+      label: '世界观设定',
+      to: `/projects/${project.id}/world`,
+      tone: 'secondary' as const,
+      icon: <Globe2 className="size-4" />,
+    },
+    {
+      label: '角色管理',
+      to: '/characters',
+      tone: 'secondary' as const,
+      icon: <Users2 className="size-4" />,
+    },
+    {
+      label: '导入资料',
+      to: null,
+      tone: 'secondary' as const,
+      icon: <FileUp className="size-4" />,
+    },
+  ]
 
   return (
     <div className="space-y-6">
-      <section className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
-        <Card className="border border-border bg-card/95 shadow-[0_16px_36px_rgba(148,163,184,0.16)]">
-          <CardHeader className="gap-4">
-            <CardDescription className="text-primary/80">项目工作台</CardDescription>
-            <div className="space-y-3">
-              <CardTitle className="text-3xl text-foreground">{project.title}</CardTitle>
+      <section className="overflow-hidden rounded-[28px] border border-border/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(249,250,251,0.9))] shadow-[0_20px_50px_rgba(148,163,184,0.12)]">
+        <div className="border-b border-border/70 px-6 py-5 lg:px-7">
+          <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+            <div className="min-w-0 space-y-3">
               <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                <StatusBadge status={project.status} />
-                <span className="rounded-full border border-border px-2.5 py-1">{formatProjectType(project.type)}</span>
+                <span className="font-medium uppercase tracking-[0.24em] text-primary/80">工作台</span>
                 <span>最近更新 {formatDate(project.updated_at)}</span>
               </div>
-            </div>
-            {project.description?.trim() ? (
-              <CardDescription className="max-w-3xl text-sm leading-7 text-muted-foreground">{project.description.trim()}</CardDescription>
-            ) : null}
-          </CardHeader>
-          <CardFooter className="flex flex-wrap items-center gap-3 border-border bg-muted/35">
-            <WorkspaceMetricCard label="章节数量" value={`${chapters.length}`} />
-            <WorkspaceMetricCard label="累计字数" value={`${totalWords}`} />
-            <WorkspaceMetricCard label="角色数量" value={`${projectCharacters.length}`} />
-            <WorkspaceMetricCard label="来源作品" value={project.source_work || '原创项目'} />
-          </CardFooter>
-        </Card>
-
-        <Card className="border border-border bg-card/95 shadow-[0_16px_36px_rgba(148,163,184,0.16)]">
-          <CardHeader>
-            <CardTitle className="text-xl text-foreground">创作活跃度</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-7 gap-2">
-              {activityMap.map((item) => (
-                <div key={item.key} className="space-y-1">
-                  <div
-                    title={`${item.label} · ${item.count} 个章节更新 · ${item.words} 字`}
-                    className={[
-                          'h-10 rounded-sm border border-border/50',
-                      item.count === 0
-                        ? 'bg-muted/35'
-                        : item.words > 3000
-                          ? 'bg-emerald-400/70'
-                          : item.words > 1000
-                            ? 'bg-emerald-400/45'
-                            : 'bg-emerald-400/25',
-                    ].join(' ')}
-                  />
-                  <div className="text-center text-[10px] text-muted-foreground">{item.label}</div>
+              <div className="space-y-2">
+                <div className="flex flex-wrap items-center gap-3">
+                  <h1 className="text-3xl font-semibold tracking-tight text-foreground">{project.title}</h1>
+                  <StatusBadge status={project.status} />
+                  <span className="inline-flex h-7 items-center rounded-full border border-border bg-background px-3 text-xs text-muted-foreground">
+                    {formatProjectType(project.type)}
+                  </span>
                 </div>
-              ))}
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
+                  <span>{project.source_work || '原创项目'}</span>
+                  <span>{chapters.length} 章</span>
+                  <span>{totalWords} 字</span>
+                  <span>{projectCharacters.length} 角色</span>
+                  <span>{worldSetting?.title?.trim() ? '世界观已配置' : '世界观待完善'}</span>
+                </div>
+              </div>
+              {project.description?.trim() ? (
+                <p className="max-w-4xl text-sm leading-7 text-muted-foreground">{project.description.trim()}</p>
+              ) : null}
             </div>
 
-            <div className="grid gap-3 md:grid-cols-3">
-              <WorkspaceFocusCard
-                title="活跃天数"
-                description={`${activeDays} / 21 天`}
-                icon={<BookOpen className="size-4 text-primary" />}
-              />
-              <WorkspaceFocusCard
-                title="角色资产"
-                description={projectCharacters.length ? `已绑定 ${projectCharacters.length} 个角色` : '还没有绑定角色'}
-                icon={<Users2 className="size-4 text-muted-foreground" />}
-              />
-              <WorkspaceFocusCard
-                title="设定入口"
-                description={worldSetting?.title?.trim() || '进入世界观页维护词条与规则'}
-                icon={<Globe2 className="size-4 text-primary" />}
-              />
+            <div className="xl:w-[280px] xl:shrink-0">
+              <div className="rounded-2xl border border-border/70 bg-background/80 p-4 shadow-sm">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">创作活跃</div>
+                    <div className="mt-1 text-lg font-semibold text-foreground">{activeDays} / 21 天</div>
+                  </div>
+                  <div className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">
+                    最近推进 {latestUpdatedChapter ? formatDate(latestUpdatedChapter.updated_at) : '暂无'}
+                  </div>
+                </div>
+                <div className="mt-4 grid grid-cols-7 gap-1.5">
+                  {activityMap.map((item) => (
+                    <div key={item.key} className="space-y-1">
+                      <div
+                        title={`${item.label} · ${item.count} 个章节更新 · ${item.words} 字`}
+                        className={[
+                          'h-6 rounded-md border border-border/50 transition',
+                          item.count === 0
+                            ? 'bg-muted/35'
+                            : item.words > 3000
+                              ? 'bg-emerald-400/80'
+                              : item.words > 1000
+                                ? 'bg-emerald-400/55'
+                                : 'bg-emerald-400/30',
+                        ].join(' ')}
+                      />
+                      <div className="text-center text-[10px] text-muted-foreground">{item.label}</div>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-1">
+                    <BookOpen className="size-3.5 text-primary" />
+                    活跃 {activeDays}/21
+                  </span>
+                  <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-1">
+                    <Users2 className="size-3.5 text-primary" />
+                    角色 {projectCharacters.length}
+                  </span>
+                  <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-1">
+                    <Globe2 className="size-3.5 text-primary" />
+                    {worldSetting?.title?.trim() ? '设定已接入' : '设定待补充'}
+                  </span>
+                </div>
+              </div>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
+
+        <div className="border-b border-border/70 px-6 py-4 lg:px-7">
+          <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-5">
+            <WorkspaceStatCell label="章节数" value={`${chapters.length}`} />
+            <WorkspaceStatCell label="总字数" value={`${totalWords}`} />
+            <WorkspaceStatCell label="当前章节" value={selectedChapter?.title || '未选中'} valueClassName="text-lg" />
+            <WorkspaceStatCell label="角色绑定" value={`${projectCharacters.length}`} />
+            <WorkspaceStatCell
+              label="最近推进"
+              value={latestUpdatedChapter ? formatDate(latestUpdatedChapter.updated_at) : '暂无'}
+              valueClassName="text-lg"
+            />
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3 px-6 py-4 lg:px-7">
+          {summaryActions.map((action) => {
+            if (action.label === '导入资料') {
+              return (
+                <Button
+                  key={action.label}
+                  type="button"
+                  variant="outline"
+                  className="h-10 rounded-full border-border bg-background px-4"
+                  onClick={() => setIsImportDialogOpen(true)}
+                >
+                  {action.icon}
+                  {action.label}
+                </Button>
+              )
+            }
+
+            if (!action.to) {
+              return null
+            }
+
+            return (
+              <Link
+                key={action.label}
+                to={action.to}
+                className={[
+                  'inline-flex h-10 items-center justify-center gap-2 rounded-full px-4 text-sm font-medium transition',
+                  action.tone === 'primary'
+                    ? 'bg-primary text-primary-foreground hover:opacity-90'
+                    : 'border border-border bg-background text-foreground hover:bg-muted',
+                ].join(' ')}
+              >
+                {action.icon}
+                {action.label}
+              </Link>
+            )
+          })}
+        </div>
       </section>
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
-        <section className="space-y-4">
-          <Card className="border border-border bg-card/95">
-            <CardHeader>
-              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                <div>
-                  <CardTitle className="text-xl text-foreground">快速创建章节</CardTitle>
+        <section className="overflow-hidden rounded-[28px] border border-border/70 bg-background shadow-[0_18px_40px_rgba(148,163,184,0.10)]">
+          <div className="border-b border-border/70 px-6 py-5 lg:px-7">
+            <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+              <div className="space-y-2">
+                <div className="flex flex-wrap items-center gap-3">
+                  <h2 className="text-2xl font-semibold text-foreground">章节管理</h2>
+                  <div className="inline-flex items-center gap-2 rounded-full border border-border bg-muted/40 px-3 py-1 text-xs text-muted-foreground">
+                    <ArrowUpDown className="size-3.5 text-primary" />
+                    工作台主导航
+                  </div>
                 </div>
-                <form className="flex w-full max-w-md flex-col gap-2 sm:flex-row" onSubmit={handleCreateChapter}>
-                  <Input
-                    value={newChapter.title}
-                    onChange={(event) => setNewChapter({ title: event.target.value })}
-                    placeholder="例如：第一章 · 雪夜重逢"
-                    maxLength={200}
-                  />
-                  <Button className="w-full sm:w-auto" type="submit" disabled={createChapterMutation.isPending}>
-                    <FilePlus2 className="size-4" />
-                    {createChapterMutation.isPending ? '创建中...' : '新建'}
-                  </Button>
-                </form>
-              </div>
-            </CardHeader>
-          </Card>
-
-          <Card className="border border-border bg-card/95">
-            <CardHeader>
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <CardTitle className="text-xl text-foreground">章节列表</CardTitle>
-                </div>
-                <div className="inline-flex items-center gap-2 rounded-full border border-border bg-background px-3 py-1 text-xs text-muted-foreground">
-                  <ArrowUpDown className="size-3.5 text-primary" />
-                  工作台主导航
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
+                  <span>共 {chapters.length} 章</span>
+                  <span>当前选中 {selectedChapter ? `第 ${selectedChapter.order_index} 章` : '未选中章节'}</span>
+                  <span>优先处理正文、摘要与排序</span>
                 </div>
               </div>
-            </CardHeader>
-            <CardContent>
-              {chapters.length === 0 ? (
-                <EmptyState title="这个项目还没有章节" description="先创建一个章节。" />
-              ) : (
-                <div className="space-y-2">
-                  {chapters.map((chapter, index) => {
-                    const isSelected = selectedChapter?.id === chapter.id
 
-                    return (
-                      <button
-                        key={chapter.id}
-                        type="button"
-                        onClick={() => setSelectedChapterId(chapter.id)}
-                        className={[
-                          'w-full rounded-md border px-4 py-3 text-left transition',
-                          isSelected
-                            ? 'border-primary/50 bg-primary/10 shadow-lg shadow-primary/10'
-                            : 'border-border bg-background/90 hover:border-primary/20 hover:bg-muted/35',
-                        ].join(' ')}
-                      >
-                        <div className="flex items-center justify-between gap-3">
-                          <div className="min-w-0 space-y-1">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <span className="rounded-full border border-border px-2 py-0.5 text-xs text-muted-foreground">
-                                第 {chapter.order_index} 章
-                              </span>
-                              <StatusBadge status={chapter.status} className="py-0.5" />
-                            </div>
-                            <h3 className="truncate text-base font-medium text-foreground">{chapter.title}</h3>
-                            <p className="text-xs text-muted-foreground">
-                              {chapter.word_count} 字 · 最近更新 {formatDate(chapter.updated_at)}
-                            </p>
-                          </div>
-                          <div className="flex shrink-0 flex-col gap-2 sm:flex-row sm:items-center">
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              className="w-full sm:w-auto"
-                              disabled={index === 0 || reorderMutation.isPending}
-                              onClick={(event) => {
-                                event.stopPropagation()
-                                moveChapter(chapter, 'up')
-                              }}
-                            >
-                              上移
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              className="w-full sm:w-auto"
-                              disabled={index === chapters.length - 1 || reorderMutation.isPending}
-                              onClick={(event) => {
-                                event.stopPropagation()
-                                moveChapter(chapter, 'down')
-                              }}
-                            >
-                              下移
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="destructive"
-                              size="sm"
-                              className="w-full sm:w-auto"
-                              disabled={deleteChapterMutation.isPending}
-                              onClick={(event) => {
-                                event.stopPropagation()
-                                handleDeleteChapter(chapter)
-                              }}
-                            >
-                              <Trash2 className="size-4" />
-                            </Button>
-                          </div>
-                        </div>
-                      </button>
-                    )
-                  })}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card className="border border-border bg-card/95">
-            <CardHeader>
-              <CardTitle className="text-xl text-foreground">当前选章</CardTitle>
-              <CardDescription className="text-muted-foreground">先决定写哪一章，再进入编辑器处理正文。</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {!selectedChapter ? (
-                <EmptyState
-                  title="尚未选中章节"
-                  description="选择一个章节。"
+              <form className="flex w-full max-w-xl flex-col gap-2 sm:flex-row" onSubmit={handleCreateChapter}>
+                <Input
+                  value={newChapter.title}
+                  onChange={(event) => setNewChapter({ title: event.target.value })}
+                  placeholder="搜索或直接输入新章节标题，例如：第一章 · 雪夜重逢"
+                  maxLength={200}
+                  className="h-11 rounded-full border-border bg-muted/20 px-4"
                 />
-              ) : (
-                <div className="space-y-5">
-                  <div className="flex flex-wrap items-center gap-3">
-                    <span className="rounded-full border border-border px-3 py-1 text-xs text-muted-foreground">
-                      第 {selectedChapter.order_index} 章
-                    </span>
+                <Button className="h-11 rounded-full px-5" type="submit" disabled={createChapterMutation.isPending}>
+                  <FilePlus2 className="size-4" />
+                  {createChapterMutation.isPending ? '创建中...' : '新建章节'}
+                </Button>
+              </form>
+            </div>
+          </div>
+
+          {chapters.length === 0 ? (
+            <div className="px-6 py-8 lg:px-7">
+              <EmptyState title="这个项目还没有章节" description="先创建一个章节。" />
+            </div>
+          ) : (
+            <div className="divide-y divide-border/70">
+              {chapters.map((chapter, index) => {
+                const isSelected = selectedChapter?.id === chapter.id
+
+                return (
+                  <div
+                    key={chapter.id}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setSelectedChapterId(chapter.id)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault()
+                        setSelectedChapterId(chapter.id)
+                      }
+                    }}
+                    className={[
+                      'group relative grid gap-4 px-6 py-5 transition lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center lg:px-7',
+                      isSelected ? 'bg-primary/6' : 'hover:bg-muted/30',
+                    ].join(' ')}
+                  >
+                    <div
+                      className={[
+                        'absolute inset-y-3 left-3 hidden w-1 rounded-full transition lg:block',
+                        isSelected ? 'bg-primary' : 'bg-transparent group-hover:bg-primary/30',
+                      ].join(' ')}
+                    />
+
+                    <div className="min-w-0 space-y-2">
+                      <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                        <span className="rounded-full border border-border bg-background px-2.5 py-1">第 {chapter.order_index} 章</span>
+                        <StatusBadge status={chapter.status} className="py-0.5" />
+                        <span>{chapter.word_count} 字</span>
+                        <span>最近更新 {formatDate(chapter.updated_at)}</span>
+                      </div>
+
+                      <div className="flex flex-wrap items-end gap-3">
+                        <h3 className="truncate text-lg font-semibold text-foreground">{chapter.title}</h3>
+                        <span className="text-sm text-muted-foreground">{chapter.content ? '已有正文，可直接续写' : '尚未开始正文编写'}</span>
+                      </div>
+
+                      <p className="line-clamp-2 text-sm leading-6 text-muted-foreground">
+                        {chapter.summary?.trim() || chapter.notes?.trim() || '暂无章节摘要，建议补充一句剧情目标或当前推进说明。'}
+                      </p>
+                    </div>
+
+                    <div className="flex shrink-0 flex-wrap items-center gap-2">
+                      <Link
+                        to={`/projects/${project.id}/editor/${chapter.id}`}
+                        className="inline-flex h-9 items-center justify-center rounded-full bg-primary px-4 text-sm font-medium text-primary-foreground transition hover:opacity-90"
+                        onClick={(event) => event.stopPropagation()}
+                      >
+                        编辑
+                      </Link>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-9 rounded-full px-3"
+                        disabled={index === 0 || reorderMutation.isPending}
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          moveChapter(chapter, 'up')
+                        }}
+                      >
+                        上移
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-9 rounded-full px-3"
+                        disabled={index === chapters.length - 1 || reorderMutation.isPending}
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          moveChapter(chapter, 'down')
+                        }}
+                      >
+                        下移
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        size="sm"
+                        className="h-9 rounded-full px-3"
+                        disabled={deleteChapterMutation.isPending}
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          handleDeleteChapter(chapter)
+                        }}
+                      >
+                        <Trash2 className="size-4" />
+                      </Button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+
+          <div className="border-t border-border/70 bg-muted/20 px-6 py-5 lg:px-7">
+            {!selectedChapter ? (
+              <div className="text-sm text-muted-foreground">尚未选中章节，请从上方列表选择一个章节继续工作。</div>
+            ) : (
+              <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_280px] xl:items-start">
+                <div className="space-y-4">
+                  <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+                    <span className="rounded-full border border-border bg-background px-3 py-1">第 {selectedChapter.order_index} 章</span>
                     <StatusBadge status={selectedChapter.status} />
-                    <span className="text-xs text-muted-foreground">最近更新 {formatDate(selectedChapter.updated_at)}</span>
+                    <span>最近更新 {formatDate(selectedChapter.updated_at)}</span>
                   </div>
 
-                  <div>
+                  <div className="space-y-2">
                     <h3 className="text-2xl font-semibold text-foreground">{selectedChapter.title}</h3>
-                    <p className="mt-3 line-clamp-3 text-sm leading-7 text-muted-foreground">
-                      {selectedChapter.summary?.trim() || '当前章节还没有摘要。'}
+                    <p className="max-w-3xl text-sm leading-7 text-muted-foreground">
+                      {selectedChapter.summary?.trim() || '当前章节还没有摘要，建议补充一句场景目标、冲突或本章推进节点。'}
                     </p>
                   </div>
 
-                  <Separator className="bg-border" />
-
-                  <div className="grid gap-4 md:grid-cols-3">
-                    <MetaCard label="当前字数" value={`${selectedChapter.word_count}`} />
-                    <MetaCard label="正文状态" value={selectedChapter.content ? '已有草稿' : '待开始'} />
-                    <MetaCard label="备注" value={selectedChapter.notes?.trim() || '暂无备注'} />
+                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                    <InlineMetaItem label="当前字数" value={`${selectedChapter.word_count}`} />
+                    <InlineMetaItem label="正文状态" value={getChapterStatusSummary(selectedChapter)} />
+                    <InlineMetaItem label="备注" value={selectedChapter.notes?.trim() || '暂无备注'} />
+                    <InlineMetaItem
+                      label="章节位置"
+                      value={selectedChapter === latestUpdatedChapter ? '最近推进章节' : '当前选中章节'}
+                    />
+                    <InlineMetaItem label="下一动作" value={getNextActionLabel(selectedChapter)} />
+                    <InlineMetaItem label="AI 处理" value="长文本改写、对照统一可进入 AI 工具箱" />
                   </div>
+                </div>
 
-                  <div className="grid gap-4 md:grid-cols-3">
-                    <MetaCard label="章节位置" value={selectedChapter === latestUpdatedChapter ? '最近推进章节' : '当前选中章节'} />
-                    <MetaCard label="下一动作" value={selectedChapter.content ? '直接进入编辑器续写' : '进入编辑器建立正文'} />
-                    <MetaCard label="重任务处理" value="长文本改写与对照统一去 AI 工具箱" />
-                  </div>
-
-                  <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+                <div className="rounded-2xl border border-border/70 bg-background/90 p-4 shadow-sm">
+                  <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">当前章节操作</div>
+                  <div className="mt-2 text-lg font-semibold text-foreground">{selectedChapter.title}</div>
+                  <div className="mt-4 grid gap-2">
                     <Link
                       to={`/projects/${project.id}/editor/${selectedChapter.id}`}
-                      className="inline-flex h-8 w-full items-center justify-center gap-1.5 rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground transition hover:opacity-90 sm:w-auto"
+                      className="inline-flex h-10 items-center justify-center gap-1.5 rounded-full bg-primary px-4 text-sm font-medium text-primary-foreground transition hover:opacity-90"
                     >
                       <PenSquare className="size-4" />
                       打开编辑器
@@ -633,12 +800,12 @@ export function ProjectWorkspacePage() {
                     </Link>
                     <Link
                       to={`/ai-toolbox?task=continue&projectId=${project.id}&chapterId=${selectedChapter.id}`}
-                      className="inline-flex h-8 w-full items-center justify-center rounded-lg border border-border bg-background px-3 text-sm font-medium text-foreground transition hover:bg-muted sm:w-auto"
+                      className="inline-flex h-10 items-center justify-center rounded-full border border-border bg-background px-4 text-sm font-medium text-foreground transition hover:bg-muted"
                     >
                       续写任务
                     </Link>
                     <Button
-                      className="w-full sm:w-auto"
+                      className="h-10 rounded-full"
                       variant="outline"
                       onClick={() =>
                         updateChapterMutation.mutate({
@@ -652,9 +819,9 @@ export function ProjectWorkspacePage() {
                     </Button>
                   </div>
                 </div>
-              )}
-            </CardContent>
-          </Card>
+              </div>
+            )}
+          </div>
         </section>
 
         <aside className="space-y-4 xl:sticky xl:top-4 xl:self-start">
@@ -702,6 +869,12 @@ export function ProjectWorkspacePage() {
 
           <Card className="border border-border bg-card/95">
             <CardHeader>
+              <div className="flex justify-end">
+                <Button type="button" size="sm" variant="outline" onClick={() => setIsImportDialogOpen(true)}>
+                  <FileUp className="size-4" />
+                  导入资料
+                </Button>
+              </div>
               <CardTitle className="flex items-center gap-2 text-lg text-foreground">
                 <Users2 className="size-5 text-primary" />
                 项目角色
@@ -806,7 +979,7 @@ export function ProjectWorkspacePage() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-sm font-medium text-foreground/85">项目内备注</label>
+                    <label className="text-sm font-medium text-foreground/85">项目内说明</label>
                     <Textarea
                       value={characterLinkDraft.summary}
                       onChange={(event) =>
@@ -815,13 +988,13 @@ export function ProjectWorkspacePage() {
                           summary: event.target.value,
                         }))
                       }
-                      rows={3}
-                      placeholder="补充角色在当前项目中的作用、关系或冲突定位"
+                      rows={4}
+                      placeholder="补充该角色在当前项目中的关系、冲突或使用约束"
                     />
                   </div>
                   <Button type="submit" className="w-full" disabled={attachCharacterMutation.isPending}>
                     <UserPlus className="size-4" />
-                    {attachCharacterMutation.isPending ? '绑定中...' : '添加到项目'}
+                    {attachCharacterMutation.isPending ? '绑定中...' : '绑定到当前项目'}
                   </Button>
                 </form>
               )}
@@ -834,43 +1007,102 @@ export function ProjectWorkspacePage() {
                 <Globe2 className="size-5 text-primary" />
                 世界观摘要
               </CardTitle>
-              <CardDescription className="text-muted-foreground">这里保留速览与跳转，详细设定维护回到专页处理。</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="rounded-2xl border border-border bg-muted/35 p-4 text-sm text-foreground/85">
-                <div className="font-medium text-foreground">当前摘要</div>
-                <div className="mt-3 space-y-3 text-sm leading-6 text-muted-foreground">
-                  <p>
-                    <span className="text-muted-foreground">标题：</span>
-                    {worldSetting?.title || '尚未设置'}
-                  </p>
-                  <p>
-                    <span className="text-muted-foreground">概览：</span>
-                    {worldSetting?.overview?.trim() || '尚未填写世界观概览'}
-                  </p>
-                  <p>
-                    <span className="text-muted-foreground">规则：</span>
-                    {worldSetting?.rules?.trim() || '尚未填写世界规则'}
-                  </p>
-                </div>
+            <CardContent className="space-y-4 text-sm leading-6 text-foreground/85">
+              <div className="rounded-2xl border border-border bg-muted/35 px-4 py-4">
+                <p>
+                  <span className="text-muted-foreground">标题：</span>
+                  {worldSetting?.title || '尚未设置'}
+                </p>
+                <p className="mt-3 line-clamp-3">
+                  <span className="text-muted-foreground">概览：</span>
+                  {worldSetting?.overview?.trim() || '尚未填写世界观概览'}
+                </p>
+                <p className="mt-3 line-clamp-3">
+                  <span className="text-muted-foreground">规则：</span>
+                  {worldSetting?.rules?.trim() || '尚未填写世界规则'}
+                </p>
               </div>
-
-              <Link
-                to={`/projects/${project.id}/world`}
-                className="inline-flex h-9 w-full items-center justify-center rounded-lg border border-border bg-background px-3 text-sm font-medium text-foreground transition hover:bg-muted"
-              >
-                进入完整世界观编辑页
-              </Link>
-              <Link
-                to={`/ai-toolbox?task=consistency&projectId=${project.id}${selectedChapter ? `&chapterId=${selectedChapter.id}` : ''}`}
-                className="inline-flex h-9 w-full items-center justify-center rounded-lg border border-border bg-muted/35 px-3 text-sm font-medium text-foreground transition hover:bg-muted"
-              >
-                用当前设定做一致性检查
-              </Link>
+              <div className="grid gap-2">
+                <Link
+                  to={`/projects/${project.id}/world`}
+                  className="inline-flex h-9 w-full items-center justify-center rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground transition hover:opacity-90"
+                >
+                  打开完整世界观页面
+                </Link>
+                <Link
+                  to={`/ai-toolbox?task=consistency&projectId=${project.id}${selectedChapter ? `&chapterId=${selectedChapter.id}` : ''}`}
+                  className="inline-flex h-9 w-full items-center justify-center rounded-lg border border-border bg-muted/35 px-3 text-sm font-medium text-foreground transition hover:bg-muted"
+                >
+                  交给 AI 做一致性检查
+                </Link>
+              </div>
             </CardContent>
           </Card>
         </aside>
       </div>
+
+      <Dialog open={isImportDialogOpen} onOpenChange={setIsImportDialogOpen}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>导入项目资料</DialogTitle>
+            <DialogDescription>
+              粘贴原文、人物设定或条目说明，系统会自动抽取角色并可同步更新当前项目世界观。
+            </DialogDescription>
+          </DialogHeader>
+
+          <form className="space-y-4" onSubmit={handleImportProjectKnowledge}>
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground/85">待导入内容</label>
+              <Textarea
+                value={projectImportDraft.sourceText}
+                onChange={(event) =>
+                  setProjectImportDraft((prev) => ({
+                    ...prev,
+                    sourceText: event.target.value,
+                  }))
+                }
+                rows={12}
+                placeholder="粘贴角色表、项目简介、已有世界观设定或原始素材。"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground/85">导入指引（可选）</label>
+              <Textarea
+                value={projectImportDraft.guidance}
+                onChange={(event) =>
+                  setProjectImportDraft((prev) => ({
+                    ...prev,
+                    guidance: event.target.value,
+                  }))
+                }
+                rows={3}
+                placeholder="例如：保留已有命名，不覆盖现有角色关系。"
+              />
+            </div>
+
+            {latestImportResult ? (
+              <div className="rounded-2xl border border-emerald-500/25 bg-emerald-500/8 px-4 py-4 text-sm leading-6 text-foreground/85">
+                <div className="font-medium text-foreground">最近一次导入结果</div>
+                <div className="mt-2 text-muted-foreground">
+                  已导入 {latestImportResult.imported_character_count} 个角色，新增 {latestImportResult.created_character_count} 个角色，
+                  {latestImportResult.world_setting_updated ? '并同步更新了世界观。' : '未修改当前世界观。'}
+                </div>
+              </div>
+            ) : null}
+
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setIsImportDialogOpen(false)}>
+                取消
+              </Button>
+              <Button type="submit" disabled={importProjectKnowledgeMutation.isPending}>
+                {importProjectKnowledgeMutation.isPending ? '导入中...' : '开始导入'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         open={Boolean(editingProjectCharacter)}
@@ -884,9 +1116,7 @@ export function ProjectWorkspacePage() {
         <DialogContent className="max-w-xl">
           <DialogHeader>
             <DialogTitle>编辑项目角色定位</DialogTitle>
-            <DialogDescription>
-              更新角色在当前项目中的定位与备注。
-            </DialogDescription>
+            <DialogDescription>更新角色在当前项目中的定位与备注。</DialogDescription>
           </DialogHeader>
 
           {editingProjectCharacter ? (
@@ -947,44 +1177,28 @@ export function ProjectWorkspacePage() {
   )
 }
 
-function WorkspaceMetricCard({ label, value, hint }: { label: string; value: string; hint?: string }) {
-  return (
-    <div className="min-w-[148px] rounded-2xl border border-border bg-muted/35 px-4 py-3">
-      <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">{label}</div>
-      <div className="mt-2 text-xl font-semibold text-foreground">{value}</div>
-      {hint ? <div className="mt-1 text-xs leading-5 text-muted-foreground">{hint}</div> : null}
-    </div>
-  )
-}
-
-function WorkspaceFocusCard({
-  title,
-  description,
-  icon,
+function WorkspaceStatCell({
+  label,
+  value,
+  valueClassName,
 }: {
-  title: string
-  description?: string
-  icon: React.ReactNode
+  label: string
+  value: string
+  valueClassName?: string
 }) {
   return (
-    <div className="rounded-2xl border border-border bg-muted/35 p-4">
-      <div className="flex items-center gap-3">
-        <div className="rounded-xl border border-border bg-background p-2">{icon}</div>
-        <div className={description ? 'space-y-1' : ''}>
-          <div className="text-sm font-medium text-foreground">{title}</div>
-          {description ? <p className="text-sm leading-6 text-muted-foreground">{description}</p> : null}
-        </div>
-      </div>
+    <div className="rounded-2xl border border-border/70 bg-background/80 px-4 py-3 shadow-sm">
+      <div className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">{label}</div>
+      <div className={[`mt-2 text-2xl font-semibold text-foreground`, valueClassName || ''].join(' ').trim()}>{value}</div>
     </div>
   )
 }
 
-function MetaCard({ label, value }: { label: string; value: string }) {
+function InlineMetaItem({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl border border-border bg-muted/35 p-4">
-      <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">{label}</div>
-      <div className="mt-2 text-sm leading-6 text-foreground">{value}</div>
+    <div className="rounded-2xl border border-border/70 bg-background/80 px-4 py-3 shadow-sm">
+      <div className="text-xs text-muted-foreground">{label}</div>
+      <div className="mt-1 text-sm leading-6 text-foreground">{value}</div>
     </div>
   )
 }
-
