@@ -15,6 +15,8 @@ import type {
   ProjectImportPayload,
   ProjectImportResult,
   ProjectPayload,
+  ProjectWorldAutoCompletePayload,
+  ProjectWorldAutoCompleteResult,
   WorldSetting,
   WorldSettingPayload,
 } from '@/types/api'
@@ -128,5 +130,10 @@ export async function updateProjectWorldSetting(projectId: string, payload: Worl
 
 export async function importProjectKnowledge(projectId: string, payload: ProjectImportPayload) {
   const { data } = await apiClient.post<ProjectImportResult>(`/projects/${projectId}/import`, payload)
+  return data
+}
+
+export async function autocompleteProjectWorldSetting(projectId: string, payload: ProjectWorldAutoCompletePayload) {
+  const { data } = await apiClient.post<ProjectWorldAutoCompleteResult>(`/projects/${projectId}/world-setting/autocomplete`, payload)
   return data
 }
