@@ -330,6 +330,27 @@ class ProjectImportAnalysisResult(BaseModel):
     notes: list[str] = Field(default_factory=list)
 
 
+class ProjectWorldAutoCompleteRequest(BaseModel):
+    mode: str = Field(default="hybrid", max_length=20)
+    source_text: str | None = Field(default=None, max_length=30000)
+    command: str | None = Field(default=None, max_length=4000)
+    guidance: str | None = Field(default=None, max_length=2000)
+    model_provider: str | None = Field(default=None, max_length=50)
+    model_id: str | None = Field(default=None, max_length=100)
+
+    @field_validator("mode")
+    @classmethod
+    def validate_world_autocomplete_mode(cls, value: str) -> str:
+        if value not in {"import", "command", "hybrid"}:
+            raise ValueError("Invalid world autocomplete mode")
+        return value
+
+    @field_validator("source_text", "command", "guidance", "model_provider", "model_id", mode="before")
+    @classmethod
+    def normalize_world_autocomplete_fields(cls, value: str | None) -> str | None:
+        return normalize_optional_text(value)
+
+
 class ProjectImportRequest(BaseModel):
     source_text: str = Field(min_length=1, max_length=30000)
     guidance: str | None = Field(default=None, max_length=2000)
@@ -434,6 +455,13 @@ class ProjectImportResponse(BaseModel):
     notes: list[str] = Field(default_factory=list)
     characters: list[ProjectCharacterResponse] = Field(default_factory=list)
     world_setting: WorldSettingResponse | None = None
+
+
+class ProjectWorldAutoCompleteResponse(BaseModel):
+    world_setting: WorldSettingResponse
+    notes: list[str] = Field(default_factory=list)
+    applied_sources: list[str] = Field(default_factory=list)
+    world_setting_updated: bool = False
 
 
 class ProjectResponse(BaseModel):

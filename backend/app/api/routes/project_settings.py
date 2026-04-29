@@ -11,6 +11,8 @@ from app.schemas.project import (
     ProjectImportAnalysisResult,
     ProjectImportRequest,
     ProjectImportResponse,
+    ProjectWorldAutoCompleteRequest,
+    ProjectWorldAutoCompleteResponse,
     ProjectCharacterCreate,
     ProjectCharacterResponse,
     ProjectCharacterUpdate,
@@ -57,6 +59,42 @@ def _apply_project_link_details(link: ProjectCharacter, *, role_label: str | Non
         link.summary = summary
         changed = True
     return changed
+
+
+def _build_world_autocomplete_instruction(project: Project, data: ProjectWorldAutoCompleteRequest) -> str:
+    world_title = project.world_setting.title if project.world_setting else f"{project.title}世界观设定"
+    mode_guidance = {
+        "import": "基于用户导入的资料补全世界观，优先提炼可直接落库的设定。",
+        "command": "基于用户的明确指令补全世界观，可以在不违背现有设定的前提下进行合理创造。",
+        "hybrid": "综合用户导入资料与补充指令补全世界观，优先保证资料事实，其次进行合理扩写。",
+    }
+    completion_requirement = (
+        "请严格输出 JSON 对象，不要输出解释、标题或 Markdown。"
+        'JSON 结构必须为：{"world_setting":{"title":"","overview":"","rules":"","factions":"","locations":"","timeline":"","extra_notes":""},'
+        '"notes":[""],"applied_sources":[""]}。'
+        "要求：1. world_setting 中所有字段都应尽量补全；"
+        "2. 若某字段无法从资料直接得出，可依据现有项目设定与用户指令做低冲突、可自洽的合理补全；"
+        "3. 不要改写已明确给出的核心事实；"
+        "4. notes 记录不确定点、推断点与建议人工确认项；"
+        "5. applied_sources 仅枚举本次使用的信息来源，例如：导入资料、用户指令、现有项目设定。"
+    )
+
+    input_sections: list[str] = []
+    if data.source_text:
+        input_sections.append(f"导入资料：\n{data.source_text}")
+    if data.command:
+        input_sections.append(f"用户补全指令：\n{data.command}")
+    if data.guidance:
+        input_sections.append(f"额外要求：\n{data.guidance}")
+
+    return (
+        f"你是小说项目的世界观设定架构师。当前项目标题：{project.title}。\n"
+        f"目标世界观标题：{world_title}。\n"
+        f"任务模式：{mode_guidance[data.mode]}\n"
+        f"{completion_requirement}\n\n"
+        "请优先参考项目已有角色、现有世界观、项目简介与来源作品，补全结果要适合直接写入数据库。\n\n"
+        + "\n\n".join(input_sections)
+    )
 
 
 @router.get("/{project_id}/characters", response_model=list[ProjectCharacterResponse])
@@ -391,4 +429,83 @@ async def import_project_knowledge(
         notes=analysis.notes,
         characters=refreshed_links,
         world_setting=world_setting,
+    )
+
+
+@router.post("/{project_id}/world-setting/autocomplete", response_model=ProjectWorldAutoCompleteResponse)
+async def autocomplete_project_world_setting(
+    project_id: str,
+    data: ProjectWorldAutoCompleteRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(Project)
+        .options(
+            selectinload(Project.project_characters).selectinload(ProjectCharacter.character),
+            selectinload(Project.world_setting),
+        )
+        .where(Project.id == project_id)
+    )
+    project = result.scalar_one_or_none()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    instruction = _build_world_autocomplete_instruction(project, data)
+    source_chunks = [chunk for chunk in [data.source_text, data.command] if chunk and chunk.strip()]
+    ai_input = "\n\n".join(source_chunks) or project.title
+
+    ai_raw = await ai_service.generate_text(
+        db,
+        project_id=project_id,
+        chapter_id=None,
+        text=ai_input,
+        instruction=instruction,
+        model_provider=data.model_provider,
+        model_id=data.model_id,
+        temperature=0.4,
+        max_tokens=4000,
+    )
+
+    try:
+        analysis_payload = _extract_json_object(ai_raw)
+        analysis = ProjectWorldAutoCompleteResponse.model_validate(analysis_payload)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"AI world-setting parsing failed: {exc}") from exc
+
+    world_payload = analysis.world_setting.model_dump()
+    title = world_payload["title"] or (project.world_setting.title if project.world_setting else f"{project.title}世界观设定")
+
+    world_setting = project.world_setting
+    world_setting_updated = False
+    if not world_setting:
+        world_setting = WorldSetting(
+            project_id=project_id,
+            title=title,
+            overview=world_payload["overview"],
+            rules=world_payload["rules"],
+            factions=world_payload["factions"],
+            locations=world_payload["locations"],
+            timeline=world_payload["timeline"],
+            extra_notes=world_payload["extra_notes"],
+        )
+        db.add(world_setting)
+        world_setting_updated = True
+    else:
+        if world_setting.title != title:
+            world_setting.title = title
+            world_setting_updated = True
+        for field in ("overview", "rules", "factions", "locations", "timeline", "extra_notes"):
+            value = world_payload[field]
+            if value is not None and getattr(world_setting, field) != value:
+                setattr(world_setting, field, value)
+                world_setting_updated = True
+
+    await db.commit()
+    await db.refresh(world_setting)
+
+    return ProjectWorldAutoCompleteResponse(
+        world_setting=world_setting,
+        notes=analysis.notes,
+        applied_sources=analysis.applied_sources,
+        world_setting_updated=world_setting_updated,
     )
