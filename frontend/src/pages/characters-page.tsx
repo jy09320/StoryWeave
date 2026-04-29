@@ -1,9 +1,11 @@
-import { useEffect, useMemo, useState, type Dispatch, type FormEvent, type SetStateAction } from 'react'
+import { useMemo, useState, type FormEvent } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { Link } from 'react-router-dom'
+import { Link, useParams } from 'react-router-dom'
 import { BookOpenText, PencilLine, Plus, Search, Trash2, Users2 } from 'lucide-react'
 import { toast } from 'sonner'
 
+import { type ProjectAssetAIDraftState } from '@/components/project-asset-ai-dialog'
+import { ProjectAssetAIPanel } from '@/components/project-asset-ai-panel'
 import { EmptyState } from '@/components/empty-state'
 import { LoadingState } from '@/components/loading-state'
 import { Button } from '@/components/ui/button'
@@ -29,8 +31,26 @@ import { Textarea } from '@/components/ui/textarea'
 import { readEditorRouteContext } from '@/lib/editor-route-context'
 import { formatDate } from '@/lib/format'
 import { queryClient } from '@/lib/query-client'
-import { createCharacter, deleteCharacter, listCharacters, updateCharacter } from '@/services/projects'
-import type { Character, CharacterPayload } from '@/types/api'
+import {
+  attachProjectCharacter,
+  createCharacter,
+  deleteCharacter,
+  getProject,
+  listCharacters,
+  updateCharacter,
+} from '@/services/projects'
+import {
+  analyzeCharacters,
+  applyCharacterPatch,
+  uploadProjectAssetFile,
+} from '@/services/project-asset-ai'
+import type {
+  Character,
+  CharacterActionItem,
+  CharacterPayload,
+  ProjectAssetAIMessage,
+  ProjectDetail,
+} from '@/types/api'
 
 interface CharacterFormState {
   name: string
@@ -52,6 +72,13 @@ const defaultFormState: CharacterFormState = {
   personality: '',
   background: '',
   relationship_notes: '',
+}
+
+const defaultCharacterAIDraft: ProjectAssetAIDraftState = {
+  mode: 'hybrid',
+  sourceText: '',
+  command: '',
+  guidance: '',
 }
 
 function buildPayload(form: CharacterFormState): CharacterPayload {
@@ -95,7 +122,11 @@ function splitTags(tags?: string | null) {
     .filter(Boolean)
 }
 
+
 export function CharactersPage() {
+  const { projectId } = useParams<{ projectId?: string }>()
+  const isProjectScoped = Boolean(projectId)
+
   const [keyword, setKeyword] = useState('')
   const [searchKeyword, setSearchKeyword] = useState('')
   const [selectedCharacterId, setSelectedCharacterId] = useState<string | null>(null)
@@ -103,6 +134,17 @@ export function CharactersPage() {
   const [editingCharacter, setEditingCharacter] = useState<Character | null>(null)
   const [createForm, setCreateForm] = useState<CharacterFormState>(defaultFormState)
   const [editForm, setEditForm] = useState<CharacterFormState>(defaultFormState)
+  const [characterAIDraft, setCharacterAIDraft] = useState<ProjectAssetAIDraftState>(defaultCharacterAIDraft)
+  const [characterAIMessages, setCharacterAIMessages] = useState<ProjectAssetAIMessage[]>([])
+  const [latestCharacterActions, setLatestCharacterActions] = useState<CharacterActionItem[] | null>(null)
+  const [uploadedFiles, setUploadedFiles] = useState<Array<{ file_id: string; filename: string }>>([])
+  const [fileIds, setFileIds] = useState<string[]>([])
+
+  const projectQuery = useQuery<ProjectDetail, Error>({
+    queryKey: ['project', projectId],
+    queryFn: () => getProject(projectId ?? ''),
+    enabled: isProjectScoped,
+  })
 
   const charactersQuery = useQuery<Character[], Error>({
     queryKey: ['characters', searchKeyword],
@@ -142,6 +184,9 @@ export function CharactersPage() {
     mutationFn: deleteCharacter,
     onSuccess: async (_, deletedId) => {
       await queryClient.invalidateQueries({ queryKey: ['characters'] })
+      if (isProjectScoped) {
+        await queryClient.invalidateQueries({ queryKey: ['project', projectId] })
+      }
       setSelectedCharacterId((current) => (current === deletedId ? null : current))
       toast.success('角色已删除')
     },
@@ -150,28 +195,130 @@ export function CharactersPage() {
     },
   })
 
-  const characters = charactersQuery.data ?? []
+  const attachCharacterMutation = useMutation({
+    mutationFn: ({ projectId: currentProjectId, characterId }: { projectId: string; characterId: string }) =>
+      attachProjectCharacter(currentProjectId, { character_id: characterId, role_label: null, summary: null }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['project', projectId] })
+      toast.success('角色已加入当前项目')
+    },
+    onError: (error: Error) => {
+      toast.error(error.message)
+    },
+  })
+
+  const analyzeCharactersMutation = useMutation({
+    mutationFn: () =>
+      analyzeCharacters(projectId ?? '', {
+        message: characterAIDraft.command.trim() || characterAIDraft.sourceText.trim() || '',
+        source_text: characterAIDraft.sourceText.trim() || null,
+        command: characterAIDraft.command.trim() || null,
+        guidance: characterAIDraft.guidance.trim() || null,
+        file_ids: fileIds,
+      }),
+    onSuccess: (result) => {
+      setLatestCharacterActions(result.actions)
+      setCharacterAIMessages((prev) => [
+        ...prev,
+        {
+          id: `char-result-${Date.now()}`,
+          role: 'result',
+          title: '角色分析完成',
+          content: [
+            result.actions.length ? `已识别 ${result.actions.length} 条角色动作` : '未识别到角色动作',
+            result.notes.length ? `备注：${result.notes.join('；')}` : '',
+            result.tool_trace.length ? `工具链：${result.tool_trace.join(' → ')}` : '',
+          ].filter(Boolean).join('\n'),
+        },
+      ])
+      toast.success(result.actions.length ? `AI 识别 ${result.actions.length} 条角色建议，请确认后写入` : 'AI 分析完成，未识别到角色')
+    },
+    onError: (error: Error) => {
+      toast.error(error.message)
+    },
+  })
+
+  const applyCharacterActionsMutation = useMutation({
+    mutationFn: () => applyCharacterPatch(projectId ?? '', { actions: latestCharacterActions! }),
+    onSuccess: async (result) => {
+      await queryClient.invalidateQueries({ queryKey: ['project', projectId] })
+      await queryClient.invalidateQueries({ queryKey: ['characters'] })
+      setLatestCharacterActions(null)
+      setCharacterAIMessages((prev) => [
+        ...prev,
+        {
+          id: `char-apply-${Date.now()}`,
+          role: 'result',
+          title: '角色写入完成',
+          content: [
+            result.applied.length ? `已执行：${result.applied.join('；')}` : '',
+            result.errors.length ? `错误：${result.errors.join('；')}` : '',
+          ].filter(Boolean).join('\n'),
+        },
+      ])
+      toast.success(`已写入 ${result.applied.length} 条角色动作`)
+    },
+    onError: (error: Error) => {
+      toast.error(error.message)
+    },
+  })
+
+  const uploadCharacterFileMutation = useMutation({
+    mutationFn: (file: File) => uploadProjectAssetFile(projectId ?? '', file),
+    onSuccess: (result) => {
+      setUploadedFiles((prev) => [...prev, { file_id: result.file_id, filename: result.filename }])
+      setFileIds((prev) => [...prev, result.file_id])
+      setCharacterAIDraft((prev) => ({
+        ...prev,
+        sourceText: prev.sourceText ? `${prev.sourceText}\n\n${result.preview}` : result.preview,
+      }))
+      toast.success(`已上传：${result.filename}（约 ${result.token_estimate} tokens）`)
+    },
+    onError: (error: Error) => {
+      toast.error(error.message)
+    },
+  })
+
+  const characters = useMemo(() => charactersQuery.data ?? [], [charactersQuery.data])
+  const projectCharacters = useMemo(() => projectQuery.data?.project_characters ?? [], [projectQuery.data?.project_characters])
+  const linkedCharacterIds = useMemo(() => new Set(projectCharacters.map((item) => item.character_id)), [projectCharacters])
+  const displayedCharacters = useMemo(
+    () => (isProjectScoped ? characters.filter((character) => linkedCharacterIds.has(character.id)) : characters),
+    [characters, isProjectScoped, linkedCharacterIds],
+  )
   const editorRouteContext = useMemo(() => readEditorRouteContext(), [])
   const selectedCharacter = useMemo(
-    () => characters.find((character) => character.id === selectedCharacterId) ?? characters[0] ?? null,
-    [characters, selectedCharacterId],
+    () => displayedCharacters.find((character) => character.id === selectedCharacterId) ?? displayedCharacters[0] ?? null,
+    [displayedCharacters, selectedCharacterId],
   )
-  const charactersWithTags = useMemo(() => characters.filter((character) => Boolean(character.tags?.trim())).length, [characters])
+  const charactersWithTags = useMemo(
+    () => displayedCharacters.filter((character) => Boolean(character.tags?.trim())).length,
+    [displayedCharacters],
+  )
   const charactersWithProfile = useMemo(
-    () => characters.filter((character) => Boolean(character.profile?.trim() || character.personality?.trim())).length,
-    [characters],
+    () => displayedCharacters.filter((character) => Boolean(character.profile?.trim() || character.personality?.trim())).length,
+    [displayedCharacters],
   )
 
-  useEffect(() => {
-    if (!characters.length) {
+  const pageTitle = isProjectScoped ? '项目角色库' : '全局角色库'
+  const pageDescription = isProjectScoped
+    ? '集中维护当前项目已绑定角色，并通过统一 AI 对话框继续补全角色资料。'
+    : '集中维护可复用角色档案。编辑器提及、悬停信息和 AI 任务都会直接读取这里。'
+
+  function ensureSelectedCharacter() {
+    if (!displayedCharacters.length) {
       setSelectedCharacterId(null)
       return
     }
 
-    if (!selectedCharacterId || !characters.some((character) => character.id === selectedCharacterId)) {
-      setSelectedCharacterId(characters[0].id)
+    if (!selectedCharacterId || !displayedCharacters.some((character) => character.id === selectedCharacterId)) {
+      setSelectedCharacterId(displayedCharacters[0].id)
     }
-  }, [characters, selectedCharacterId])
+  }
+
+  if (selectedCharacterId && !displayedCharacters.some((character) => character.id === selectedCharacterId)) {
+    ensureSelectedCharacter()
+  }
 
   function handleSearchSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -223,14 +370,83 @@ export function CharactersPage() {
     deleteCharacterMutation.mutate(character.id)
   }
 
+  function handleAttachToProject(character: Character) {
+    if (!projectId) {
+      return
+    }
+
+    attachCharacterMutation.mutate({ projectId, characterId: character.id })
+  }
+
+  function handleCharacterAIAssist(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+
+    if (!projectId) {
+      toast.error('当前不在项目上下文中，无法使用项目角色 AI。')
+      return
+    }
+
+    const sourceText = characterAIDraft.sourceText.trim()
+    const commandText = characterAIDraft.command.trim()
+
+    if (!sourceText && !commandText && fileIds.length === 0) {
+      toast.error('请先输入角色资料、上传文件或填写指令')
+      return
+    }
+
+    setCharacterAIMessages([
+      {
+        id: `char-user-${Date.now()}`,
+        role: 'user',
+        title: '用户请求',
+        content: [
+          sourceText ? `资料：\n${sourceText}` : '',
+          fileIds.length ? `已上传 ${fileIds.length} 个文件` : '',
+          commandText ? `指令：\n${commandText}` : '',
+          characterAIDraft.guidance.trim() ? `约束：\n${characterAIDraft.guidance.trim()}` : '',
+        ].filter(Boolean).join('\n\n'),
+      },
+      {
+        id: `char-system-${Date.now()}`,
+        role: 'system',
+        title: '正在分析',
+        content: '正在读取项目已绑定角色，结合输入资料生成角色动作建议，完成后请点击"应用写入"确认。',
+      },
+    ])
+
+    analyzeCharactersMutation.mutate()
+  }
+
+  if (isProjectScoped && !projectId) {
+    return <EmptyState title="项目标识缺失" description="当前路由中没有有效的项目 ID。" />
+  }
+
+  if (isProjectScoped && projectQuery.isLoading) {
+    return <LoadingState label="正在加载项目角色库..." />
+  }
+
+  if (isProjectScoped && (projectQuery.isError || !projectQuery.data)) {
+    return (
+      <EmptyState
+        title="项目角色库加载失败"
+        description={projectQuery.error?.message || '未能读取当前项目，请稍后重试。'}
+        action={
+          <Button variant="outline" onClick={() => projectQuery.refetch()}>
+            重新加载
+          </Button>
+        }
+      />
+    )
+  }
+
   if (charactersQuery.isLoading) {
-    return <LoadingState label="正在加载角色库..." />
+    return <LoadingState label={isProjectScoped ? '正在加载项目角色库...' : '正在加载角色库...'} />
   }
 
   if (charactersQuery.isError) {
     return (
       <EmptyState
-        title="角色库加载失败"
+        title={isProjectScoped ? '项目角色库加载失败' : '角色库加载失败'}
         description={charactersQuery.error?.message || '请检查后端服务是否已启动。'}
         action={
           <Button variant="outline" onClick={() => charactersQuery.refetch()}>
@@ -242,269 +458,390 @@ export function CharactersPage() {
   }
 
   return (
-    <div className="space-y-6 pb-8">
-      {editorRouteContext ? (
-        <Card className="border border-border bg-card/95 shadow-[0_12px_30px_rgba(148,163,184,0.14)]">
-          <CardContent className="flex flex-col gap-3 px-5 py-4 md:flex-row md:items-center md:justify-between">
-            <div className="space-y-1">
-              <div className="text-sm font-medium text-foreground">当前仍有章节上下文</div>
-              <div className="text-sm text-muted-foreground">
-                {editorRouteContext.projectTitle || '当前项目'} / {editorRouteContext.chapterTitle || '当前章节'}
-              </div>
-            </div>
-            <Link
-              to={`/projects/${editorRouteContext.projectId}/editor/${editorRouteContext.chapterId}`}
-              className="inline-flex h-9 items-center justify-center rounded-md border border-border bg-background px-4 text-sm text-foreground transition hover:bg-muted"
-            >
-              返回当前章节
-            </Link>
-          </CardContent>
-        </Card>
-      ) : null}
-
-      <section>
-        <Card className="border border-border bg-card/95 shadow-[0_18px_44px_rgba(148,163,184,0.16)]">
-          <CardContent className="flex flex-col gap-4 py-4">
-            <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-              <div className="min-w-0 space-y-1.5">
-                <div className="flex flex-wrap items-center gap-2">
-                  <h1 className="text-2xl font-semibold leading-tight text-foreground">全局角色库</h1>
-                  {searchKeyword ? (
-                    <span className="rounded-full border border-primary/20 bg-primary/10 px-2 py-0.5 text-[11px] text-primary">
-                      当前筛选：{searchKeyword}
-                    </span>
-                  ) : null}
+    <>
+      <div className="space-y-6 pb-8">
+        {editorRouteContext && !isProjectScoped ? (
+          <Card className="border border-border bg-card/95 shadow-[0_12px_30px_rgba(148,163,184,0.14)]">
+            <CardContent className="flex flex-col gap-3 px-5 py-4 md:flex-row md:items-center md:justify-between">
+              <div className="space-y-1">
+                <div className="text-sm font-medium text-foreground">当前仍有章节上下文</div>
+                <div className="text-sm text-muted-foreground">
+                  {editorRouteContext.projectTitle || '当前项目'} / {editorRouteContext.chapterTitle || '当前章节'}
                 </div>
-                <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
-                  集中维护可复用角色档案。编辑器提及、悬停信息和 AI 任务都会直接读取这里。
-                </p>
+              </div>
+              <Link
+                to={`/projects/${editorRouteContext.projectId}/editor/${editorRouteContext.chapterId}`}
+                className="inline-flex h-9 items-center justify-center rounded-md border border-border bg-background px-4 text-sm text-foreground transition hover:bg-muted"
+              >
+                返回当前章节
+              </Link>
+            </CardContent>
+          </Card>
+        ) : null}
+
+        {/* Page header */}
+        <section>
+          <Card className="border border-border bg-card/95 shadow-[0_18px_44px_rgba(148,163,184,0.16)]">
+            <CardContent className="flex flex-col gap-4 py-4">
+              <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                <div className="min-w-0 space-y-1.5">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h1 className="text-2xl font-semibold leading-tight text-foreground">{pageTitle}</h1>
+                    {searchKeyword ? (
+                      <span className="rounded-full border border-primary/20 bg-primary/10 px-2 py-0.5 text-[11px] text-primary">
+                        当前筛选：{searchKeyword}
+                      </span>
+                    ) : null}
+                  </div>
+                  <p className="max-w-3xl text-sm leading-6 text-muted-foreground">{pageDescription}</p>
+                </div>
+
+                <div className="flex w-full flex-col gap-2 xl:w-auto xl:flex-row">
+                  <CharacterDialog
+                    open={isCreateOpen}
+                    onOpenChange={(open) => {
+                      setIsCreateOpen(open)
+                      if (!open) {
+                        setCreateForm(defaultFormState)
+                      }
+                    }}
+                    title="创建角色"
+                    description="填写角色信息"
+                    form={createForm}
+                    onChange={setCreateForm}
+                    onSubmit={handleCreateSubmit}
+                    pending={createCharacterMutation.isPending}
+                    trigger={
+                      <Button className="w-full xl:w-auto" size="sm">
+                        <Plus className="size-4" />
+                        新建角色
+                      </Button>
+                    }
+                    submitLabel="创建角色"
+                  />
+                </div>
               </div>
 
-              <CharacterDialog
-                open={isCreateOpen}
-                onOpenChange={(open) => {
-                  setIsCreateOpen(open)
-                  if (!open) {
-                    setCreateForm(defaultFormState)
-                  }
-                }}
-                title="创建角色"
-                description="填写角色信息"
-                form={createForm}
-                onChange={setCreateForm}
-                onSubmit={handleCreateSubmit}
-                pending={createCharacterMutation.isPending}
-                trigger={
-                  <Button className="w-full xl:w-auto" size="sm">
-                    <Plus className="size-4" />
-                    {'\u65b0\u5efa\u89d2\u8272'}
-                  </Button>
-                }
-                submitLabel="创建角色"
+              {!isProjectScoped ? (
+                <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center">
+                  <form className="flex w-full flex-col gap-2 sm:flex-row" onSubmit={handleSearchSubmit}>
+                    <div className="relative min-w-0 flex-1">
+                      <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                      <Input
+                        value={keyword}
+                        onChange={(event) => setKeyword(event.target.value)}
+                        placeholder="搜索角色名、别名、标签"
+                        className="pl-9"
+                      />
+                    </div>
+                    <Button className="w-full sm:w-auto" size="sm" type="submit" variant="outline">
+                      搜索
+                    </Button>
+                  </form>
+
+                  <div className="grid grid-cols-3 gap-2 xl:min-w-[360px]">
+                    <MetricInline label="角色总数" value={displayedCharacters.length} />
+                    <MetricInline label="已打标签" value={charactersWithTags} />
+                    <MetricInline
+                      label="资料较完整"
+                      value={charactersWithProfile}
+                      hint={searchKeyword ? '筛选结果内' : '含人设或档案'}
+                    />
+                  </div>
+                </div>
+              ) : null}
+
+              <div className="flex flex-wrap gap-2">
+                <FeaturePill title="统一角色卡" icon={<Users2 className="size-3.5 text-primary" />} />
+                <FeaturePill title={isProjectScoped ? '项目角色聚合' : '项目复用'} icon={<BookOpenText className="size-3.5 text-muted-foreground" />} />
+                <FeaturePill title="AI 上下文底座" icon={<PencilLine className="size-3.5 text-primary" />} />
+              </div>
+            </CardContent>
+          </Card>
+        </section>
+
+        {/* Project scoped: AI panel (left) + character list (right) */}
+        {isProjectScoped ? (
+          <section className="grid gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+            {/* AI panel — primary, always visible */}
+            <div className="xl:sticky xl:top-4 xl:self-start xl:h-[calc(100vh-8rem)]">
+              <ProjectAssetAIPanel
+                assetType="project_character"
+                draft={characterAIDraft}
+                onDraftChange={setCharacterAIDraft}
+                onSubmit={handleCharacterAIAssist}
+                isSubmitting={analyzeCharactersMutation.isPending}
+                messages={characterAIMessages}
+                latestCharacterActions={latestCharacterActions}
+                onApplyCharacterActions={() => applyCharacterActionsMutation.mutate()}
+                isApplying={applyCharacterActionsMutation.isPending}
+                onFileUpload={async (file) => { await uploadCharacterFileMutation.mutateAsync(file) }}
+                isUploadingFile={uploadCharacterFileMutation.isPending}
+                uploadedFiles={uploadedFiles}
               />
             </div>
 
-            <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center">
-              <form className="flex w-full flex-col gap-2 sm:flex-row" onSubmit={handleSearchSubmit}>
-                <div className="relative min-w-0 flex-1">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    value={keyword}
-                    onChange={(event) => setKeyword(event.target.value)}
-                    placeholder="搜索角色名、别名、标签"
-                    className="pl-9"
-                  />
-                </div>
-                <Button className="w-full sm:w-auto" size="sm" type="submit" variant="outline">
-                  {'\u641c\u7d22'}
-                </Button>
-              </form>
-
-              <div className="grid grid-cols-3 gap-2 xl:min-w-[360px]">
-                <MetricInline label="角色总数" value={characters.length} />
-                <MetricInline label="已打标签" value={charactersWithTags} />
-                <MetricInline
-                  label="资料较完整"
-                  value={charactersWithProfile}
-                  hint={searchKeyword ? '筛选结果内' : '含人设或档案'}
+            {/* Character list + detail */}
+            <div className="space-y-4">
+              {displayedCharacters.length === 0 ? (
+                <EmptyState
+                  title={searchKeyword ? '没有匹配的角色' : '当前项目还没有角色'}
+                  description={searchKeyword ? '换个关键词再试。' : '先创建角色，或把已有角色绑定到当前项目。'}
+                  action={
+                    <Button onClick={() => setIsCreateOpen(true)}>
+                      <Plus className="size-4" />
+                      创建角色
+                    </Button>
+                  }
                 />
+              ) : (
+                <>
+                  <CharacterList
+                    characters={displayedCharacters}
+                    selectedCharacter={selectedCharacter}
+                    linkedCharacterIds={linkedCharacterIds}
+                    isProjectScoped={isProjectScoped}
+                    onSelect={setSelectedCharacterId}
+                  />
+                  {selectedCharacter ? (
+                    <CharacterDetail
+                      character={selectedCharacter}
+                      isProjectScoped={isProjectScoped}
+                      linkedCharacterIds={linkedCharacterIds}
+                      attachPending={attachCharacterMutation.isPending}
+                      deletePending={deleteCharacterMutation.isPending}
+                      onAttach={() => handleAttachToProject(selectedCharacter)}
+                      onEdit={() => openEditDialog(selectedCharacter)}
+                      onDelete={() => handleDelete(selectedCharacter)}
+                    />
+                  ) : null}
+                </>
+              )}
+            </div>
+          </section>
+        ) : (
+          /* Global: original layout */
+          <>
+            {displayedCharacters.length === 0 ? (
+              <EmptyState
+                title={searchKeyword ? '没有匹配的角色' : '角色库还是空的'}
+                description={searchKeyword ? '换个关键词再试。' : '先创建一个角色。'}
+                action={
+                  <Button onClick={() => setIsCreateOpen(true)}>
+                    <Plus className="size-4" />
+                    创建角色
+                  </Button>
+                }
+              />
+            ) : (
+              <section className="grid gap-4 xl:grid-cols-[300px_minmax(0,1fr)]">
+                <aside>
+                  <CharacterList
+                    characters={displayedCharacters}
+                    selectedCharacter={selectedCharacter}
+                    linkedCharacterIds={linkedCharacterIds}
+                    isProjectScoped={false}
+                    onSelect={setSelectedCharacterId}
+                  />
+                </aside>
+
+                <section className="min-w-0 space-y-4">
+                  {selectedCharacter ? (
+                    <CharacterDetail
+                      character={selectedCharacter}
+                      isProjectScoped={false}
+                      linkedCharacterIds={linkedCharacterIds}
+                      attachPending={attachCharacterMutation.isPending}
+                      deletePending={deleteCharacterMutation.isPending}
+                      onAttach={() => handleAttachToProject(selectedCharacter)}
+                      onEdit={() => openEditDialog(selectedCharacter)}
+                      onDelete={() => handleDelete(selectedCharacter)}
+                    />
+                  ) : null}
+                </section>
+              </section>
+            )}
+          </>
+        )}
+
+        <CharacterDialog
+          open={Boolean(editingCharacter)}
+          onOpenChange={(open) => {
+            if (!open) {
+              setEditingCharacter(null)
+              setEditForm(defaultFormState)
+            }
+          }}
+          title="编辑角色"
+          description="更新角色资料"
+          form={editForm}
+          onChange={setEditForm}
+          onSubmit={handleEditSubmit}
+          pending={updateCharacterMutation.isPending}
+          submitLabel="保存修改"
+        />
+      </div>
+    </>
+  )
+}
+
+interface CharacterListProps {
+  characters: Character[]
+  selectedCharacter: Character | null
+  linkedCharacterIds: Set<string>
+  isProjectScoped: boolean
+  onSelect: (id: string) => void
+}
+
+function CharacterList({ characters, selectedCharacter, linkedCharacterIds, isProjectScoped, onSelect }: CharacterListProps) {
+  return (
+    <Card className="border border-border bg-card/95">
+      <CardHeader className="pb-2">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <CardTitle className="text-lg text-foreground">角色列表</CardTitle>
+            <CardDescription className="text-xs text-muted-foreground">按名称、别名和标签定位</CardDescription>
+          </div>
+          <span className="rounded-full border border-border bg-background px-2.5 py-1 text-xs text-muted-foreground">
+            {characters.length} 条
+          </span>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        {characters.map((character) => {
+          const tags = splitTags(character.tags)
+          const isActive = selectedCharacter?.id === character.id
+          const isLinked = linkedCharacterIds.has(character.id)
+
+          return (
+            <button
+              key={character.id}
+              type="button"
+              onClick={() => onSelect(character.id)}
+              className={[
+                'w-full rounded-md border px-3 py-2.5 text-left transition',
+                isActive
+                  ? 'border-primary/30 bg-primary/10'
+                  : 'border-border bg-background/90 hover:border-primary/20 hover:bg-muted/35',
+              ].join(' ')}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0 space-y-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="truncate text-sm font-medium text-foreground">{character.name}</div>
+                    {character.alias ? (
+                      <span className="rounded-full border border-border px-2 py-0.5 text-[11px] text-muted-foreground">
+                        {character.alias}
+                      </span>
+                    ) : null}
+                    {isProjectScoped && isLinked ? (
+                      <span className="rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2 py-0.5 text-[11px] text-emerald-600">
+                        已在项目中
+                      </span>
+                    ) : null}
+                  </div>
+                  <div className="line-clamp-1 text-xs leading-5 text-muted-foreground">
+                    {character.description?.trim() || character.personality?.trim() || '暂无角色摘要'}
+                  </div>
+                </div>
+                <div className="shrink-0 text-[11px] text-muted-foreground">{formatDate(character.updated_at)}</div>
+              </div>
+              {tags.length > 0 ? (
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {tags.slice(0, 3).map((tag) => (
+                    <span
+                      key={`${character.id}-${tag}`}
+                      className="rounded-full border border-border bg-muted/35 px-2 py-0.5 text-[11px] text-muted-foreground"
+                    >
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
+            </button>
+          )
+        })}
+      </CardContent>
+    </Card>
+  )
+}
+
+interface CharacterDetailProps {
+  character: Character
+  isProjectScoped: boolean
+  linkedCharacterIds: Set<string>
+  attachPending: boolean
+  deletePending: boolean
+  onAttach: () => void
+  onEdit: () => void
+  onDelete: () => void
+}
+
+function CharacterDetail({ character, isProjectScoped, linkedCharacterIds, attachPending, deletePending, onAttach, onEdit, onDelete }: CharacterDetailProps) {
+  return (
+    <>
+      <Card className="border border-border bg-card/95">
+        <CardHeader className="gap-3">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div className="min-w-0 space-y-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <CardTitle className="text-2xl text-foreground sm:text-3xl">{character.name}</CardTitle>
+                {character.alias ? (
+                  <span className="rounded-full border border-border bg-background px-2.5 py-1 text-xs text-muted-foreground">
+                    别名：{character.alias}
+                  </span>
+                ) : null}
+              </div>
+              <CardDescription className="max-w-3xl text-sm leading-6 text-muted-foreground">
+                {character.description?.trim() || '这名角色还没有补充摘要。'}
+              </CardDescription>
+              <div className="flex flex-wrap gap-2">
+                {splitTags(character.tags).length > 0 ? (
+                  splitTags(character.tags).map((tag) => (
+                    <span
+                      key={`${character.id}-${tag}`}
+                      className="rounded-full border border-border bg-background px-2.5 py-1 text-xs text-muted-foreground"
+                    >
+                      {tag}
+                    </span>
+                  ))
+                ) : (
+                  <span className="rounded-full border border-dashed border-border px-2.5 py-1 text-xs text-muted-foreground">
+                    暂无标签
+                  </span>
+                )}
               </div>
             </div>
 
-            <div className="flex flex-wrap gap-2">
-              <FeaturePill title="统一角色卡" icon={<Users2 className="size-3.5 text-primary" />} />
-              <FeaturePill title="项目复用" icon={<BookOpenText className="size-3.5 text-muted-foreground" />} />
-              <FeaturePill title="AI 上下文底座" icon={<PencilLine className="size-3.5 text-primary" />} />
+            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+              {isProjectScoped && !linkedCharacterIds.has(character.id) ? (
+                <Button className="w-full sm:w-auto" variant="outline" onClick={onAttach} disabled={attachPending}>
+                  {attachPending ? '绑定中...' : '加入当前项目'}
+                </Button>
+              ) : null}
+              <Button className="w-full sm:w-auto" variant="outline" onClick={onEdit}>
+                编辑资料
+              </Button>
+              <Button className="w-full sm:w-auto" variant="ghost" onClick={onDelete} disabled={deletePending}>
+                <Trash2 className="size-4" />
+                删除角色
+              </Button>
             </div>
-          </CardContent>
-        </Card>
-      </section>
+          </div>
+        </CardHeader>
+        <CardFooter className="flex flex-col items-start gap-2 border-border bg-muted/35 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+          <span>创建于 {formatDate(character.created_at)}</span>
+          <span>更新于 {formatDate(character.updated_at)}</span>
+        </CardFooter>
+      </Card>
 
-      {characters.length === 0 ? (
-        <EmptyState
-          title={searchKeyword ? '没有匹配的角色' : '角色库还是空的'}
-          description={searchKeyword ? '换个关键词再试。' : '先创建一个角色。'}
-          action={
-            <Button onClick={() => setIsCreateOpen(true)}>
-              <Plus className="size-4" />
-              创建角色
-            </Button>
-          }
-        />
-      ) : (
-        <section className="grid gap-4 xl:grid-cols-[300px_minmax(0,1fr)]">
-          <aside className="space-y-4">
-            <Card className="border border-border bg-card/95">
-              <CardHeader className="pb-2">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <CardTitle className="text-lg text-foreground">角色列表</CardTitle>
-                    <CardDescription className="text-xs text-muted-foreground">按名称、别名和标签定位</CardDescription>
-                  </div>
-                  <span className="rounded-full border border-border bg-background px-2.5 py-1 text-xs text-muted-foreground">
-                    {characters.length} 条
-                  </span>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                {characters.map((character) => {
-                  const tags = splitTags(character.tags)
-                  const isActive = selectedCharacter?.id === character.id
-
-                  return (
-                    <button
-                      key={character.id}
-                      type="button"
-                      onClick={() => setSelectedCharacterId(character.id)}
-                      className={[
-                        'w-full rounded-md border px-3 py-2.5 text-left transition',
-                        isActive
-                          ? 'border-primary/30 bg-primary/10'
-                          : 'border-border bg-background/90 hover:border-primary/20 hover:bg-muted/35',
-                      ].join(' ')}
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0 space-y-2">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <div className="truncate text-sm font-medium text-foreground">{character.name}</div>
-                            {character.alias ? (
-                              <span className="rounded-full border border-border px-2 py-0.5 text-[11px] text-muted-foreground">
-                                {character.alias}
-                              </span>
-                            ) : null}
-                          </div>
-                          <div className="line-clamp-1 text-xs leading-5 text-muted-foreground">
-                            {character.description?.trim() || character.personality?.trim() || '暂无角色摘要'}
-                          </div>
-                        </div>
-                        <div className="shrink-0 text-[11px] text-muted-foreground">{formatDate(character.updated_at)}</div>
-                      </div>
-                      {tags.length > 0 ? (
-                        <div className="mt-2 flex flex-wrap gap-1.5">
-                          {tags.slice(0, 3).map((tag) => (
-                            <span
-                              key={`${character.id}-${tag}`}
-                              className="rounded-full border border-border bg-muted/35 px-2 py-0.5 text-[11px] text-muted-foreground"
-                            >
-                              {tag}
-                            </span>
-                          ))}
-                        </div>
-                      ) : null}
-                    </button>
-                  )
-                })}
-              </CardContent>
-            </Card>
-          </aside>
-
-          <section className="min-w-0 space-y-4">
-            {selectedCharacter ? (
-              <>
-                <Card className="border border-border bg-card/95">
-                  <CardHeader className="gap-3">
-                    <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                      <div className="min-w-0 space-y-3">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <CardTitle className="text-2xl text-foreground sm:text-3xl">{selectedCharacter.name}</CardTitle>
-                          {selectedCharacter.alias ? (
-                            <span className="rounded-full border border-border bg-background px-2.5 py-1 text-xs text-muted-foreground">
-                              别名：{selectedCharacter.alias}
-                            </span>
-                          ) : null}
-                        </div>
-                        <CardDescription className="max-w-3xl text-sm leading-6 text-muted-foreground">
-                          {selectedCharacter.description?.trim() || '这名角色还没有补充摘要。'}
-                        </CardDescription>
-                        <div className="flex flex-wrap gap-2">
-                          {splitTags(selectedCharacter.tags).length > 0 ? (
-                            splitTags(selectedCharacter.tags).map((tag) => (
-                              <span
-                                key={`${selectedCharacter.id}-${tag}`}
-                                className="rounded-full border border-border bg-background px-2.5 py-1 text-xs text-muted-foreground"
-                              >
-                                {tag}
-                              </span>
-                            ))
-                          ) : (
-                            <span className="rounded-full border border-dashed border-border px-2.5 py-1 text-xs text-muted-foreground">
-                              暂无标签
-                            </span>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
-                        <Button className="w-full sm:w-auto" variant="outline" onClick={() => openEditDialog(selectedCharacter)}>
-                          编辑资料
-                        </Button>
-                        <Button
-                          className="w-full sm:w-auto"
-                          variant="ghost"
-                          onClick={() => handleDelete(selectedCharacter)}
-                          disabled={deleteCharacterMutation.isPending}
-                        >
-                          <Trash2 className="size-4" />
-                          删除角色
-                        </Button>
-                      </div>
-                    </div>
-                  </CardHeader>
-                  <CardFooter className="flex flex-col items-start gap-2 border-border bg-muted/35 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
-                    <span>创建于 {formatDate(selectedCharacter.created_at)}</span>
-                    <span>更新于 {formatDate(selectedCharacter.updated_at)}</span>
-                  </CardFooter>
-                </Card>
-
-                <div className="grid gap-4 xl:grid-cols-2">
-                  <InfoBlock label="人物档案" value={selectedCharacter.profile || '未填写人物档案'} />
-                  <InfoBlock label="性格特征" value={selectedCharacter.personality || '未填写性格特征'} />
-                  <InfoBlock label="背景经历" value={selectedCharacter.background || '未填写背景经历'} />
-                  <InfoBlock label="关系备注" value={selectedCharacter.relationship_notes || '未填写关系备注'} />
-                </div>
-              </>
-            ) : null}
-          </section>
-        </section>
-      )}
-
-      <CharacterDialog
-        open={Boolean(editingCharacter)}
-        onOpenChange={(open) => {
-          if (!open) {
-            setEditingCharacter(null)
-            setEditForm(defaultFormState)
-          }
-        }}
-        title="编辑角色"
-        description="更新角色资料"
-        form={editForm}
-        onChange={setEditForm}
-        onSubmit={handleEditSubmit}
-        pending={updateCharacterMutation.isPending}
-        submitLabel="保存修改"
-      />
-    </div>
+      <div className="grid gap-4 xl:grid-cols-2">
+        <InfoBlock label="人物档案" value={character.profile || '未填写人物档案'} />
+        <InfoBlock label="性格特征" value={character.personality || '未填写性格特征'} />
+        <InfoBlock label="背景经历" value={character.background || '未填写背景经历'} />
+        <InfoBlock label="关系备注" value={character.relationship_notes || '未填写关系备注'} />
+      </div>
+    </>
   )
 }
 
@@ -546,7 +883,7 @@ interface CharacterDialogProps {
   title: string
   description: string
   form: CharacterFormState
-  onChange: Dispatch<SetStateAction<CharacterFormState>>
+  onChange: React.Dispatch<React.SetStateAction<CharacterFormState>>
   onSubmit: (event: FormEvent<HTMLFormElement>) => void
   pending: boolean
   submitLabel: string
@@ -576,59 +913,59 @@ function CharacterDialog({
 
         <form className="flex min-h-0 flex-1 flex-col overflow-hidden" onSubmit={onSubmit}>
           <div className="min-h-0 flex-1 space-y-5 overflow-y-auto pr-1">
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground/85">角色名称</label>
-              <Input value={form.name} onChange={(event) => onChange((prev) => ({ ...prev, name: event.target.value }))} required />
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground/85">角色名称</label>
+                <Input value={form.name} onChange={(event) => onChange((prev) => ({ ...prev, name: event.target.value }))} required />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground/85">别名</label>
+                <Input value={form.alias} onChange={(event) => onChange((prev) => ({ ...prev, alias: event.target.value }))} />
+              </div>
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground/85">别名</label>
-              <Input value={form.alias} onChange={(event) => onChange((prev) => ({ ...prev, alias: event.target.value }))} />
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-foreground/85">标签</label>
-            <Input
-              value={form.tags}
-              onChange={(event) => onChange((prev) => ({ ...prev, tags: event.target.value }))}
-              placeholder="例如：主角、反派、导师"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-foreground/85">角色简介</label>
-            <Textarea value={form.description} onChange={(event) => onChange((prev) => ({ ...prev, description: event.target.value }))} rows={3} />
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground/85">人物档案</label>
-              <Textarea value={form.profile} onChange={(event) => onChange((prev) => ({ ...prev, profile: event.target.value }))} rows={4} />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground/85">性格特征</label>
-              <Textarea value={form.personality} onChange={(event) => onChange((prev) => ({ ...prev, personality: event.target.value }))} rows={4} />
-            </div>
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground/85">背景经历</label>
-              <Textarea value={form.background} onChange={(event) => onChange((prev) => ({ ...prev, background: event.target.value }))} rows={4} />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground/85">关系备注</label>
-              <Textarea
-                value={form.relationship_notes}
-                onChange={(event) => onChange((prev) => ({ ...prev, relationship_notes: event.target.value }))}
-                rows={4}
+              <label className="text-sm font-medium text-foreground/85">标签</label>
+              <Input
+                value={form.tags}
+                onChange={(event) => onChange((prev) => ({ ...prev, tags: event.target.value }))}
+                placeholder="例如：主角、反派、导师"
               />
             </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground/85">角色简介</label>
+              <Textarea value={form.description} onChange={(event) => onChange((prev) => ({ ...prev, description: event.target.value }))} rows={3} />
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground/85">人物档案</label>
+                <Textarea value={form.profile} onChange={(event) => onChange((prev) => ({ ...prev, profile: event.target.value }))} rows={4} />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground/85">性格特征</label>
+                <Textarea value={form.personality} onChange={(event) => onChange((prev) => ({ ...prev, personality: event.target.value }))} rows={4} />
+              </div>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground/85">背景经历</label>
+                <Textarea value={form.background} onChange={(event) => onChange((prev) => ({ ...prev, background: event.target.value }))} rows={4} />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground/85">关系备注</label>
+                <Textarea
+                  value={form.relationship_notes}
+                  onChange={(event) => onChange((prev) => ({ ...prev, relationship_notes: event.target.value }))}
+                  rows={4}
+                />
+              </div>
+            </div>
           </div>
 
-          </div>
           <DialogFooter className="mt-5 shrink-0 border-t border-border pt-4">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               取消

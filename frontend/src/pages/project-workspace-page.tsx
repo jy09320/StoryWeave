@@ -12,8 +12,6 @@ import {
   UserPlus,
   Users2,
   Globe2,
-  SquarePen,
-  Unlink,
 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -45,7 +43,6 @@ import {
   attachProjectCharacter,
   createChapter,
   deleteChapter,
-  deleteProjectCharacter,
   getProject,
   importProjectKnowledge,
   listCharacters,
@@ -280,17 +277,6 @@ export function ProjectWorkspacePage() {
     },
   })
 
-  const detachCharacterMutation = useMutation({
-    mutationFn: ({ projectId, linkId }: { projectId: string; linkId: string }) => deleteProjectCharacter(projectId, linkId),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['project', projectId] })
-      toast.success('角色已移出项目')
-    },
-    onError: (error: Error) => {
-      toast.error(error.message)
-    },
-  })
-
   const importProjectKnowledgeMutation = useMutation({
     mutationFn: async () =>
       importProjectKnowledge(projectId ?? '', {
@@ -371,23 +357,6 @@ export function ProjectWorkspacePage() {
     })
   }
 
-  function handleDetachCharacter(linkId: string, name: string) {
-    const confirmed = window.confirm(`确认将角色“${name}”从当前项目中移除吗？`)
-    if (!confirmed) {
-      return
-    }
-
-    detachCharacterMutation.mutate({ projectId: projectId ?? '', linkId })
-  }
-
-  function openEditProjectCharacterDialog(projectCharacter: ProjectCharacter) {
-    setEditingProjectCharacter(projectCharacter)
-    setCharacterLinkEditDraft({
-      roleLabel: projectCharacter.role_label ?? '',
-      summary: projectCharacter.summary ?? '',
-    })
-  }
-
   function handleUpdateProjectCharacter(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
 
@@ -412,6 +381,7 @@ export function ProjectWorkspacePage() {
 
     importProjectKnowledgeMutation.mutate()
   }
+
 
   if (!projectId) {
     return (
@@ -467,7 +437,7 @@ export function ProjectWorkspacePage() {
     },
     {
       label: '角色管理',
-      to: '/characters',
+      to: `/projects/${project.id}/characters`,
       tone: 'secondary' as const,
       icon: <Users2 className="size-4" />,
     },
@@ -869,67 +839,52 @@ export function ProjectWorkspacePage() {
 
           <Card className="border border-border bg-card/95">
             <CardHeader>
-              <div className="flex justify-end">
-                <Button type="button" size="sm" variant="outline" onClick={() => setIsImportDialogOpen(true)}>
-                  <FileUp className="size-4" />
-                  导入资料
-                </Button>
+              <div>
+                <CardTitle className="flex items-center gap-2 text-lg text-foreground">
+                  <Users2 className="size-5 text-primary" />
+                  项目角色
+                </CardTitle>
+                <CardDescription className="mt-1">管理项目内角色与绑定信息。在侧边栏角色库页面可使用角色 AI 助手。</CardDescription>
               </div>
-              <CardTitle className="flex items-center gap-2 text-lg text-foreground">
-                <Users2 className="size-5 text-primary" />
-                项目角色
-              </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              {projectCharacters.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-border bg-muted/35 px-4 py-5 text-sm leading-6 text-muted-foreground">
-                  当前项目还没有绑定角色。
+              <div className="rounded-2xl border border-border bg-muted/35 px-4 py-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">角色摘要</div>
+                    <div className="mt-1 text-2xl font-semibold text-foreground">{projectCharacters.length}</div>
+                  </div>
+                  <div className="rounded-full border border-border bg-background px-3 py-1 text-xs text-muted-foreground">已绑定角色</div>
                 </div>
-              ) : (
-                <div className="space-y-3">
-                  {projectCharacters.map((item) => (
-                    <div key={item.id} className="rounded-2xl border border-border bg-background/90 p-4">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="space-y-2">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <div className="text-sm font-medium text-foreground">{item.character.name}</div>
-                            {item.role_label ? (
-                              <span className="rounded-full border border-border px-2 py-0.5 text-xs text-muted-foreground">
-                                {item.role_label}
-                              </span>
-                            ) : null}
-                          </div>
-                          <p className="text-xs leading-5 text-muted-foreground">
-                            {item.summary?.trim() || item.character.description?.trim() || '暂无项目内角色说明'}
-                          </p>
+                <div className="mt-3 space-y-2">
+                  {projectCharacters.length === 0 ? (
+                    <p className="text-sm leading-6 text-muted-foreground">当前项目还没有绑定角色，可手动绑定，也可在角色库页面通过角色 AI 助手分析资料。</p>
+                  ) : (
+                    projectCharacters.slice(0, 3).map((item) => (
+                      <div key={item.id} className="rounded-xl border border-border/70 bg-background/90 px-3 py-3">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium text-foreground">{item.character.name}</span>
+                          {item.role_label ? (
+                            <span className="rounded-full border border-border px-2 py-0.5 text-[11px] text-muted-foreground">
+                              {item.role_label}
+                            </span>
+                          ) : null}
                         </div>
-                        <div className="flex items-center gap-1">
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            disabled={updateProjectCharacterMutation.isPending}
-                            onClick={() => openEditProjectCharacterDialog(item)}
-                          >
-                            <SquarePen className="size-4" />
-                            <span className="sr-only">编辑项目角色</span>
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            disabled={detachCharacterMutation.isPending}
-                            onClick={() => handleDetachCharacter(item.id, item.character.name)}
-                          >
-                            <Unlink className="size-4" />
-                            <span className="sr-only">移除角色</span>
-                          </Button>
-                        </div>
+                        <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                          {item.summary?.trim() || item.character.description?.trim() || '暂无项目内角色说明'}
+                        </p>
                       </div>
-                    </div>
-                  ))}
+                    ))
+                  )}
                 </div>
-              )}
+              </div>
+
+              <div className="grid gap-2">
+                <Button type="button" variant="outline" onClick={() => setIsImportDialogOpen(true)}>
+                  <FileUp className="size-4" />
+                  导入角色资料
+                </Button>
+              </div>
 
               <Separator className="bg-border" />
 
@@ -1003,10 +958,13 @@ export function ProjectWorkspacePage() {
 
           <Card className="border border-border bg-card/95">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-lg text-foreground">
-                <Globe2 className="size-5 text-primary" />
-                世界观摘要
-              </CardTitle>
+              <div>
+                <CardTitle className="flex items-center gap-2 text-lg text-foreground">
+                  <Globe2 className="size-5 text-primary" />
+                  世界观摘要
+                </CardTitle>
+                <CardDescription className="mt-1">查看设定摘要。在世界观设定页可使用世界观 AI 助手。</CardDescription>
+              </div>
             </CardHeader>
             <CardContent className="space-y-4 text-sm leading-6 text-foreground/85">
               <div className="rounded-2xl border border-border bg-muted/35 px-4 py-4">
@@ -1022,7 +980,19 @@ export function ProjectWorkspacePage() {
                   <span className="text-muted-foreground">规则：</span>
                   {worldSetting?.rules?.trim() || '尚未填写世界规则'}
                 </p>
+                <p className="mt-3 line-clamp-3">
+                  <span className="text-muted-foreground">时间线：</span>
+                  {worldSetting?.timeline?.trim() || '尚未填写时间线摘要'}
+                </p>
               </div>
+
+              <div className="grid gap-2">
+                <Button type="button" variant="outline" onClick={() => setIsImportDialogOpen(true)}>
+                  <FileUp className="size-4" />
+                  导入世界观资料
+                </Button>
+              </div>
+
               <div className="grid gap-2">
                 <Link
                   to={`/projects/${project.id}/world`}
@@ -1092,9 +1062,15 @@ export function ProjectWorkspacePage() {
               </div>
             ) : null}
 
+            <Separator />
+
+            <div className="rounded-2xl border border-dashed border-border bg-muted/20 px-4 py-4 text-sm leading-6 text-muted-foreground">
+              世界观 AI 补全入口已迁移到独立的“世界观 AI”对话框中。这里保留纯资料导入职责，用于统一导入项目背景、角色素材与条目说明。
+            </div>
+
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setIsImportDialogOpen(false)}>
-                取消
+                关闭
               </Button>
               <Button type="submit" disabled={importProjectKnowledgeMutation.isPending}>
                 {importProjectKnowledgeMutation.isPending ? '导入中...' : '开始导入'}

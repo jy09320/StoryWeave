@@ -5,7 +5,12 @@
       "Bash(npx @playwright/mcp --help)",
       "Read(//c/Users/30799/.claude/**)",
       "WebSearch",
-      "Read(//c/Users/30799/**)"
+      "Read(//c/Users/30799/**)",
+      "Bash(npx tsc *)",
+      "Bash(xargs grep *)",
+      "Bash(echo \"Exit: $?\")",
+      "Bash(python -c ' *)",
+      "Bash(git commit -m ' *)"
     ],
     "additionalDirectories": [
       "C:\\Users\\30799"
