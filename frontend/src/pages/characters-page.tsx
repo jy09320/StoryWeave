@@ -1,10 +1,10 @@
 import { useMemo, useState, type FormEvent } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { Link, useParams } from 'react-router-dom'
-import { BookOpenText, PencilLine, Plus, Search, Trash2, Users2 } from 'lucide-react'
+import { Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 
-import { type ProjectAssetAIDraftState } from '@/components/project-asset-ai-dialog'
+
 import { ProjectAssetAIPanel } from '@/components/project-asset-ai-panel'
 import { EmptyState } from '@/components/empty-state'
 import { LoadingState } from '@/components/loading-state'
@@ -33,24 +33,23 @@ import { formatDate } from '@/lib/format'
 import { queryClient } from '@/lib/query-client'
 import {
   attachProjectCharacter,
-  createCharacter,
   deleteCharacter,
   getProject,
   listCharacters,
   updateCharacter,
 } from '@/services/projects'
 import {
-  analyzeCharacters,
   applyCharacterPatch,
   uploadProjectAssetFile,
 } from '@/services/project-asset-ai'
 import type {
+  AssetChatSSEDraftReadyEvent,
   Character,
   CharacterActionItem,
   CharacterPayload,
-  ProjectAssetAIMessage,
   ProjectDetail,
 } from '@/types/api'
+
 
 interface CharacterFormState {
   name: string
@@ -72,13 +71,6 @@ const defaultFormState: CharacterFormState = {
   personality: '',
   background: '',
   relationship_notes: '',
-}
-
-const defaultCharacterAIDraft: ProjectAssetAIDraftState = {
-  mode: 'hybrid',
-  sourceText: '',
-  command: '',
-  guidance: '',
 }
 
 function buildPayload(form: CharacterFormState): CharacterPayload {
@@ -127,18 +119,15 @@ export function CharactersPage() {
   const { projectId } = useParams<{ projectId?: string }>()
   const isProjectScoped = Boolean(projectId)
 
-  const [keyword, setKeyword] = useState('')
-  const [searchKeyword, setSearchKeyword] = useState('')
+  const [searchKeyword] = useState('')
   const [selectedCharacterId, setSelectedCharacterId] = useState<string | null>(null)
-  const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [editingCharacter, setEditingCharacter] = useState<Character | null>(null)
-  const [createForm, setCreateForm] = useState<CharacterFormState>(defaultFormState)
   const [editForm, setEditForm] = useState<CharacterFormState>(defaultFormState)
-  const [characterAIDraft, setCharacterAIDraft] = useState<ProjectAssetAIDraftState>(defaultCharacterAIDraft)
-  const [characterAIMessages, setCharacterAIMessages] = useState<ProjectAssetAIMessage[]>([])
   const [latestCharacterActions, setLatestCharacterActions] = useState<CharacterActionItem[] | null>(null)
   const [uploadedFiles, setUploadedFiles] = useState<Array<{ file_id: string; filename: string }>>([])
   const [fileIds, setFileIds] = useState<string[]>([])
+
+  const sessionId = useMemo(() => `${projectId ?? 'unknown'}:project_character:${Date.now()}`, [projectId])
 
   const projectQuery = useQuery<ProjectDetail, Error>({
     queryKey: ['project', projectId],
@@ -149,20 +138,6 @@ export function CharactersPage() {
   const charactersQuery = useQuery<Character[], Error>({
     queryKey: ['characters', searchKeyword],
     queryFn: () => listCharacters(searchKeyword || undefined),
-  })
-
-  const createCharacterMutation = useMutation({
-    mutationFn: createCharacter,
-    onSuccess: async (character: Character) => {
-      await queryClient.invalidateQueries({ queryKey: ['characters'] })
-      setSelectedCharacterId(character.id)
-      setIsCreateOpen(false)
-      setCreateForm(defaultFormState)
-      toast.success('角色已创建')
-    },
-    onError: (error: Error) => {
-      toast.error(error.message)
-    },
   })
 
   const updateCharacterMutation = useMutation({
@@ -207,56 +182,13 @@ export function CharactersPage() {
     },
   })
 
-  const analyzeCharactersMutation = useMutation({
-    mutationFn: () =>
-      analyzeCharacters(projectId ?? '', {
-        message: characterAIDraft.command.trim() || characterAIDraft.sourceText.trim() || '',
-        source_text: characterAIDraft.sourceText.trim() || null,
-        command: characterAIDraft.command.trim() || null,
-        guidance: characterAIDraft.guidance.trim() || null,
-        file_ids: fileIds,
-      }),
-    onSuccess: (result) => {
-      setLatestCharacterActions(result.actions)
-      setCharacterAIMessages((prev) => [
-        ...prev,
-        {
-          id: `char-result-${Date.now()}`,
-          role: 'result',
-          title: '角色分析完成',
-          content: [
-            result.actions.length ? `已识别 ${result.actions.length} 条角色动作` : '未识别到角色动作',
-            result.notes.length ? `备注：${result.notes.join('；')}` : '',
-            result.tool_trace.length ? `工具链：${result.tool_trace.join(' → ')}` : '',
-          ].filter(Boolean).join('\n'),
-        },
-      ])
-      toast.success(result.actions.length ? `AI 识别 ${result.actions.length} 条角色建议，请确认后写入` : 'AI 分析完成，未识别到角色')
-    },
-    onError: (error: Error) => {
-      toast.error(error.message)
-    },
-  })
-
   const applyCharacterActionsMutation = useMutation({
     mutationFn: () => applyCharacterPatch(projectId ?? '', { actions: latestCharacterActions! }),
-    onSuccess: async (result) => {
+    onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['project', projectId] })
       await queryClient.invalidateQueries({ queryKey: ['characters'] })
       setLatestCharacterActions(null)
-      setCharacterAIMessages((prev) => [
-        ...prev,
-        {
-          id: `char-apply-${Date.now()}`,
-          role: 'result',
-          title: '角色写入完成',
-          content: [
-            result.applied.length ? `已执行：${result.applied.join('；')}` : '',
-            result.errors.length ? `错误：${result.errors.join('；')}` : '',
-          ].filter(Boolean).join('\n'),
-        },
-      ])
-      toast.success(`已写入 ${result.applied.length} 条角色动作`)
+      toast.success('角色动作已写入')
     },
     onError: (error: Error) => {
       toast.error(error.message)
@@ -268,10 +200,6 @@ export function CharactersPage() {
     onSuccess: (result) => {
       setUploadedFiles((prev) => [...prev, { file_id: result.file_id, filename: result.filename }])
       setFileIds((prev) => [...prev, result.file_id])
-      setCharacterAIDraft((prev) => ({
-        ...prev,
-        sourceText: prev.sourceText ? `${prev.sourceText}\n\n${result.preview}` : result.preview,
-      }))
       toast.success(`已上传：${result.filename}（约 ${result.token_estimate} tokens）`)
     },
     onError: (error: Error) => {
@@ -291,19 +219,6 @@ export function CharactersPage() {
     () => displayedCharacters.find((character) => character.id === selectedCharacterId) ?? displayedCharacters[0] ?? null,
     [displayedCharacters, selectedCharacterId],
   )
-  const charactersWithTags = useMemo(
-    () => displayedCharacters.filter((character) => Boolean(character.tags?.trim())).length,
-    [displayedCharacters],
-  )
-  const charactersWithProfile = useMemo(
-    () => displayedCharacters.filter((character) => Boolean(character.profile?.trim() || character.personality?.trim())).length,
-    [displayedCharacters],
-  )
-
-  const pageTitle = isProjectScoped ? '项目角色库' : '全局角色库'
-  const pageDescription = isProjectScoped
-    ? '集中维护当前项目已绑定角色，并通过统一 AI 对话框继续补全角色资料。'
-    : '集中维护可复用角色档案。编辑器提及、悬停信息和 AI 任务都会直接读取这里。'
 
   function ensureSelectedCharacter() {
     if (!displayedCharacters.length) {
@@ -318,23 +233,6 @@ export function CharactersPage() {
 
   if (selectedCharacterId && !displayedCharacters.some((character) => character.id === selectedCharacterId)) {
     ensureSelectedCharacter()
-  }
-
-  function handleSearchSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    setSearchKeyword(keyword.trim())
-  }
-
-  function handleCreateSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-
-    const payload = buildPayload(createForm)
-    if (!payload.name) {
-      toast.error('请输入角色名称')
-      return
-    }
-
-    createCharacterMutation.mutate(payload)
   }
 
   function handleEditSubmit(event: FormEvent<HTMLFormElement>) {
@@ -378,43 +276,11 @@ export function CharactersPage() {
     attachCharacterMutation.mutate({ projectId, characterId: character.id })
   }
 
-  function handleCharacterAIAssist(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-
-    if (!projectId) {
-      toast.error('当前不在项目上下文中，无法使用项目角色 AI。')
-      return
+  function handleDraftReady(event: AssetChatSSEDraftReadyEvent) {
+    if (event.asset_type === 'project_character' && event.actions) {
+      setLatestCharacterActions(event.actions)
+      toast.info('AI 已生成角色建议，请在面板中确认后写入')
     }
-
-    const sourceText = characterAIDraft.sourceText.trim()
-    const commandText = characterAIDraft.command.trim()
-
-    if (!sourceText && !commandText && fileIds.length === 0) {
-      toast.error('请先输入角色资料、上传文件或填写指令')
-      return
-    }
-
-    setCharacterAIMessages([
-      {
-        id: `char-user-${Date.now()}`,
-        role: 'user',
-        title: '用户请求',
-        content: [
-          sourceText ? `资料：\n${sourceText}` : '',
-          fileIds.length ? `已上传 ${fileIds.length} 个文件` : '',
-          commandText ? `指令：\n${commandText}` : '',
-          characterAIDraft.guidance.trim() ? `约束：\n${characterAIDraft.guidance.trim()}` : '',
-        ].filter(Boolean).join('\n\n'),
-      },
-      {
-        id: `char-system-${Date.now()}`,
-        role: 'system',
-        title: '正在分析',
-        content: '正在读取项目已绑定角色，结合输入资料生成角色动作建议，完成后请点击"应用写入"确认。',
-      },
-    ])
-
-    analyzeCharactersMutation.mutate()
   }
 
   if (isProjectScoped && !projectId) {
@@ -479,105 +345,23 @@ export function CharactersPage() {
           </Card>
         ) : null}
 
-        {/* Page header */}
-        <section>
-          <Card className="border border-border bg-card/95 shadow-[0_18px_44px_rgba(148,163,184,0.16)]">
-            <CardContent className="flex flex-col gap-4 py-4">
-              <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-                <div className="min-w-0 space-y-1.5">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h1 className="text-2xl font-semibold leading-tight text-foreground">{pageTitle}</h1>
-                    {searchKeyword ? (
-                      <span className="rounded-full border border-primary/20 bg-primary/10 px-2 py-0.5 text-[11px] text-primary">
-                        当前筛选：{searchKeyword}
-                      </span>
-                    ) : null}
-                  </div>
-                  <p className="max-w-3xl text-sm leading-6 text-muted-foreground">{pageDescription}</p>
-                </div>
-
-                <div className="flex w-full flex-col gap-2 xl:w-auto xl:flex-row">
-                  <CharacterDialog
-                    open={isCreateOpen}
-                    onOpenChange={(open) => {
-                      setIsCreateOpen(open)
-                      if (!open) {
-                        setCreateForm(defaultFormState)
-                      }
-                    }}
-                    title="创建角色"
-                    description="填写角色信息"
-                    form={createForm}
-                    onChange={setCreateForm}
-                    onSubmit={handleCreateSubmit}
-                    pending={createCharacterMutation.isPending}
-                    trigger={
-                      <Button className="w-full xl:w-auto" size="sm">
-                        <Plus className="size-4" />
-                        新建角色
-                      </Button>
-                    }
-                    submitLabel="创建角色"
-                  />
-                </div>
-              </div>
-
-              {!isProjectScoped ? (
-                <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center">
-                  <form className="flex w-full flex-col gap-2 sm:flex-row" onSubmit={handleSearchSubmit}>
-                    <div className="relative min-w-0 flex-1">
-                      <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                      <Input
-                        value={keyword}
-                        onChange={(event) => setKeyword(event.target.value)}
-                        placeholder="搜索角色名、别名、标签"
-                        className="pl-9"
-                      />
-                    </div>
-                    <Button className="w-full sm:w-auto" size="sm" type="submit" variant="outline">
-                      搜索
-                    </Button>
-                  </form>
-
-                  <div className="grid grid-cols-3 gap-2 xl:min-w-[360px]">
-                    <MetricInline label="角色总数" value={displayedCharacters.length} />
-                    <MetricInline label="已打标签" value={charactersWithTags} />
-                    <MetricInline
-                      label="资料较完整"
-                      value={charactersWithProfile}
-                      hint={searchKeyword ? '筛选结果内' : '含人设或档案'}
-                    />
-                  </div>
-                </div>
-              ) : null}
-
-              <div className="flex flex-wrap gap-2">
-                <FeaturePill title="统一角色卡" icon={<Users2 className="size-3.5 text-primary" />} />
-                <FeaturePill title={isProjectScoped ? '项目角色聚合' : '项目复用'} icon={<BookOpenText className="size-3.5 text-muted-foreground" />} />
-                <FeaturePill title="AI 上下文底座" icon={<PencilLine className="size-3.5 text-primary" />} />
-              </div>
-            </CardContent>
-          </Card>
-        </section>
-
         {/* Project scoped: AI panel (left) + character list (right) */}
         {isProjectScoped ? (
           <section className="grid gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
             {/* AI panel — primary, always visible */}
-            <div className="xl:sticky xl:top-4 xl:self-start xl:h-[calc(100vh-8rem)]">
+            <div className="xl:sticky xl:top-4 xl:self-start xl:h-[calc(100vh-4rem)]">
               <ProjectAssetAIPanel
+                projectId={projectId ?? ''}
                 assetType="project_character"
-                draft={characterAIDraft}
-                onDraftChange={setCharacterAIDraft}
-                onSubmit={handleCharacterAIAssist}
-                isSubmitting={analyzeCharactersMutation.isPending}
-                messages={characterAIMessages}
+                sessionId={sessionId}
                 latestCharacterActions={latestCharacterActions}
                 onApplyCharacterActions={() => applyCharacterActionsMutation.mutate()}
                 isApplying={applyCharacterActionsMutation.isPending}
                 onFileUpload={async (file) => { await uploadCharacterFileMutation.mutateAsync(file) }}
                 isUploadingFile={uploadCharacterFileMutation.isPending}
                 uploadedFiles={uploadedFiles}
+                fileIds={fileIds}
+                onDraftReady={handleDraftReady}
               />
             </div>
 
@@ -587,12 +371,6 @@ export function CharactersPage() {
                 <EmptyState
                   title={searchKeyword ? '没有匹配的角色' : '当前项目还没有角色'}
                   description={searchKeyword ? '换个关键词再试。' : '先创建角色，或把已有角色绑定到当前项目。'}
-                  action={
-                    <Button onClick={() => setIsCreateOpen(true)}>
-                      <Plus className="size-4" />
-                      创建角色
-                    </Button>
-                  }
                 />
               ) : (
                 <>
@@ -626,12 +404,6 @@ export function CharactersPage() {
               <EmptyState
                 title={searchKeyword ? '没有匹配的角色' : '角色库还是空的'}
                 description={searchKeyword ? '换个关键词再试。' : '先创建一个角色。'}
-                action={
-                  <Button onClick={() => setIsCreateOpen(true)}>
-                    <Plus className="size-4" />
-                    创建角色
-                  </Button>
-                }
               />
             ) : (
               <section className="grid gap-4 xl:grid-cols-[300px_minmax(0,1fr)]">
@@ -842,25 +614,6 @@ function CharacterDetail({ character, isProjectScoped, linkedCharacterIds, attac
         <InfoBlock label="关系备注" value={character.relationship_notes || '未填写关系备注'} />
       </div>
     </>
-  )
-}
-
-function FeaturePill({ title, icon }: { title: string; icon: React.ReactNode }) {
-  return (
-    <div className="inline-flex items-center gap-2 rounded-md border border-border bg-muted/35 px-2.5 py-1.5 text-xs text-foreground/85">
-      <span className="rounded-sm bg-background p-1">{icon}</span>
-      <span>{title}</span>
-    </div>
-  )
-}
-
-function MetricInline({ label, value, hint }: { label: string; value: number; hint?: string }) {
-  return (
-    <div className="rounded-md border border-border bg-muted/35 px-3 py-2">
-      <div className="text-[11px] text-muted-foreground">{label}</div>
-      <div className="mt-1 text-xl font-semibold text-foreground">{value}</div>
-      {hint ? <div className="mt-1 truncate text-[11px] text-muted-foreground">{hint}</div> : null}
-    </div>
   )
 }
 

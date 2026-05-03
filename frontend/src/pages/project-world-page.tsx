@@ -4,7 +4,6 @@ import { Link, useParams } from 'react-router-dom'
 import { ArrowLeft, BrainCircuit, Sparkles, Users2 } from 'lucide-react'
 import { toast } from 'sonner'
 
-import { type ProjectAssetAIDraftState } from '@/components/project-asset-ai-dialog'
 import { ProjectAssetAIPanel } from '@/components/project-asset-ai-panel'
 import { EmptyState } from '@/components/empty-state'
 import { LoadingState } from '@/components/loading-state'
@@ -12,7 +11,6 @@ import { Button } from '@/components/ui/button'
 import {
   Card,
   CardContent,
-  CardDescription,
   CardFooter,
   CardHeader,
   CardTitle,
@@ -21,16 +19,14 @@ import { Input } from '@/components/ui/input'
 import { Separator } from '@/components/ui/separator'
 import { Textarea } from '@/components/ui/textarea'
 import { readEditorRouteContext } from '@/lib/editor-route-context'
-import { formatDate } from '@/lib/format'
 import { queryClient } from '@/lib/query-client'
 import { getProject, updateProjectWorldSetting } from '@/services/projects'
 import {
-  analyzeWorldSetting,
   applyWorldSettingPatch,
   uploadProjectAssetFile,
 } from '@/services/project-asset-ai'
 import type {
-  ProjectAssetAIMessage,
+  AssetChatSSEDraftReadyEvent,
   ProjectCharacter,
   ProjectDetail,
   WorldSetting,
@@ -58,13 +54,6 @@ const defaultWorldSettingDraft: WorldSettingDraftState = {
   extra_notes: '',
 }
 
-const defaultWorldAIDraft: ProjectAssetAIDraftState = {
-  mode: 'hybrid',
-  sourceText: '',
-  command: '',
-  guidance: '',
-}
-
 function buildWorldSettingDraft(worldSetting: WorldSetting | null | undefined): WorldSettingDraftState {
   if (!worldSetting) {
     return defaultWorldSettingDraft
@@ -84,11 +73,11 @@ function buildWorldSettingDraft(worldSetting: WorldSetting | null | undefined): 
 export function ProjectWorldPage() {
   const { projectId } = useParams<{ projectId: string }>()
   const [draft, setDraft] = useState<WorldSettingDraftState>(defaultWorldSettingDraft)
-  const [worldAIDraft, setWorldAIDraft] = useState<ProjectAssetAIDraftState>(defaultWorldAIDraft)
-  const [worldAIMessages, setWorldAIMessages] = useState<ProjectAssetAIMessage[]>([])
   const [latestWorldPatch, setLatestWorldPatch] = useState<WorldSettingPatch | null>(null)
   const [uploadedFiles, setUploadedFiles] = useState<Array<{ file_id: string; filename: string }>>([])
   const [fileIds, setFileIds] = useState<string[]>([])
+
+  const sessionId = useMemo(() => `${projectId ?? 'unknown'}:world_setting:${Date.now()}`, [projectId])
 
   const projectQuery = useQuery<ProjectDetail, Error>({
     queryKey: ['project', projectId],
@@ -119,53 +108,11 @@ export function ProjectWorldPage() {
     },
   })
 
-  const analyzeWorldSettingMutation = useMutation({
-    mutationFn: () =>
-      analyzeWorldSetting(projectId ?? '', {
-        message: worldAIDraft.command.trim() || worldAIDraft.sourceText.trim() || '',
-        source_text: worldAIDraft.sourceText.trim() || null,
-        command: worldAIDraft.command.trim() || null,
-        guidance: worldAIDraft.guidance.trim() || null,
-        file_ids: fileIds,
-      }),
-    onSuccess: (result) => {
-      setLatestWorldPatch(result.patch)
-      setWorldAIMessages((prev) => [
-        ...prev,
-        {
-          id: `world-result-${Date.now()}`,
-          role: 'result',
-          title: '世界观分析完成',
-          content: [
-            result.notes.length ? `备注：${result.notes.join('；')}` : '',
-            result.applied_sources.length ? `参考来源：${result.applied_sources.join('、')}` : '',
-            result.tool_trace.length ? `工具链：${result.tool_trace.join(' → ')}` : '',
-          ].filter(Boolean).join('\n'),
-        },
-      ])
-      toast.success('AI 分析完成，请确认后写入世界观')
-    },
-    onError: (error: Error) => {
-      toast.error(error.message)
-    },
-  })
-
   const applyWorldPatchMutation = useMutation({
     mutationFn: () => applyWorldSettingPatch(projectId ?? '', { patch: latestWorldPatch! }),
     onSuccess: async (result) => {
       await queryClient.invalidateQueries({ queryKey: ['project', projectId] })
       setLatestWorldPatch(null)
-      setWorldAIMessages((prev) => [
-        ...prev,
-        {
-          id: `world-apply-${Date.now()}`,
-          role: 'result',
-          title: result.world_setting_updated ? '世界观已写入' : '世界观无需变更',
-          content: result.world_setting_updated
-            ? '结构化建议已成功写入当前项目世界观。'
-            : '当前建议与已有内容一致，无字段发生变更。',
-        },
-      ])
       toast.success(result.world_setting_updated ? '世界观已更新' : '无需更新')
     },
     onError: (error: Error) => {
@@ -178,12 +125,6 @@ export function ProjectWorldPage() {
     onSuccess: (result) => {
       setUploadedFiles((prev) => [...prev, { file_id: result.file_id, filename: result.filename }])
       setFileIds((prev) => [...prev, result.file_id])
-      setWorldAIDraft((prev) => ({
-        ...prev,
-        sourceText: prev.sourceText
-          ? `${prev.sourceText}\n\n${result.preview}`
-          : result.preview,
-      }))
       toast.success(`已上传：${result.filename}（约 ${result.token_estimate} tokens）`)
     },
     onError: (error: Error) => {
@@ -191,38 +132,11 @@ export function ProjectWorldPage() {
     },
   })
 
-  function handleWorldAIAssist(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-
-    const hasSource = Boolean(worldAIDraft.sourceText.trim()) || fileIds.length > 0
-    const hasCommand = Boolean(worldAIDraft.command.trim())
-
-    if (!hasSource && !hasCommand) {
-      toast.error('请至少输入资料、上传文件或填写指令')
-      return
+  function handleDraftReady(event: AssetChatSSEDraftReadyEvent) {
+    if (event.asset_type === 'world_setting' && event.patch) {
+      setLatestWorldPatch(event.patch)
+      toast.info('AI 已生成世界观建议，请在面板中确认后写入')
     }
-
-    setWorldAIMessages([
-      {
-        id: `world-user-${Date.now()}`,
-        role: 'user',
-        title: '用户请求',
-        content: [
-          worldAIDraft.sourceText.trim() ? `资料：\n${worldAIDraft.sourceText.trim()}` : '',
-          fileIds.length ? `已上传 ${fileIds.length} 个文件` : '',
-          worldAIDraft.command.trim() ? `指令：\n${worldAIDraft.command.trim()}` : '',
-          worldAIDraft.guidance.trim() ? `约束：\n${worldAIDraft.guidance.trim()}` : '',
-        ].filter(Boolean).join('\n\n'),
-      },
-      {
-        id: `world-system-${Date.now()}`,
-        role: 'system',
-        title: '正在分析',
-        content: '正在读取当前项目世界观、已有角色，结合输入资料生成结构化建议，完成后请点击"应用写入"确认。',
-      },
-    ])
-
-    analyzeWorldSettingMutation.mutate()
   }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -282,60 +196,40 @@ export function ProjectWorldPage() {
 
   return (
     <div className="space-y-6">
-      {/* Top info bar */}
-      <Card className="border border-border bg-card/95 shadow-[0_16px_36px_rgba(148,163,184,0.16)]">
-        <CardHeader className="gap-3">
-          <div className="flex flex-wrap items-center gap-3">
-            <Link
-              to={returnToEditor ? `/projects/${returnToEditor.projectId}/editor/${returnToEditor.chapterId}` : `/projects/${project.id}`}
-              className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-border bg-background px-3 text-sm font-medium text-foreground transition hover:bg-muted"
-            >
-              <ArrowLeft className="size-4" />
-              {returnToEditor ? '返回当前章节' : '返回工作台'}
-            </Link>
-            <Link
-              to={`/ai-toolbox?task=consistency&projectId=${project.id}${returnToEditor ? `&chapterId=${returnToEditor.chapterId}` : ''}`}
-              className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-primary/20 bg-primary/10 px-3 text-sm font-medium text-primary transition hover:bg-primary/15"
-            >
-              <Sparkles className="size-4" />
-              设定检查
-            </Link>
-          </div>
-          <div className="space-y-1.5">
-            <CardDescription className="text-primary/80">项目世界观</CardDescription>
-            <CardTitle className="text-2xl text-foreground">{project.title}</CardTitle>
-            {project.description?.trim() ? (
-              <CardDescription className="max-w-3xl text-sm leading-6 text-muted-foreground">{project.description.trim()}</CardDescription>
-            ) : null}
-          </div>
-        </CardHeader>
-        <CardFooter className="flex flex-wrap items-center gap-3 border-border bg-muted/35">
-          <WorldMetricCard label="章节数量" value={`${project.chapters.length}`} />
-          <WorldMetricCard label="角色数量" value={`${projectCharacters.length}`} />
-          <WorldMetricCard
-            label="最近更新"
-            value={formatDate(worldSetting?.updated_at || project.updated_at)}
-          />
-        </CardFooter>
-      </Card>
+      {/* Nav buttons */}
+      <div className="flex flex-wrap items-center gap-2">
+        <Link
+          to={returnToEditor ? `/projects/${returnToEditor.projectId}/editor/${returnToEditor.chapterId}` : `/projects/${project.id}`}
+          className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-border bg-background px-3 text-sm font-medium text-foreground transition hover:bg-muted"
+        >
+          <ArrowLeft className="size-4" />
+          {returnToEditor ? '返回当前章节' : '返回工作台'}
+        </Link>
+        <Link
+          to={`/ai-toolbox?task=consistency&projectId=${project.id}${returnToEditor ? `&chapterId=${returnToEditor.chapterId}` : ''}`}
+          className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-primary/20 bg-primary/10 px-3 text-sm font-medium text-primary transition hover:bg-primary/15"
+        >
+          <Sparkles className="size-4" />
+          设定检查
+        </Link>
+      </div>
 
       {/* Main layout: AI panel (left, primary) + edit form + sidebar (right) */}
       <div className="grid gap-6 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
         {/* AI panel — primary, always visible */}
-        <div className="xl:sticky xl:top-4 xl:self-start xl:h-[calc(100vh-8rem)]">
+        <div className="xl:sticky xl:top-4 xl:self-start xl:h-[calc(100vh-4rem)]">
           <ProjectAssetAIPanel
+            projectId={project.id}
             assetType="world_setting"
-            draft={worldAIDraft}
-            onDraftChange={setWorldAIDraft}
-            onSubmit={handleWorldAIAssist}
-            isSubmitting={analyzeWorldSettingMutation.isPending}
-            messages={worldAIMessages}
+            sessionId={sessionId}
             latestWorldPatch={latestWorldPatch}
             onApplyWorldPatch={() => applyWorldPatchMutation.mutate()}
             isApplying={applyWorldPatchMutation.isPending}
             onFileUpload={async (file) => { await uploadFileMutation.mutateAsync(file) }}
             isUploadingFile={uploadFileMutation.isPending}
             uploadedFiles={uploadedFiles}
+            fileIds={fileIds}
+            onDraftReady={handleDraftReady}
           />
         </div>
 
@@ -477,16 +371,6 @@ export function ProjectWorldPage() {
           </Card>
         </div>
       </div>
-    </div>
-  )
-}
-
-function WorldMetricCard({ label, value, hint }: { label: string; value: string; hint?: string }) {
-  return (
-    <div className="min-w-37 rounded-2xl border border-border bg-muted/35 px-4 py-3">
-      <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">{label}</div>
-      <div className="mt-2 text-xl font-semibold text-foreground">{value}</div>
-      {hint ? <div className="mt-1 text-xs leading-5 text-muted-foreground">{hint}</div> : null}
     </div>
   )
 }

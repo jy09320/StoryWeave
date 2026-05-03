@@ -1,28 +1,23 @@
-import { useRef, useEffect, useCallback, type FormEvent, type ChangeEvent, type KeyboardEvent } from 'react'
+import { useRef, useEffect, useCallback, useState, type ChangeEvent, type KeyboardEvent } from 'react'
 import { Globe2, Users2, CheckCircle2, Send, Paperclip, Sparkles, Wrench, BrainCircuit } from 'lucide-react'
+import { toast } from 'sonner'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
+import { streamAssetChat } from '@/services/project-asset-ai'
 import type {
+  AssetChatSSEDraftReadyEvent,
   CharacterActionItem,
-  ProjectAssetAICharacterResult,
   ProjectAssetAIMessage,
   ProjectAssetAIType,
-  ProjectWorldAutoCompleteResult,
   WorldSettingPatch,
 } from '@/types/api'
-import type { ProjectAssetAIDraftState } from '@/components/project-asset-ai-dialog'
 
 export interface ProjectAssetAIPanelProps {
+  projectId: string
   assetType: ProjectAssetAIType
-  draft: ProjectAssetAIDraftState
-  onDraftChange: (updater: (prev: ProjectAssetAIDraftState) => ProjectAssetAIDraftState) => void
-  onSubmit: (event: FormEvent<HTMLFormElement>) => void
-  isSubmitting: boolean
-  messages?: ProjectAssetAIMessage[]
-  latestWorldResult?: ProjectWorldAutoCompleteResult | null
-  latestCharacterResult?: ProjectAssetAICharacterResult | null
+  sessionId: string
   latestWorldPatch?: WorldSettingPatch | null
   latestCharacterActions?: CharacterActionItem[] | null
   onApplyWorldPatch?: () => void
@@ -31,6 +26,8 @@ export interface ProjectAssetAIPanelProps {
   onFileUpload?: (file: File) => Promise<void>
   isUploadingFile?: boolean
   uploadedFiles?: Array<{ file_id: string; filename: string }>
+  fileIds?: string[]
+  onDraftReady?: (event: AssetChatSSEDraftReadyEvent) => void
 }
 
 const assetMeta: Record<
@@ -49,32 +46,30 @@ const assetMeta: Record<
     title: '世界观 AI 助手',
     icon: Globe2,
     accentClassName: 'text-sky-500',
-    placeholder: '输入指令或粘贴设定资料，AI 会分析并生成结构化建议。\n\nShift+Enter 换行，Enter 发送。',
+    placeholder: '输入消息或指令，AI 会与你对话并引导完善世界观。\n\nShift+Enter 换行，Enter 发送。',
     guidancePlaceholder: '例如：保留已有世界规则，风格偏东方玄幻，不要覆盖已经确定的人名地名。',
     quickPrompts: ['补全时间线', '梳理阵营势力', '提炼世界规则'],
-    welcomeContent: '你好！我可以帮你分析资料、补全设定字段。\n\n可以直接输入指令（如"补全该世界的时间线"），也可以粘贴原始资料让我整理，或上传 .txt / .md 文档。',
+    welcomeContent: '你好！我是世界观 AI 助手，可以帮你完善世界背景、规则、势力和地图等设定。\n\n可以直接和我对话，上传 .txt / .md 文档，或者说出具体指令（如"补全该世界的时间线"），我会引导你一步步完善。',
   },
   project_character: {
     title: '角色 AI 助手',
     icon: Users2,
     accentClassName: 'text-amber-500',
-    placeholder: '输入角色指令或粘贴人物资料，AI 会整理并生成角色建议。\n\nShift+Enter 换行，Enter 发送。',
+    placeholder: '输入消息或角色信息，AI 会与你对话并引导完善角色设定。\n\nShift+Enter 换行，Enter 发送。',
     guidancePlaceholder: '例如：优先提炼已出现角色，不要擅自新增核心角色，保持角色关系克制真实。',
     quickPrompts: ['识别主要角色', '提炼角色关系', '补全项目内定位'],
-    welcomeContent: '你好！我可以帮你从资料中识别角色、整理角色关系，并生成创建/更新建议。\n\n可以直接输入指令，或粘贴人物小传、对话片段，也支持上传 .txt / .md 文档。',
+    welcomeContent: '你好！我是角色 AI 助手，可以帮你从资料中识别角色、整理角色设定和关系。\n\n可以直接和我对话，描述你的角色，上传人物资料文档，我会生成结构化的角色建议供你确认。',
   },
 }
 
-function buildFallbackMessages(assetType: ProjectAssetAIType): ProjectAssetAIMessage[] {
+function buildWelcomeMessage(assetType: ProjectAssetAIType): ProjectAssetAIMessage {
   const meta = assetMeta[assetType]
-  return [
-    {
-      id: `${assetType}-welcome`,
-      role: 'system',
-      title: meta.title,
-      content: meta.welcomeContent,
-    },
-  ]
+  return {
+    id: `${assetType}-welcome`,
+    role: 'system',
+    title: meta.title,
+    content: meta.welcomeContent,
+  }
 }
 
 const messageLeftStyle: Record<Exclude<ProjectAssetAIMessage['role'], 'user'>, string> = {
@@ -130,20 +125,24 @@ function MessageBubble({ message }: { message: ProjectAssetAIMessage }) {
   )
 }
 
-function ThinkingBubble({ accentClassName }: { accentClassName: string }) {
+function StreamingBubble({ text, accentClassName }: { text: string; accentClassName: string }) {
   return (
     <div className="flex gap-2.5">
-      <div className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full border border-border bg-muted">
-        <Sparkles className={`size-3 animate-pulse ${accentClassName}`} />
+      <div className={`mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full border border-border bg-muted ${accentClassName}`}>
+        <Sparkles className="size-3 animate-pulse" />
       </div>
       <div className="min-w-0 flex-1">
-        <div className="mb-1 text-xs font-medium text-foreground">正在分析</div>
-        <div className="rounded-2xl rounded-tl-sm border border-border bg-muted/40 px-4 py-3">
-          <div className="flex items-center gap-1.5">
-            <span className="size-1.5 animate-bounce rounded-full bg-foreground/30 [animation-delay:0ms]" />
-            <span className="size-1.5 animate-bounce rounded-full bg-foreground/30 [animation-delay:150ms]" />
-            <span className="size-1.5 animate-bounce rounded-full bg-foreground/30 [animation-delay:300ms]" />
-          </div>
+        <div className="mb-1 text-xs font-medium text-foreground">AI 助手</div>
+        <div className="rounded-2xl rounded-tl-sm border border-border bg-muted/40 px-4 py-2.5">
+          {text ? (
+            <p className="whitespace-pre-wrap text-sm leading-6 text-muted-foreground">{text}<span className="ml-0.5 inline-block h-3.5 w-px animate-pulse bg-foreground/50" /></p>
+          ) : (
+            <div className="flex items-center gap-1.5">
+              <span className="size-1.5 animate-bounce rounded-full bg-foreground/30 [animation-delay:0ms]" />
+              <span className="size-1.5 animate-bounce rounded-full bg-foreground/30 [animation-delay:150ms]" />
+              <span className="size-1.5 animate-bounce rounded-full bg-foreground/30 [animation-delay:300ms]" />
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -151,12 +150,9 @@ function ThinkingBubble({ accentClassName }: { accentClassName: string }) {
 }
 
 export function ProjectAssetAIPanel({
+  projectId,
   assetType,
-  draft,
-  onDraftChange,
-  onSubmit,
-  isSubmitting,
-  messages,
+  sessionId,
   latestWorldPatch = null,
   latestCharacterActions = null,
   onApplyWorldPatch,
@@ -165,19 +161,28 @@ export function ProjectAssetAIPanel({
   onFileUpload,
   isUploadingFile = false,
   uploadedFiles = [],
+  fileIds = [],
+  onDraftReady,
 }: ProjectAssetAIPanelProps) {
   const meta = assetMeta[assetType]
   const Icon = meta.icon
-  const resolvedMessages = messages?.length ? messages : buildFallbackMessages(assetType)
+
+  const [messages, setMessages] = useState<ProjectAssetAIMessage[]>(() => [buildWelcomeMessage(assetType)])
+  const [streamingText, setStreamingText] = useState<string | null>(null)
+  const [inputText, setInputText] = useState('')
+  const [guidance, setGuidance] = useState('')
+
   const scrollRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const formRef = useRef<HTMLFormElement>(null)
+  const abortRef = useRef<(() => void) | null>(null as (() => void) | null)
+
+  const isStreaming = streamingText !== null
 
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight
     }
-  }, [resolvedMessages, isSubmitting])
+  }, [messages, streamingText])
 
   const handleFileChange = useCallback(
     async (event: ChangeEvent<HTMLInputElement>) => {
@@ -192,7 +197,90 @@ export function ProjectAssetAIPanel({
   function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
     if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault()
-      formRef.current?.requestSubmit()
+      void handleSend()
+    }
+  }
+
+  async function handleSend() {
+    const text = inputText.trim()
+    if (!text && fileIds.length === 0) {
+      toast.error('请先输入消息或上传文件')
+      return
+    }
+    if (isStreaming) return
+
+    const userMessage: ProjectAssetAIMessage = {
+      id: `user-${Date.now()}`,
+      role: 'user',
+      content: text || `[已上传 ${fileIds.length} 个文件]`,
+    }
+    setMessages((prev) => [...prev, userMessage])
+    setInputText('')
+    setStreamingText('')
+
+    let accumulatedText = ''
+    let aborted = false
+    const controller = new AbortController()
+
+    abortRef.current = () => { aborted = true; controller.abort() }
+
+    try {
+      await streamAssetChat(
+        projectId,
+        {
+          message: text,
+          asset_type: assetType,
+          session_id: sessionId,
+          file_ids: fileIds,
+        },
+        (event) => {
+          if (aborted) return
+
+          if (event.type === 'text') {
+            accumulatedText += event.content
+            setStreamingText(accumulatedText)
+          } else if (event.type === 'tool_call') {
+            const toolNames: Record<string, string> = {
+              query_world_setting: '读取世界观',
+              query_characters: '读取角色列表',
+              draft_world_setting_update: '生成世界观建议',
+              draft_character_actions: '生成角色建议',
+            }
+            setMessages((prev) => [
+              ...prev,
+              {
+                id: `tool-${Date.now()}`,
+                role: 'tool',
+                title: toolNames[event.name] ?? event.name,
+                content: '正在处理...',
+              },
+            ])
+          } else if (event.type === 'draft_ready') {
+            onDraftReady?.(event)
+          } else if (event.type === 'error') {
+            toast.error(event.error)
+          }
+        },
+        controller.signal,
+      )
+    } catch (err) {
+      if (!aborted) {
+        const message = err instanceof Error ? err.message : '对话请求失败'
+        toast.error(message)
+      }
+    } finally {
+      if (!aborted && accumulatedText) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `ai-${Date.now()}`,
+            role: 'result',
+            content: accumulatedText,
+          },
+        ])
+      }
+      setStreamingText(null)
+      abortRef.current = null
     }
   }
 
@@ -203,7 +291,7 @@ export function ProjectAssetAIPanel({
         <div className="flex items-center gap-2">
           <Icon className={`size-4 ${meta.accentClassName}`} />
           <span className="text-sm font-semibold text-foreground">{meta.title}</span>
-          <Badge variant="outline" className="text-[10px]">{assetType}</Badge>
+          <Badge variant="outline" className="text-[10px]">对话模式</Badge>
         </div>
         <div className="flex flex-wrap gap-1.5">
           {meta.quickPrompts.map((prompt) => (
@@ -211,12 +299,7 @@ export function ProjectAssetAIPanel({
               key={prompt}
               type="button"
               className="rounded-full border border-border bg-muted/50 px-2.5 py-0.5 text-[11px] text-muted-foreground transition hover:border-primary/30 hover:bg-muted hover:text-foreground"
-              onClick={() =>
-                onDraftChange((prev) => ({
-                  ...prev,
-                  command: prev.command.trim() ? prev.command : prompt,
-                }))
-              }
+              onClick={() => setInputText((prev) => prev.trim() ? prev : prompt)}
             >
               {prompt}
             </button>
@@ -227,10 +310,10 @@ export function ProjectAssetAIPanel({
       {/* Messages */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4">
         <div className="space-y-4">
-          {resolvedMessages.map((message) => (
+          {messages.map((message) => (
             <MessageBubble key={message.id} message={message} />
           ))}
-          {isSubmitting ? <ThinkingBubble accentClassName={meta.accentClassName} /> : null}
+          {isStreaming ? <StreamingBubble text={streamingText ?? ''} accentClassName={meta.accentClassName} /> : null}
         </div>
       </div>
 
@@ -276,7 +359,7 @@ export function ProjectAssetAIPanel({
       ) : null}
 
       {/* Input area */}
-      <form ref={formRef} className="border-t border-border px-4 pb-4 pt-3" onSubmit={onSubmit}>
+      <div className="border-t border-border px-4 pb-4 pt-3">
         {/* Uploaded file pills */}
         {uploadedFiles.length > 0 ? (
           <div className="mb-2 flex flex-wrap gap-1.5">
@@ -316,20 +399,21 @@ export function ProjectAssetAIPanel({
           </button>
 
           <Textarea
-            value={draft.command}
-            onChange={(e) => onDraftChange((prev) => ({ ...prev, command: e.target.value }))}
+            value={inputText}
+            onChange={(e) => setInputText(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder={meta.placeholder}
             rows={3}
             className="flex-1 resize-none text-sm"
-            disabled={isSubmitting}
+            disabled={isStreaming}
           />
 
           <Button
-            type="submit"
+            type="button"
             size="icon"
             className="size-9 shrink-0 rounded-xl"
-            disabled={isSubmitting}
+            disabled={isStreaming}
+            onClick={() => void handleSend()}
           >
             <Send className="size-4" />
           </Button>
@@ -342,15 +426,15 @@ export function ProjectAssetAIPanel({
           </summary>
           <div className="mt-2">
             <Textarea
-              value={draft.guidance}
-              onChange={(e) => onDraftChange((prev) => ({ ...prev, guidance: e.target.value }))}
+              value={guidance}
+              onChange={(e) => setGuidance(e.target.value)}
               rows={2}
               placeholder={meta.guidancePlaceholder}
               className="resize-none text-xs"
             />
           </div>
         </details>
-      </form>
+      </div>
     </div>
   )
 }

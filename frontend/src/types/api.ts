@@ -311,3 +311,52 @@ export interface CharacterApplyResponse {
   applied: string[]
   errors: string[]
 }
+
+// ---------------------------------------------------------------------------
+// Conversational chat (LangGraph agent)
+// ---------------------------------------------------------------------------
+
+export interface AssetChatRequest {
+  message: string
+  asset_type: 'world_setting' | 'project_character'
+  session_id: string
+  file_ids?: string[]
+}
+
+export type AssetChatSSEEventType = 'text' | 'tool_call' | 'draft_ready' | 'error' | 'done'
+
+export interface AssetChatSSETextEvent {
+  type: 'text'
+  content: string
+}
+
+export interface AssetChatSSEToolCallEvent {
+  type: 'tool_call'
+  name: string
+  args: Record<string, unknown>
+}
+
+export interface AssetChatSSEDraftReadyEvent {
+  type: 'draft_ready'
+  asset_type: 'world_setting' | 'project_character'
+  patch: WorldSettingPatch | null
+  actions: CharacterActionItem[] | null
+  notes: string[]
+  applied_sources?: string[]
+}
+
+export interface AssetChatSSEErrorEvent {
+  type: 'error'
+  error: string
+}
+
+export interface AssetChatSSEDoneEvent {
+  type: 'done'
+}
+
+export type AssetChatSSEEvent =
+  | AssetChatSSETextEvent
+  | AssetChatSSEToolCallEvent
+  | AssetChatSSEDraftReadyEvent
+  | AssetChatSSEErrorEvent
+  | AssetChatSSEDoneEvent
