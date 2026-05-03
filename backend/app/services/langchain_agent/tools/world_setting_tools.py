@@ -64,6 +64,8 @@ async def propose_world_setting_patch(
         chapter_id=None,
         text=input_text,
         instruction=instruction,
+        model_provider=None,
+        model_id=None,
         temperature=0.4,
         max_tokens=4000,
     )
@@ -103,7 +105,8 @@ def _build_instruction(context: dict, *, source_text: str | None, command: str |
         'JSON 结构：{"world_setting":{"title":"","overview":"","rules":"","factions":"","locations":"","timeline":"","extra_notes":""},'
         '"notes":[""],"applied_sources":[""]}。\n'
         "要求：1. 尽量补全所有字段；2. 不要改写现有核心事实；"
-        "3. notes 记录不确定点和推断；4. applied_sources 列出本次参考的信息来源。"
+        "3. notes 记录不确定点和推断；4. applied_sources 列出本次参考的信息来源；"
+        "5. 无论是否有资料，必须始终输出合法 JSON，资料不足时 world_setting 各字段保持空字符串，在 notes 中说明原因，禁止输出任何非 JSON 内容。"
     )
 
 

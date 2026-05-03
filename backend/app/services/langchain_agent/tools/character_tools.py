@@ -57,6 +57,8 @@ async def propose_character_patch(
         chapter_id=None,
         text=input_text,
         instruction=instruction,
+        model_provider=None,
+        model_id=None,
         temperature=0.3,
         max_tokens=3000,
     )
@@ -86,7 +88,8 @@ def _build_instruction(context: dict, *, guidance: str | None) -> str:
         '"role_label":null,"summary":null}],"notes":[""]}。\n'
         "要求：1. 只生成资料中明确出现的角色；2. 已在项目中的角色使用 update_project_character；"
         "3. 新角色使用 create_and_attach；4. 字段无法确定时设为 null；"
-        "5. notes 记录歧义和待确认点。"
+        "5. notes 记录歧义和待确认点；"
+        "6. 无论是否有资料，必须始终输出合法 JSON，资料不足时 actions 为空数组，在 notes 中说明原因，禁止输出任何非 JSON 内容。"
     )
 
 

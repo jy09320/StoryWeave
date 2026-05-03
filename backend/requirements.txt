@@ -14,4 +14,5 @@ tiktoken==0.8.0
 ulid-py==1.1.0
 langchain-openai==0.3.14
 langchain-anthropic==0.3.10
+langgraph>=0.3.0,<0.4.0
 python-multipart==0.0.20

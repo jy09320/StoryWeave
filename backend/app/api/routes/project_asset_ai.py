@@ -1,13 +1,16 @@
-"""Project asset AI routes: file upload, world-setting analyze/apply, character analyze/apply."""
+"""Project asset AI routes: file upload, world-setting analyze/apply, character analyze/apply, chat."""
+import json
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.database import get_db
 from app.models.project import Character, Project, ProjectCharacter, WorldSetting
+from app.schemas.chat import AssetChatRequest
 from app.schemas.project_asset_ai import (
     ProjectAssetFileUploadResponse,
     WorldSettingAnalyzeRequest,
@@ -295,3 +298,172 @@ async def apply_character_patch(
     await db.commit()
 
     return CharacterApplyResponse(applied=applied, errors=errors)
+
+
+# ---------------------------------------------------------------------------
+# Conversational chat endpoint (SSE streaming, LangGraph ReAct agent)
+# ---------------------------------------------------------------------------
+
+def _sse(event: str, data: dict) -> str:
+    return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+
+
+@router.post("/{project_id}/ai-assets/chat")
+async def asset_chat(
+    project_id: str,
+    data: AssetChatRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(Project)
+        .options(
+            selectinload(Project.project_characters).selectinload(ProjectCharacter.character),
+            selectinload(Project.world_setting),
+        )
+        .where(Project.id == project_id)
+    )
+    project = result.scalar_one_or_none()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    # Combine file contents into the user message
+    file_parts: list[str] = []
+    for fid in (data.file_ids or []):
+        stored = _file_store.get(fid)
+        if stored:
+            file_parts.append(stored)
+
+    user_message = data.message
+    if file_parts:
+        user_message = user_message + "\n\n" + "\n\n".join(file_parts) if user_message else "\n\n".join(file_parts)
+
+    async def event_generator():
+        from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
+        from langchain_openai import ChatOpenAI
+        from langchain_anthropic import ChatAnthropic
+
+        from app.services.ai_service import ai_service
+        from app.services.langchain_agent.graph import build_graph
+        from app.services.langchain_agent.session_store import get_history, save_history
+        from app.services.langchain_agent.tools.tool_definitions import make_asset_tools
+
+        # Load session history
+        history = get_history(data.session_id)
+
+        # Build tools with db/project injected
+        tools = make_asset_tools(db=db, project=project)
+
+        # Build LLM instance from runtime config
+        try:
+            runtime = await ai_service.resolve_runtime_config(db, None, None)
+        except Exception as exc:
+            yield _sse("error", {"error": f"AI 配置加载失败：{exc}"})
+            return
+
+        provider = str(runtime["provider"])
+        model_id = str(runtime["model_id"])
+        api_key = runtime.get("api_key")
+        base_url = runtime.get("base_url")
+
+        if provider == "anthropic":
+            llm = ChatAnthropic(
+                model=model_id,
+                api_key=api_key,
+                base_url=base_url,
+                temperature=0.6,
+                max_tokens=4096,
+            )
+        else:
+            llm = ChatOpenAI(
+                model=model_id,
+                api_key=api_key,
+                base_url=base_url,
+                temperature=0.6,
+                max_tokens=4096,
+            )
+
+        graph = build_graph(data.asset_type, tools, llm)
+
+        new_messages = list(history) + [HumanMessage(content=user_message)]
+        current_ai_text = ""
+
+        try:
+            async for event in graph.astream_events(
+                {"messages": new_messages},
+                version="v2",
+            ):
+                kind = event.get("event")
+                name = event.get("name", "")
+
+                # Stream AI text tokens
+                if kind == "on_chat_model_stream":
+                    chunk = event.get("data", {}).get("chunk")
+                    if chunk:
+                        content = getattr(chunk, "content", None) or ""
+                        if isinstance(content, list):
+                            # Anthropic-style content blocks
+                            for block in content:
+                                if isinstance(block, dict) and block.get("type") == "text":
+                                    text = block.get("text", "")
+                                    if text:
+                                        current_ai_text += text
+                                        yield _sse("text", {"content": text})
+                        elif isinstance(content, str) and content:
+                            current_ai_text += content
+                            yield _sse("text", {"content": content})
+
+                # Tool call start
+                elif kind == "on_tool_start":
+                    tool_input = event.get("data", {}).get("input", {})
+                    yield _sse("tool_call", {"name": name, "args": tool_input})
+
+                # Tool call end — detect draft_ready
+                elif kind == "on_tool_end":
+                    tool_output = event.get("data", {}).get("output", "")
+                    # LangGraph wraps tool output in a ToolMessage; extract content string
+                    if hasattr(tool_output, "content"):
+                        output_str = tool_output.content
+                        if isinstance(output_str, list):
+                            output_str = " ".join(
+                                block.get("text", "") if isinstance(block, dict) else str(block)
+                                for block in output_str
+                            )
+                    else:
+                        output_str = str(tool_output)
+
+                    if name in ("draft_world_setting_update", "draft_character_actions"):
+                        try:
+                            payload = json.loads(output_str)
+                            if name == "draft_world_setting_update":
+                                yield _sse("draft_ready", {
+                                    "asset_type": "world_setting",
+                                    "patch": payload.get("patch"),
+                                    "actions": None,
+                                    "notes": payload.get("notes", []),
+                                    "applied_sources": payload.get("applied_sources", []),
+                                })
+                            else:
+                                yield _sse("draft_ready", {
+                                    "asset_type": "project_character",
+                                    "patch": None,
+                                    "actions": payload.get("actions"),
+                                    "notes": payload.get("notes", []),
+                                })
+                        except Exception:
+                            pass  # Non-JSON tool output, skip draft event
+
+        except Exception as exc:
+            yield _sse("error", {"error": str(exc)})
+            return
+
+        # Save updated history: append new human + final AI message
+        final_messages = new_messages + [AIMessage(content=current_ai_text or "")]
+        save_history(data.session_id, final_messages)
+
+        yield _sse("done", {})
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )

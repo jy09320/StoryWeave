@@ -1,5 +1,5 @@
 """Schemas for project asset AI endpoints (file upload, analyze, apply)."""
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class ProjectAssetFileUploadResponse(BaseModel):
@@ -59,6 +59,13 @@ class CharacterActionItem(BaseModel):
     tags: str | None = None
     role_label: str | None = None
     summary: str | None = None
+
+    @field_validator("tags", mode="before")
+    @classmethod
+    def coerce_tags(cls, v):
+        if isinstance(v, list):
+            return ", ".join(str(i) for i in v) if v else None
+        return v
 
 
 class CharacterAnalyzeRequest(BaseModel):
