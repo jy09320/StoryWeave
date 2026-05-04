@@ -746,11 +746,7 @@ export function AppShell() {
                 </div>
               ) : null}
 
-              {aiMessages.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-[#d1d5db] bg-white px-4 py-4 text-sm leading-6 text-[#6b7280]">
-                  输入续写指令后发送。这里会按聊天消息流展示你的要求和 AI 返回内容，底部输入区固定保留。
-                </div>
-              ) : null}
+              {aiMessages.length === 0 ? null : null}
 
               {aiMessages.map((message) => (
                 <div key={message.id} className={clsx('flex', message.role === 'user' ? 'justify-end' : 'justify-start')}>
