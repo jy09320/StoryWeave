@@ -497,41 +497,6 @@ export function AIToolboxPage() {
 
   return (
     <div className="space-y-6 pb-8">
-      <Card className="border border-border bg-card/95 shadow-[0_18px_44px_rgba(148,163,184,0.18)]">
-        <CardHeader className="gap-4">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div className="space-y-3">
-              <CardDescription className="text-primary/80">AI Toolbox</CardDescription>
-              <CardTitle className="text-3xl font-semibold leading-tight text-foreground">把文本拿出来处理，再决定是否回写</CardTitle>
-              <p className="max-w-3xl text-sm leading-7 text-muted-foreground">
-                这里不是能力广场，也不是编辑器镜像。它只做一件事：针对一段文本执行续写、改写或设定检查，先产出候选结果，再由你决定是否带回编辑器。
-              </p>
-            </div>
-
-            <div className="flex w-full flex-col gap-2 sm:w-auto sm:min-w-[240px]">
-              <Link
-                to={returnTarget.to}
-                className="inline-flex h-10 items-center justify-center rounded-lg border border-border bg-background px-4 text-sm font-medium text-foreground transition hover:bg-muted"
-              >
-                {returnTarget.label}
-              </Link>
-              <Link
-                to="/settings"
-                className="inline-flex h-10 items-center justify-center rounded-lg border border-border bg-muted/45 px-4 text-sm font-medium text-foreground transition hover:bg-muted"
-              >
-                打开 AI 设置
-              </Link>
-            </div>
-          </div>
-
-          <div className="grid gap-3 md:grid-cols-3">
-            <QuickStep title="1. 选任务" description="续写、改写、设定检查三种模式。" />
-            <QuickStep title="2. 放文本" description="粘贴文本，或直接载入当前章节正文。" />
-            <QuickStep title="3. 拿结果" description="复制、继续加工，或带回编辑器。" />
-          </div>
-        </CardHeader>
-      </Card>
-
       <section className="grid gap-6 xl:grid-cols-[260px_minmax(0,1fr)_320px]">
         <aside className="space-y-4">
           <Card className="border border-border bg-card/95 shadow-[0_16px_36px_rgba(148,163,184,0.16)]">
@@ -568,25 +533,6 @@ export function AIToolboxPage() {
                   </button>
                 )
               })}
-            </CardContent>
-          </Card>
-
-          <Card className="border border-border bg-card/95 shadow-[0_16px_36px_rgba(148,163,184,0.16)]">
-            <CardHeader>
-              <CardTitle className="text-lg text-foreground">当前任务说明</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3 text-sm leading-6 text-foreground/85">
-              <div className="rounded-2xl border border-primary/20 bg-primary/8 p-4">
-                <div className="text-sm font-medium text-foreground">{taskMeta.label}</div>
-                <div className="mt-2 text-xs leading-6 text-muted-foreground">{taskMeta.status}</div>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {taskMeta.items.map((item) => (
-                  <span key={item} className="rounded-full border border-border bg-background px-3 py-1 text-[11px] text-muted-foreground">
-                    {item}
-                  </span>
-                ))}
-              </div>
             </CardContent>
           </Card>
         </aside>
@@ -702,10 +648,6 @@ export function AIToolboxPage() {
                       前往设置中心
                     </Link>
                   </div>
-
-                  <div className="rounded-xl border border-dashed border-border bg-muted/35 p-3 text-xs leading-5 text-muted-foreground">
-                    模型列表已收纳到弹窗里，点击上方“选择模型”即可切换。
-                  </div>
                 </div>
 
                 <div className="space-y-2">
@@ -719,7 +661,7 @@ export function AIToolboxPage() {
                     rows={5}
                     placeholder={taskMeta.placeholder}
                   />
-                  <div className="text-xs leading-6 text-muted-foreground">这里写的是“怎么处理”，不是“处理什么文本”。原文请放在上面的输入区。</div>
+                  <div className="text-xs leading-6 text-muted-foreground">这里写的是「怎么处理」，不是「处理什么文本」。原文请放在上面的输入区。</div>
                 </div>
 
                 <div className="flex flex-wrap gap-3">
@@ -1002,15 +944,6 @@ export function AIToolboxPage() {
           toast.success(`下一次生成将使用模型：${modelId}`)
         }}
       />
-    </div>
-  )
-}
-
-function QuickStep({ title, description }: { title: string; description: string }) {
-  return (
-    <div className="rounded-xl border border-border bg-muted/35 p-4">
-      <div className="text-sm font-medium text-foreground">{title}</div>
-      <div className="mt-2 text-xs leading-6 text-muted-foreground">{description}</div>
     </div>
   )
 }
