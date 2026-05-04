@@ -586,10 +586,6 @@ export function AppShell() {
     }
 
     const sourceText = (scopedEditorUtilityContext?.action === 'expand' ? scopedEditorUtilityContext.selectedText : scopedEditorAIDraft?.plainText)?.trim() ?? ''
-    if (!sourceText) {
-      toast.error('请先准备可续写的正文内容')
-      return
-    }
 
     const submittedInstruction = aiState.instruction.trim() || DEFAULT_CONTINUE_INSTRUCTION
     const requestId = aiState.requestId + 1
@@ -700,9 +696,6 @@ export function AppShell() {
   function renderAIPanel(onClose?: () => void) {
     const primaryLabel = scopedEditorUtilityContext?.action === 'expand' ? '选区扩写' : '章节续写'
     const resultApplyLabel = scopedEditorUtilityContext?.action === 'expand' ? '插入到选区后' : '追加到正文'
-    const hasDraftSource =
-      scopedEditorUtilityContext?.action === 'expand' || Boolean(scopedEditorAIDraft?.plainText.trim())
-
     return (
       <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
         <div className="mb-4 flex items-center justify-between">
@@ -793,7 +786,7 @@ export function AppShell() {
                 onKeyDown={(event) => {
                   if (event.key === 'Enter' && !event.shiftKey) {
                     event.preventDefault()
-                    if (!aiState.isGenerating && hasDraftSource) {
+                    if (!aiState.isGenerating) {
                       void handleGenerate()
                     }
                   }
@@ -831,7 +824,7 @@ export function AppShell() {
                 <button
                   type="button"
                   onClick={() => void handleGenerate()}
-                  disabled={aiState.isGenerating || !hasDraftSource}
+                  disabled={aiState.isGenerating}
                   className="inline-flex h-9 items-center justify-center gap-2 rounded-xl bg-emerald-500 px-3 text-xs font-medium text-white transition hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {aiState.isGenerating ? <LoaderCircle className="size-3.5 animate-spin" /> : <SendHorizontal className="size-3.5" />}
