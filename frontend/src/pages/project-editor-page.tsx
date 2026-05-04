@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { ChevronDown, ChevronLeft, History, LoaderCircle, Save } from 'lucide-react'
+import { ChevronDown, ChevronLeft, History, LoaderCircle, Save, SendHorizontal, Sparkles } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { RichTextEditor, type RichTextEditorHandle } from '@/components/editor/rich-text-editor'
@@ -23,14 +23,15 @@ import {
   writeEditorAIDraftContext,
   type EditorAICommand,
 } from '@/lib/editor-ai-bridge'
-import { writeToolboxInputDraft } from '@/lib/ai-toolbox-context'
 import { writeEditorRouteContext } from '@/lib/editor-route-context'
 import { writeEditorUtilityContext, type EditorUtilityAction } from '@/lib/editor-utility-context'
 import { formatDate } from '@/lib/format'
 import { queryClient } from '@/lib/query-client'
 import { cn } from '@/lib/utils'
+import { getAIRuntimeSettings, streamGenerate } from '@/services/ai'
+import { writeToolboxInputDraft } from '@/lib/ai-toolbox-context'
 import { getProject, listChapterVersions, updateChapter } from '@/services/projects'
-import type { Chapter, ChapterStatus, ChapterVersion, ProjectDetail } from '@/types/api'
+import type { AIGeneratePayload, Chapter, ChapterStatus, ChapterVersion, ProjectDetail } from '@/types/api'
 
 const CHAPTER_STATUS_OPTIONS: Array<{ label: string; value: ChapterStatus }> = [
   { label: '草稿', value: 'draft' },
@@ -61,6 +62,37 @@ interface ToolboxResultDraft {
   sourceInput: string
   createdAt: string
   mode: ToolboxDraftApplyMode
+}
+
+const BUBBLE_ACTION_META: Record<EditorUtilityAction, { label: string; defaultInstruction: string }> = {
+  polish: {
+    label: 'AI 润色',
+    defaultInstruction: '请对这段文字进行润色，让语言更流畅自然，保持原有风格和意思不变。',
+  },
+  expand: {
+    label: '扩写',
+    defaultInstruction: '请围绕这段文字扩写，补足细节、情绪和动作，保持与当前章节风格一致。',
+  },
+  rewrite: {
+    label: '改写',
+    defaultInstruction: '请在不改变核心情节的前提下改写这段文字，让语言更顺、节奏更稳，并保留人物口吻。',
+  },
+  consistency: {
+    label: '一致性检查',
+    defaultInstruction: '请从角色设定、世界规则、叙事逻辑和时间线四个角度检查这段内容，列出冲突点和修改建议。',
+  },
+}
+
+interface BubbleDialogState {
+  action: EditorUtilityAction
+  selectedText: string
+}
+
+interface BubbleGenState {
+  instruction: string
+  result: string
+  isGenerating: boolean
+  requestId: number
 }
 
 function getChapterStatusLabel(status: ChapterStatus) {
@@ -153,6 +185,13 @@ export function ProjectEditorPage() {
   const [dirtyChapterIds, setDirtyChapterIds] = useState<Record<string, boolean>>({})
   const [isVersionDialogOpen, setIsVersionDialogOpen] = useState(false)
   const [isStatusMenuOpen, setIsStatusMenuOpen] = useState(false)
+  const [bubbleDialog, setBubbleDialog] = useState<BubbleDialogState | null>(null)
+  const [bubbleGen, setBubbleGen] = useState<BubbleGenState>({
+    instruction: '',
+    result: '',
+    isGenerating: false,
+    requestId: 0,
+  })
 
   const projectQuery = useQuery<ProjectDetail, Error>({
     queryKey: ['project', projectId],
@@ -160,6 +199,11 @@ export function ProjectEditorPage() {
     enabled: Boolean(projectId),
   })
 
+  const runtimeSettingsQuery = useQuery({
+    queryKey: ['ai-runtime-settings'],
+    queryFn: getAIRuntimeSettings,
+    staleTime: 60_000,
+  })
 
   const chapter = useMemo(
     () => getChapterById(projectQuery.data, chapterId),
@@ -354,28 +398,82 @@ export function ProjectEditorPage() {
       return
     }
 
-    if (action !== 'expand') {
-      writeToolboxInputDraft({
-        task: action === 'consistency' ? 'consistency' : 'rewrite',
-        projectId,
-        chapterId: chapter.id,
-        input: selectedText,
-        createdAt: new Date().toISOString(),
-      })
-      navigate(`/ai-toolbox?task=${action === 'consistency' ? 'consistency' : 'rewrite'}&projectId=${projectId}&chapterId=${chapter.id}`)
+    const meta = BUBBLE_ACTION_META[action]
+    setBubbleDialog({ action, selectedText })
+    setBubbleGen({
+      instruction: meta.defaultInstruction,
+      result: '',
+      isGenerating: false,
+      requestId: 0,
+    })
+  }
+
+  async function handleBubbleGenerate() {
+    if (!projectId || !chapterId || !bubbleDialog) {
       return
     }
 
-    writeEditorUtilityContext({
-      projectId,
-      projectTitle: projectQuery.data?.title ?? null,
-      chapterId: chapter.id,
-      chapterTitle: chapter.title ?? null,
-      action,
-      selectedText,
-      updatedAt: new Date().toISOString(),
-    })
-    toast.success('已切换到选区扩写模式')
+    const requestId = bubbleGen.requestId + 1
+    setBubbleGen((prev) => ({ ...prev, result: '', isGenerating: true, requestId }))
+
+    const payload: AIGeneratePayload = {
+      project_id: projectId,
+      chapter_id: chapterId,
+      text: bubbleDialog.selectedText,
+      instruction: bubbleGen.instruction.trim() || BUBBLE_ACTION_META[bubbleDialog.action].defaultInstruction,
+      model_provider: runtimeSettingsQuery.data?.provider ?? 'openai',
+      model_id: runtimeSettingsQuery.data?.model_id ?? 'gpt-4o',
+    }
+
+    try {
+      await streamGenerate(payload, (chunk) => {
+        setBubbleGen((prev) => {
+          if (prev.requestId !== requestId || !prev.isGenerating) return prev
+          return { ...prev, result: `${prev.result}${chunk}` }
+        })
+      })
+      setBubbleGen((prev) => (prev.requestId === requestId ? { ...prev, isGenerating: false } : prev))
+    } catch (error) {
+      setBubbleGen((prev) => (prev.requestId === requestId ? { ...prev, isGenerating: false } : prev))
+      toast.error(error instanceof Error ? error.message : 'AI 生成失败')
+    }
+  }
+
+  function handleBubbleApply(mode: 'replace' | 'append') {
+    if (!chapter?.id || !bubbleGen.result.trim()) {
+      return
+    }
+
+    if (mode === 'replace') {
+      const applied = editorRef.current?.applyGeneratedText({
+        text: bubbleGen.result.trim(),
+        mode: 'replace-selection',
+      })
+      if (!applied) {
+        toast.error('选区已失效，请重新选择文字后再试')
+        return
+      }
+      setBubbleDialog(null)
+      toast.success('已替换选区内容')
+      return
+    }
+
+    const current = drafts[chapter.id] ?? buildEditorForm(chapter)
+    const nextText = current.plainText.trim()
+      ? `${current.plainText.trimEnd()}\n\n${bubbleGen.result.trim()}`
+      : bubbleGen.result.trim()
+
+    const next = {
+      ...current,
+      contentHtml: plainTextToHtml(nextText),
+      plainText: nextText,
+    }
+
+    setDrafts((prev) => ({ ...prev, [chapter.id]: next }))
+    setDirtyChapterIds((prev) => ({ ...prev, [chapter.id]: true }))
+    scheduleAutosave(chapter.id, next)
+    setBubbleDialog(null)
+    toast.success('已追加到正文末尾')
   }
 
   async function handleManualSave() {
@@ -862,6 +960,79 @@ ${nextText}` : nextText
               <EmptyState title="暂无历史版本" />
             )}
           </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={Boolean(bubbleDialog)} onOpenChange={(open) => { if (!open) setBubbleDialog(null) }}>
+        <DialogContent className="flex max-h-[90vh] max-w-2xl flex-col border border-border bg-popover text-popover-foreground">
+          <DialogHeader className="shrink-0">
+            <DialogTitle>{bubbleDialog ? BUBBLE_ACTION_META[bubbleDialog.action].label : ''}</DialogTitle>
+            <DialogDescription>AI 将针对你选中的文字生成结果，确认后可插入正文。</DialogDescription>
+          </DialogHeader>
+
+          {bubbleDialog ? (
+            <>
+              <div className="min-h-0 flex-1 space-y-4 overflow-y-auto pr-1">
+              <div className="rounded-2xl border border-border bg-muted/45 px-4 py-3">
+                <div className="mb-1 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">选中文字</div>
+                <div className="whitespace-pre-wrap text-sm leading-6 text-foreground/85">{bubbleDialog.selectedText}</div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground">任务说明</label>
+                <Textarea
+                  value={bubbleGen.instruction}
+                  onChange={(e) => setBubbleGen((prev) => ({ ...prev, instruction: e.target.value }))}
+                  rows={3}
+                  placeholder="描述你希望 AI 做什么"
+                  disabled={bubbleGen.isGenerating}
+                />
+              </div>
+
+              {bubbleGen.result.trim() ? (
+                <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/8 px-4 py-3">
+                  <div className="mb-1 text-[11px] uppercase tracking-[0.18em] text-emerald-600">生成结果</div>
+                  <div className="whitespace-pre-wrap text-sm leading-6 text-foreground/85">{bubbleGen.result}</div>
+                </div>
+              ) : null}
+            </div>
+
+            <div className="shrink-0 border-t border-border pt-4">
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  onClick={() => void handleBubbleGenerate()}
+                  disabled={bubbleGen.isGenerating}
+                  className="flex-1"
+                >
+                  {bubbleGen.isGenerating
+                    ? <><LoaderCircle className="size-4 animate-spin" />生成中...</>
+                    : <><Sparkles className="size-4" />{bubbleGen.result.trim() ? '重新生成' : '开始生成'}</>}
+                </Button>
+                {bubbleGen.isGenerating ? (
+                  <Button variant="outline" onClick={() => setBubbleGen((prev) => ({ ...prev, isGenerating: false }))}>
+                    停止
+                  </Button>
+                ) : null}
+                {bubbleGen.result.trim() && !bubbleGen.isGenerating ? (
+                  <>
+                    <Button
+                      variant="outline"
+                      onClick={() => handleBubbleApply('replace')}
+                    >
+                      替换选区
+                    </Button>
+                    <Button
+                      onClick={() => handleBubbleApply('append')}
+                    >
+                      <SendHorizontal className="size-4" />
+                      追加到正文
+                    </Button>
+                  </>
+                ) : null}
+              </div>
+            </div>
+            </>
+          ) : null}
         </DialogContent>
       </Dialog>
     </div>
