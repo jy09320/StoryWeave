@@ -5,14 +5,18 @@ import { createBrowserRouter, Navigate, RouterProvider } from 'react-router-dom'
 import { TooltipProvider } from '@/components/ui/tooltip'
 
 import { AppShell } from '@/components/app-shell'
+import { ProtectedRoute } from '@/components/protected-route'
+import { AuthProvider } from '@/contexts/auth-context'
 import { queryClient } from '@/lib/query-client'
 import { AIToolboxPage } from '@/pages/ai-toolbox-page'
 import { CharactersPage } from '@/pages/characters-page'
 import { DashboardPage } from '@/pages/dashboard-page'
 import { HomePage } from '@/pages/home-page'
+import { LoginPage } from '@/pages/login-page'
 import { ProjectEditorPage } from '@/pages/project-editor-page'
 import { ProjectWorldPage } from '@/pages/project-world-page'
 import { ProjectWorkspacePage } from '@/pages/project-workspace-page'
+import { RegisterPage } from '@/pages/register-page'
 import { SettingsPage } from '@/pages/settings-page'
 
 const router = createBrowserRouter([
@@ -21,8 +25,20 @@ const router = createBrowserRouter([
     element: <HomePage />,
   },
   {
+    path: '/login',
+    element: <LoginPage />,
+  },
+  {
+    path: '/register',
+    element: <RegisterPage />,
+  },
+  {
     path: '/',
-    element: <AppShell />,
+    element: (
+      <ProtectedRoute>
+        <AppShell />
+      </ProtectedRoute>
+    ),
     children: [
       {
         path: 'workspace',
@@ -67,10 +83,12 @@ const router = createBrowserRouter([
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <RouterProvider router={router} />
-        <Toaster richColors position="top-right" theme="dark" />
-      </TooltipProvider>
+      <AuthProvider>
+        <TooltipProvider>
+          <RouterProvider router={router} />
+          <Toaster richColors position="top-right" theme="dark" />
+        </TooltipProvider>
+      </AuthProvider>
     </QueryClientProvider>
   )
 }
