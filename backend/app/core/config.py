@@ -8,6 +8,9 @@ class Settings(BaseSettings):
     ANTHROPIC_API_KEY: str = ""
     OPENAI_BASE_URL: str | None = None
     ANTHROPIC_BASE_URL: str | None = None
+    JWT_SECRET_KEY: str = "change-me-in-production-please-use-a-long-random-string"
+    TOKEN_EXPIRE_DAYS: int = 30
+
     BACKEND_CORS_ORIGINS: list[str] = [
         "http://localhost:5173",
         "http://127.0.0.1:5173",

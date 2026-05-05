@@ -3,22 +3,33 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.api.deps import get_current_user
 from app.core.database import get_db
 from app.models.project import Project, ProjectCharacter
+from app.models.user import User
 from app.schemas.project import ProjectCreate, ProjectDetailResponse, ProjectResponse, ProjectUpdate
 
 router = APIRouter()
 
 
 @router.get("/", response_model=list[ProjectResponse])
-async def list_projects(db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Project).order_by(Project.updated_at.desc()))
+async def list_projects(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    result = await db.execute(
+        select(Project).where(Project.owner_id == current_user.id).order_by(Project.updated_at.desc())
+    )
     return result.scalars().all()
 
 
 @router.post("/", response_model=ProjectResponse)
-async def create_project(data: ProjectCreate, db: AsyncSession = Depends(get_db)):
-    project = Project(**data.model_dump())
+async def create_project(
+    data: ProjectCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    project = Project(**data.model_dump(), owner_id=current_user.id)
     db.add(project)
     await db.commit()
     await db.refresh(project)
@@ -26,7 +37,11 @@ async def create_project(data: ProjectCreate, db: AsyncSession = Depends(get_db)
 
 
 @router.get("/{project_id}", response_model=ProjectDetailResponse)
-async def get_project(project_id: str, db: AsyncSession = Depends(get_db)):
+async def get_project(
+    project_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     result = await db.execute(
         select(Project)
         .options(
@@ -34,7 +49,7 @@ async def get_project(project_id: str, db: AsyncSession = Depends(get_db)):
             selectinload(Project.project_characters).selectinload(ProjectCharacter.character),
             selectinload(Project.world_setting),
         )
-        .where(Project.id == project_id)
+        .where(Project.id == project_id, Project.owner_id == current_user.id)
     )
     project = result.scalar_one_or_none()
     if not project:
@@ -43,8 +58,16 @@ async def get_project(project_id: str, db: AsyncSession = Depends(get_db)):
 
 
 @router.put("/{project_id}", response_model=ProjectResponse)
-async def update_project(project_id: str, data: ProjectUpdate, db: AsyncSession = Depends(get_db)):
-    project = await db.get(Project, project_id)
+async def update_project(
+    project_id: str,
+    data: ProjectUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    result = await db.execute(
+        select(Project).where(Project.id == project_id, Project.owner_id == current_user.id)
+    )
+    project = result.scalar_one_or_none()
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     for key, value in data.model_dump(exclude_unset=True).items():
@@ -55,8 +78,15 @@ async def update_project(project_id: str, data: ProjectUpdate, db: AsyncSession 
 
 
 @router.delete("/{project_id}")
-async def delete_project(project_id: str, db: AsyncSession = Depends(get_db)):
-    project = await db.get(Project, project_id)
+async def delete_project(
+    project_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    result = await db.execute(
+        select(Project).where(Project.id == project_id, Project.owner_id == current_user.id)
+    )
+    project = result.scalar_one_or_none()
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     await db.delete(project)

@@ -15,6 +15,7 @@ class Project(Base):
     __tablename__ = "projects"
 
     id: Mapped[str] = mapped_column(String(26), primary_key=True, default=generate_ulid)
+    owner_id: Mapped[str | None] = mapped_column(String(26), ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True)
     title: Mapped[str] = mapped_column(String(200), nullable=False)
     description: Mapped[str | None] = mapped_column(Text)
     type: Mapped[str] = mapped_column(String(20), nullable=False, default="original")
@@ -75,6 +76,7 @@ class Character(Base):
     __tablename__ = "characters"
 
     id: Mapped[str] = mapped_column(String(26), primary_key=True, default=generate_ulid)
+    owner_id: Mapped[str | None] = mapped_column(String(26), ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True)
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     alias: Mapped[str | None] = mapped_column(String(200))
     description: Mapped[str | None] = mapped_column(Text)
@@ -132,6 +134,7 @@ class AIRuntimeSetting(Base):
     __tablename__ = "ai_runtime_settings"
 
     id: Mapped[str] = mapped_column(String(26), primary_key=True, default=generate_ulid)
+    owner_id: Mapped[str | None] = mapped_column(String(26), ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True)
     provider: Mapped[str] = mapped_column(String(50), nullable=False, default="openai")
     model_id: Mapped[str] = mapped_column(String(100), nullable=False, default="gpt-4o")
     base_url: Mapped[str | None] = mapped_column(String(500))

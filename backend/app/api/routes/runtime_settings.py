@@ -2,7 +2,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from openai import AsyncOpenAI
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import get_current_user
 from app.core.database import get_db
+from app.models.user import User
 from app.schemas.project import (
     AIRuntimeSettingResponse,
     AIRuntimeSettingUpdate,
@@ -15,8 +17,11 @@ router = APIRouter()
 
 
 @router.get("/runtime-settings", response_model=AIRuntimeSettingResponse)
-async def get_ai_runtime_settings(db: AsyncSession = Depends(get_db)):
-    config = await runtime_ai_config_service.get_effective_config(db)
+async def get_ai_runtime_settings(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    config = await runtime_ai_config_service.get_effective_config(db, current_user.id)
     return AIRuntimeSettingResponse(
         provider=str(config["provider"]),
         model_id=str(config["model_id"]),
@@ -28,9 +33,14 @@ async def get_ai_runtime_settings(db: AsyncSession = Depends(get_db)):
 
 
 @router.put("/runtime-settings", response_model=AIRuntimeSettingResponse)
-async def update_ai_runtime_settings(data: AIRuntimeSettingUpdate, db: AsyncSession = Depends(get_db)):
+async def update_ai_runtime_settings(
+    data: AIRuntimeSettingUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     saved = await runtime_ai_config_service.save_active_setting(
         db,
+        owner_id=current_user.id,
         provider=data.provider,
         model_id=data.model_id,
         base_url=data.base_url,
@@ -47,8 +57,11 @@ async def update_ai_runtime_settings(data: AIRuntimeSettingUpdate, db: AsyncSess
 
 
 @router.get("/runtime-settings/models", response_model=AIModelListResponse)
-async def list_ai_runtime_models(db: AsyncSession = Depends(get_db)):
-    config = await runtime_ai_config_service.get_effective_config(db)
+async def list_ai_runtime_models(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    config = await runtime_ai_config_service.get_effective_config(db, current_user.id)
     provider = str(config["provider"] or "openai")
     base_url = config["base_url"]
     api_key = config["api_key"]

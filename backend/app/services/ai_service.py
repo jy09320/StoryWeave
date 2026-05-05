@@ -264,8 +264,9 @@ class AIService:
         db: AsyncSession,
         requested_provider: str | None,
         requested_model_id: str | None,
+        owner_id: str | None = None,
     ) -> dict[str, str | None]:
-        config = await runtime_ai_config_service.get_effective_config(db)
+        config = await runtime_ai_config_service.get_effective_config(db, owner_id or "")
         provider = requested_provider or str(config["provider"] or "openai")
         model_id = requested_model_id or str(config["model_id"] or "gpt-4o")
 
@@ -531,6 +532,7 @@ class AIService:
         model_id: str,
         temperature: float,
         max_tokens: int,
+        owner_id: str | None = None,
     ):
         instruction = await self.build_generation_instruction(
             db,
@@ -539,7 +541,7 @@ class AIService:
             text=text,
             instruction=instruction,
         )
-        runtime_config = await self.resolve_runtime_config(db, model_provider, model_id)
+        runtime_config = await self.resolve_runtime_config(db, model_provider, model_id, owner_id)
         provider = str(runtime_config["provider"])
         resolved_model_id = str(runtime_config["model_id"])
         api_key = runtime_config["api_key"]
@@ -581,6 +583,7 @@ class AIService:
         model_id: str | None,
         temperature: float,
         max_tokens: int,
+        owner_id: str | None = None,
     ) -> str:
         resolved_instruction = await self.build_generation_instruction(
             db,
@@ -589,7 +592,7 @@ class AIService:
             text=text,
             instruction=instruction,
         )
-        runtime_config = await self.resolve_runtime_config(db, model_provider, model_id)
+        runtime_config = await self.resolve_runtime_config(db, model_provider, model_id, owner_id)
         provider = str(runtime_config["provider"])
         resolved_model_id = str(runtime_config["model_id"])
         api_key = runtime_config["api_key"]

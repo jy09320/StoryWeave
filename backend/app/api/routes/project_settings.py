@@ -5,8 +5,10 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.api.deps import get_current_user
 from app.core.database import get_db
 from app.models.project import Character, Project, ProjectCharacter, WorldSetting
+from app.models.user import User
 from app.schemas.project import (
     ProjectImportAnalysisResult,
     ProjectImportRequest,
@@ -22,6 +24,31 @@ from app.schemas.project import (
 from app.services.ai_service import ai_service
 
 router = APIRouter()
+
+
+async def _require_owned_project(project_id: str, user_id: str, db: AsyncSession) -> Project:
+    result = await db.execute(
+        select(Project).where(Project.id == project_id, Project.owner_id == user_id)
+    )
+    project = result.scalar_one_or_none()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return project
+
+
+async def _require_owned_project_with_relations(project_id: str, user_id: str, db: AsyncSession) -> Project:
+    result = await db.execute(
+        select(Project)
+        .options(
+            selectinload(Project.project_characters).selectinload(ProjectCharacter.character),
+            selectinload(Project.world_setting),
+        )
+        .where(Project.id == project_id, Project.owner_id == user_id)
+    )
+    project = result.scalar_one_or_none()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return project
 
 
 def _extract_json_object(raw_text: str) -> dict:
@@ -98,10 +125,12 @@ def _build_world_autocomplete_instruction(project: Project, data: ProjectWorldAu
 
 
 @router.get("/{project_id}/characters", response_model=list[ProjectCharacterResponse])
-async def list_project_characters(project_id: str, db: AsyncSession = Depends(get_db)):
-    project = await db.get(Project, project_id)
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
+async def list_project_characters(
+    project_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    await _require_owned_project(project_id, current_user.id, db)
 
     result = await db.execute(
         select(ProjectCharacter)
@@ -117,10 +146,9 @@ async def attach_project_character(
     project_id: str,
     data: ProjectCharacterCreate,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    project = await db.get(Project, project_id)
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
+    await _require_owned_project(project_id, current_user.id, db)
 
     character = await db.get(Character, data.character_id)
     if not character:
@@ -164,11 +192,13 @@ async def update_project_character(
     link_id: str,
     data: ProjectCharacterUpdate,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     result = await db.execute(
         select(ProjectCharacter)
+        .join(Project, Project.id == ProjectCharacter.project_id)
         .options(selectinload(ProjectCharacter.character))
-        .where(ProjectCharacter.id == link_id, ProjectCharacter.project_id == project_id)
+        .where(ProjectCharacter.id == link_id, ProjectCharacter.project_id == project_id, Project.owner_id == current_user.id)
     )
     project_character = result.scalar_one_or_none()
     if not project_character:
@@ -183,9 +213,16 @@ async def update_project_character(
 
 
 @router.delete("/{project_id}/characters/{link_id}")
-async def delete_project_character(project_id: str, link_id: str, db: AsyncSession = Depends(get_db)):
+async def delete_project_character(
+    project_id: str,
+    link_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     result = await db.execute(
-        select(ProjectCharacter).where(ProjectCharacter.id == link_id, ProjectCharacter.project_id == project_id)
+        select(ProjectCharacter)
+        .join(Project, Project.id == ProjectCharacter.project_id)
+        .where(ProjectCharacter.id == link_id, ProjectCharacter.project_id == project_id, Project.owner_id == current_user.id)
     )
     project_character = result.scalar_one_or_none()
     if not project_character:
@@ -197,10 +234,12 @@ async def delete_project_character(project_id: str, link_id: str, db: AsyncSessi
 
 
 @router.get("/{project_id}/world-setting", response_model=WorldSettingResponse | None)
-async def get_project_world_setting(project_id: str, db: AsyncSession = Depends(get_db)):
-    project = await db.get(Project, project_id)
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
+async def get_project_world_setting(
+    project_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    await _require_owned_project(project_id, current_user.id, db)
 
     result = await db.execute(select(WorldSetting).where(WorldSetting.project_id == project_id))
     return result.scalar_one_or_none()
@@ -211,10 +250,9 @@ async def upsert_project_world_setting(
     project_id: str,
     data: WorldSettingUpsert,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    project = await db.get(Project, project_id)
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
+    await _require_owned_project(project_id, current_user.id, db)
 
     result = await db.execute(select(WorldSetting).where(WorldSetting.project_id == project_id))
     world_setting = result.scalar_one_or_none()
@@ -236,18 +274,9 @@ async def import_project_knowledge(
     project_id: str,
     data: ProjectImportRequest,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    result = await db.execute(
-        select(Project)
-        .options(
-            selectinload(Project.project_characters).selectinload(ProjectCharacter.character),
-            selectinload(Project.world_setting),
-        )
-        .where(Project.id == project_id)
-    )
-    project = result.scalar_one_or_none()
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
+    project = await _require_owned_project_with_relations(project_id, current_user.id, db)
 
     instruction = (
         "你是小说项目资料整理助手。请从用户提供的资料中抽取当前项目可直接落库的角色与世界观信息，"
@@ -273,6 +302,7 @@ async def import_project_knowledge(
         model_id=data.model_id,
         temperature=0.2,
         max_tokens=4000,
+        owner_id=current_user.id,
     )
 
     try:
@@ -290,7 +320,12 @@ async def import_project_knowledge(
     imported_names = [item.name.strip().lower() for item in analysis.characters if item.name.strip()]
     existing_global_by_name: dict[str, Character] = {}
     if imported_names:
-        global_matches = await db.execute(select(Character).where(func.lower(Character.name).in_(imported_names)))
+        global_matches = await db.execute(
+            select(Character).where(
+                Character.owner_id == current_user.id,
+                func.lower(Character.name).in_(imported_names),
+            )
+        )
         existing_global_by_name = {
             character.name.strip().lower(): character
             for character in global_matches.scalars().all()
@@ -354,7 +389,7 @@ async def import_project_knowledge(
             linked_by_name[normalized_name] = link
             continue
 
-        new_character = Character(**character_payload)
+        new_character = Character(**character_payload, owner_id=current_user.id)
         db.add(new_character)
         await db.flush()
 
@@ -437,18 +472,9 @@ async def autocomplete_project_world_setting(
     project_id: str,
     data: ProjectWorldAutoCompleteRequest,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    result = await db.execute(
-        select(Project)
-        .options(
-            selectinload(Project.project_characters).selectinload(ProjectCharacter.character),
-            selectinload(Project.world_setting),
-        )
-        .where(Project.id == project_id)
-    )
-    project = result.scalar_one_or_none()
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
+    project = await _require_owned_project_with_relations(project_id, current_user.id, db)
 
     instruction = _build_world_autocomplete_instruction(project, data)
     source_chunks = [chunk for chunk in [data.source_text, data.command] if chunk and chunk.strip()]
@@ -464,6 +490,7 @@ async def autocomplete_project_world_setting(
         model_id=data.model_id,
         temperature=0.4,
         max_tokens=4000,
+        owner_id=current_user.id,
     )
 
     try:

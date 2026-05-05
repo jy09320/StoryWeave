@@ -1,5 +1,6 @@
 """Project asset AI routes: file upload, world-setting analyze/apply, character analyze/apply, chat."""
 import json
+import logging
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
@@ -8,8 +9,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.api.deps import get_current_user
 from app.core.database import get_db
 from app.models.project import Character, Project, ProjectCharacter, WorldSetting
+from app.models.user import User
 from app.schemas.chat import AssetChatRequest
 from app.schemas.project_asset_ai import (
     ProjectAssetFileUploadResponse,
@@ -40,9 +43,10 @@ async def upload_project_asset_file(
     project_id: str,
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     project = await db.get(Project, project_id)
-    if not project:
+    if not project or project.owner_id != current_user.id:
         raise HTTPException(status_code=404, detail="Project not found")
 
     filename = file.filename or ""
@@ -94,6 +98,7 @@ async def analyze_world_setting(
     project_id: str,
     data: WorldSettingAnalyzeRequest,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     result = await db.execute(
         select(Project)
@@ -101,7 +106,7 @@ async def analyze_world_setting(
             selectinload(Project.project_characters).selectinload(ProjectCharacter.character),
             selectinload(Project.world_setting),
         )
-        .where(Project.id == project_id)
+        .where(Project.id == project_id, Project.owner_id == current_user.id)
     )
     project = result.scalar_one_or_none()
     if not project:
@@ -140,9 +145,10 @@ async def apply_world_setting_patch(
     project_id: str,
     data: WorldSettingApplyRequest,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     project = await db.get(Project, project_id)
-    if not project:
+    if not project or project.owner_id != current_user.id:
         raise HTTPException(status_code=404, detail="Project not found")
 
     result = await db.execute(select(WorldSetting).where(WorldSetting.project_id == project_id))
@@ -176,6 +182,7 @@ async def analyze_characters(
     project_id: str,
     data: CharacterAnalyzeRequest,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     result = await db.execute(
         select(Project)
@@ -183,7 +190,7 @@ async def analyze_characters(
             selectinload(Project.project_characters).selectinload(ProjectCharacter.character),
             selectinload(Project.world_setting),
         )
-        .where(Project.id == project_id)
+        .where(Project.id == project_id, Project.owner_id == current_user.id)
     )
     project = result.scalar_one_or_none()
     if not project:
@@ -222,13 +229,14 @@ async def apply_character_patch(
     project_id: str,
     data: CharacterApplyRequest,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     result = await db.execute(
         select(Project)
         .options(
             selectinload(Project.project_characters).selectinload(ProjectCharacter.character),
         )
-        .where(Project.id == project_id)
+        .where(Project.id == project_id, Project.owner_id == current_user.id)
     )
     project = result.scalar_one_or_none()
     if not project:
@@ -313,6 +321,7 @@ async def asset_chat(
     project_id: str,
     data: AssetChatRequest,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     result = await db.execute(
         select(Project)
@@ -320,7 +329,7 @@ async def asset_chat(
             selectinload(Project.project_characters).selectinload(ProjectCharacter.character),
             selectinload(Project.world_setting),
         )
-        .where(Project.id == project_id)
+        .where(Project.id == project_id, Project.owner_id == current_user.id)
     )
     project = result.scalar_one_or_none()
     if not project:
@@ -355,7 +364,7 @@ async def asset_chat(
 
         # Build LLM instance from runtime config
         try:
-            runtime = await ai_service.resolve_runtime_config(db, None, None)
+            runtime = await ai_service.resolve_runtime_config(db, None, None, current_user.id)
         except Exception as exc:
             yield _sse("error", {"error": f"AI 配置加载失败：{exc}"})
             return
@@ -449,8 +458,9 @@ async def asset_chat(
                                     "actions": payload.get("actions"),
                                     "notes": payload.get("notes", []),
                                 })
-                        except Exception:
-                            pass  # Non-JSON tool output, skip draft event
+                        except Exception as draft_exc:
+                            logging.warning("draft_ready parse failed for tool %s: %s | output: %.300s", name, draft_exc, output_str)
+                            yield _sse("error", {"error": f"AI 生成建议时出现问题，请重试（{draft_exc}）"})
 
         except Exception as exc:
             yield _sse("error", {"error": str(exc)})

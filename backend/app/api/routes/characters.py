@@ -2,8 +2,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import get_current_user
 from app.core.database import get_db
 from app.models.project import Character
+from app.models.user import User
 from app.schemas.project import CharacterCreate, CharacterResponse, CharacterUpdate
 
 router = APIRouter()
@@ -13,8 +15,13 @@ router = APIRouter()
 async def list_characters(
     keyword: str | None = Query(default=None, max_length=100),
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    stmt = select(Character).order_by(Character.updated_at.desc(), Character.created_at.desc())
+    stmt = (
+        select(Character)
+        .where(Character.owner_id == current_user.id)
+        .order_by(Character.updated_at.desc(), Character.created_at.desc())
+    )
 
     if keyword:
         search = f"%{keyword.strip()}%"
@@ -32,8 +39,12 @@ async def list_characters(
 
 
 @router.post("/", response_model=CharacterResponse)
-async def create_character(data: CharacterCreate, db: AsyncSession = Depends(get_db)):
-    character = Character(**data.model_dump())
+async def create_character(
+    data: CharacterCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    character = Character(**data.model_dump(), owner_id=current_user.id)
     db.add(character)
     await db.commit()
     await db.refresh(character)
@@ -41,16 +52,31 @@ async def create_character(data: CharacterCreate, db: AsyncSession = Depends(get
 
 
 @router.get("/{character_id}", response_model=CharacterResponse)
-async def get_character(character_id: str, db: AsyncSession = Depends(get_db)):
-    character = await db.get(Character, character_id)
+async def get_character(
+    character_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    result = await db.execute(
+        select(Character).where(Character.id == character_id, Character.owner_id == current_user.id)
+    )
+    character = result.scalar_one_or_none()
     if not character:
         raise HTTPException(status_code=404, detail="Character not found")
     return character
 
 
 @router.put("/{character_id}", response_model=CharacterResponse)
-async def update_character(character_id: str, data: CharacterUpdate, db: AsyncSession = Depends(get_db)):
-    character = await db.get(Character, character_id)
+async def update_character(
+    character_id: str,
+    data: CharacterUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    result = await db.execute(
+        select(Character).where(Character.id == character_id, Character.owner_id == current_user.id)
+    )
+    character = result.scalar_one_or_none()
     if not character:
         raise HTTPException(status_code=404, detail="Character not found")
 
@@ -63,8 +89,15 @@ async def update_character(character_id: str, data: CharacterUpdate, db: AsyncSe
 
 
 @router.delete("/{character_id}")
-async def delete_character(character_id: str, db: AsyncSession = Depends(get_db)):
-    character = await db.get(Character, character_id)
+async def delete_character(
+    character_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    result = await db.execute(
+        select(Character).where(Character.id == character_id, Character.owner_id == current_user.id)
+    )
+    character = result.scalar_one_or_none()
     if not character:
         raise HTTPException(status_code=404, detail="Character not found")
 

@@ -2,8 +2,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import get_current_user
 from app.core.database import get_db
 from app.models.project import Chapter, ChapterVersion, Project
+from app.models.user import User
 from app.schemas.project import (
     ChapterCreate,
     ChapterReorderItem,
@@ -15,8 +17,35 @@ from app.schemas.project import (
 router = APIRouter()
 
 
+async def _require_project(project_id: str, user_id: str, db: AsyncSession) -> Project:
+    result = await db.execute(
+        select(Project).where(Project.id == project_id, Project.owner_id == user_id)
+    )
+    project = result.scalar_one_or_none()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return project
+
+
+async def _require_chapter(chapter_id: str, user_id: str, db: AsyncSession) -> Chapter:
+    result = await db.execute(
+        select(Chapter)
+        .join(Project, Project.id == Chapter.project_id)
+        .where(Chapter.id == chapter_id, Project.owner_id == user_id)
+    )
+    chapter = result.scalar_one_or_none()
+    if not chapter:
+        raise HTTPException(status_code=404, detail="Chapter not found")
+    return chapter
+
+
 @router.get("/by-project/{project_id}", response_model=list[ChapterResponse])
-async def list_chapters(project_id: str, db: AsyncSession = Depends(get_db)):
+async def list_chapters(
+    project_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    await _require_project(project_id, current_user.id, db)
     result = await db.execute(
         select(Chapter).where(Chapter.project_id == project_id).order_by(Chapter.order_index)
     )
@@ -24,10 +53,12 @@ async def list_chapters(project_id: str, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/", response_model=ChapterResponse)
-async def create_chapter(data: ChapterCreate, db: AsyncSession = Depends(get_db)):
-    project = await db.get(Project, data.project_id)
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
+async def create_chapter(
+    data: ChapterCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    await _require_project(data.project_id, current_user.id, db)
 
     payload = data.model_dump()
     if payload["order_index"] == 0:
@@ -50,18 +81,22 @@ async def create_chapter(data: ChapterCreate, db: AsyncSession = Depends(get_db)
 
 
 @router.get("/{chapter_id}", response_model=ChapterResponse)
-async def get_chapter(chapter_id: str, db: AsyncSession = Depends(get_db)):
-    chapter = await db.get(Chapter, chapter_id)
-    if not chapter:
-        raise HTTPException(status_code=404, detail="Chapter not found")
-    return chapter
+async def get_chapter(
+    chapter_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return await _require_chapter(chapter_id, current_user.id, db)
 
 
 @router.put("/{chapter_id}", response_model=ChapterResponse)
-async def update_chapter(chapter_id: str, data: ChapterUpdate, db: AsyncSession = Depends(get_db)):
-    chapter = await db.get(Chapter, chapter_id)
-    if not chapter:
-        raise HTTPException(status_code=404, detail="Chapter not found")
+async def update_chapter(
+    chapter_id: str,
+    data: ChapterUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    chapter = await _require_chapter(chapter_id, current_user.id, db)
 
     update_data = data.model_dump(exclude_unset=True)
     if "plain_text" in update_data and update_data["plain_text"]:
@@ -90,7 +125,10 @@ async def reorder_chapters(
     project_id: str,
     data: list[ChapterReorderItem],
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
+    await _require_project(project_id, current_user.id, db)
+
     result = await db.execute(select(Chapter).where(Chapter.project_id == project_id))
     chapters = {chapter.id: chapter for chapter in result.scalars().all()}
 
@@ -112,10 +150,12 @@ async def reorder_chapters(
 
 
 @router.get("/{chapter_id}/versions", response_model=list[ChapterVersionResponse])
-async def list_chapter_versions(chapter_id: str, db: AsyncSession = Depends(get_db)):
-    chapter = await db.get(Chapter, chapter_id)
-    if not chapter:
-        raise HTTPException(status_code=404, detail="Chapter not found")
+async def list_chapter_versions(
+    chapter_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    await _require_chapter(chapter_id, current_user.id, db)
 
     result = await db.execute(
         select(ChapterVersion)
@@ -126,10 +166,12 @@ async def list_chapter_versions(chapter_id: str, db: AsyncSession = Depends(get_
 
 
 @router.delete("/{chapter_id}")
-async def delete_chapter(chapter_id: str, db: AsyncSession = Depends(get_db)):
-    chapter = await db.get(Chapter, chapter_id)
-    if not chapter:
-        raise HTTPException(status_code=404, detail="Chapter not found")
+async def delete_chapter(
+    chapter_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    chapter = await _require_chapter(chapter_id, current_user.id, db)
 
     project_id = chapter.project_id
     await db.delete(chapter)
