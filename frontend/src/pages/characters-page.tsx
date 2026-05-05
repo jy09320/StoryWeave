@@ -127,7 +127,7 @@ export function CharactersPage() {
   const [uploadedFiles, setUploadedFiles] = useState<Array<{ file_id: string; filename: string }>>([])
   const [fileIds, setFileIds] = useState<string[]>([])
 
-  const sessionId = useMemo(() => `${projectId ?? 'unknown'}:project_character:${Date.now()}`, [projectId])
+  const sessionId = useMemo(() => `${projectId ?? 'unknown'}:project_character`, [projectId])
 
   const projectQuery = useQuery<ProjectDetail, Error>({
     queryKey: ['project', projectId],

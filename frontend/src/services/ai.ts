@@ -1,6 +1,5 @@
 import type { AIGeneratePayload } from '@/types/api'
-
-const baseURL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000/api'
+import { apiClient } from '@/lib/api-client'
 
 export interface AIRuntimeSettings {
   provider: string
@@ -29,71 +28,34 @@ export interface AIModelListResponse {
   models: AIModelOption[]
 }
 
-function buildSseUrl() {
-  return `${baseURL}/ai/generate`
-}
-
-async function readErrorMessage(response: Response, fallback: string) {
-  const text = await response.text()
-  if (!text) {
-    return fallback
-  }
-
-  try {
-    const parsed = JSON.parse(text) as {
-      detail?: string
-      message?: string
-      error?: { message?: string }
-    }
-    return parsed.detail || parsed.message || parsed.error?.message || text
-  } catch {
-    return text
-  }
-}
-
 export async function getAIRuntimeSettings() {
-  const response = await fetch(`${baseURL}/ai/runtime-settings`)
-  if (!response.ok) {
-    throw new Error(await readErrorMessage(response, '获取 AI 运行时配置失败'))
-  }
-  return (await response.json()) as AIRuntimeSettings
+  const { data } = await apiClient.get<AIRuntimeSettings>('/ai/runtime-settings')
+  return data
 }
 
 export async function updateAIRuntimeSettings(payload: AIRuntimeSettingsPayload) {
-  const response = await fetch(`${baseURL}/ai/runtime-settings`, {
-    method: 'PUT',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(payload),
-  })
-
-  if (!response.ok) {
-    throw new Error(await readErrorMessage(response, '更新 AI 运行时配置失败'))
-  }
-
-  return (await response.json()) as AIRuntimeSettings
+  const { data } = await apiClient.put<AIRuntimeSettings>('/ai/runtime-settings', payload)
+  return data
 }
 
 export async function listAIRuntimeModels() {
-  const response = await fetch(`${baseURL}/ai/runtime-settings/models`)
-  if (!response.ok) {
-    throw new Error(await readErrorMessage(response, '获取可用模型列表失败'))
-  }
-  return (await response.json()) as AIModelListResponse
+  const { data } = await apiClient.get<AIModelListResponse>('/ai/runtime-settings/models')
+  return data
 }
 
 export async function streamGenerate(payload: AIGeneratePayload, onMessage: (chunk: string) => void) {
-  const response = await fetch(buildSseUrl(), {
+  const response = await fetch(`${apiClient.defaults.baseURL}/ai/generate`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      Authorization: `Bearer ${localStorage.getItem('sw_token')}`,
     },
     body: JSON.stringify(payload),
   })
 
   if (!response.ok || !response.body) {
-    throw new Error(await readErrorMessage(response, 'AI 生成请求失败'))
+    const text = await response.text()
+    throw new Error(text || 'AI 生成请求失败')
   }
 
   const reader = response.body.getReader()

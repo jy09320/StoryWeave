@@ -8,6 +8,7 @@ import {
   ChevronRight,
   Home,
   LoaderCircle,
+  LogOut,
   Maximize2,
   Minimize2,
   PanelLeftClose,
@@ -18,7 +19,7 @@ import {
   Sparkles,
   Users2,
 } from 'lucide-react'
-import { Link, NavLink, Outlet, useLocation, useParams } from 'react-router-dom'
+import { Link, NavLink, Outlet, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { toast } from 'sonner'
 
 import { ModelPickerDialog } from '@/components/ai/model-picker-dialog'
@@ -37,6 +38,7 @@ import { formatDate } from '@/lib/format'
 import { getAIRuntimeSettings, listAIRuntimeModels, streamGenerate, type AIModelOption } from '@/services/ai'
 import { getProject } from '@/services/projects'
 import type { AIGeneratePayload, ProjectDetail } from '@/types/api'
+import { useAuth } from '@/contexts/auth-context'
 
 const primaryNavItems = [
   { to: '/workspace', label: '首页', icon: Home, end: true },
@@ -127,7 +129,9 @@ function getToolboxPath(task: string, projectId?: string, chapterId?: string) {
 
 export function AppShell() {
   const location = useLocation()
+  const navigate = useNavigate()
   const { projectId, chapterId } = useParams<{ projectId?: string; chapterId?: string }>()
+  const { user, logout } = useAuth()
   const [isProjectTreeOpen, setIsProjectTreeOpen] = useState(true)
   const [isUtilityOpen, setIsUtilityOpen] = useState(false)
   const [isAIPanelOpen, setIsAIPanelOpen] = useState(false)
@@ -553,7 +557,17 @@ export function AppShell() {
       instruction: getAIInstruction(scopedEditorUtilityContext),
     }))
     setAIMessages([])
-  }, [scopedEditorUtilityContext?.updatedAt, chapterId])
+  }, [scopedEditorUtilityContext?.updatedAt])
+
+  const prevChapterIdRef = useRef<string | undefined>(chapterId)
+  useEffect(() => {
+    if (chapterId && prevChapterIdRef.current !== chapterId) {
+      setAIMessages([])
+    }
+    if (chapterId) {
+      prevChapterIdRef.current = chapterId
+    }
+  }, [chapterId])
 
   async function handleLoadModels() {
     setIsLoadingModels(true)
@@ -893,8 +907,28 @@ export function AppShell() {
           })}
         </nav>
 
-        <div className="mt-4 rounded-full border border-primary/15 bg-primary/10 px-2.5 py-1 text-[10px] text-primary">
-          就绪
+        <div className="mt-4 flex flex-col items-center gap-2">
+          <div className="rounded-full border border-primary/15 bg-primary/10 px-2.5 py-1 text-[10px] text-primary">
+            就绪
+          </div>
+          {user ? (
+            <div className="flex flex-col items-center gap-1.5">
+              <div
+                className="flex size-8 items-center justify-center rounded-full border border-border bg-muted text-[11px] font-medium text-foreground"
+                title={user.email}
+              >
+                {user.email[0].toUpperCase()}
+              </div>
+              <button
+                type="button"
+                title="退出登录"
+                onClick={() => { logout(); navigate('/login') }}
+                className="flex size-8 items-center justify-center rounded-xl text-muted-foreground transition hover:bg-muted hover:text-foreground"
+              >
+                <LogOut className="size-3.5" />
+              </button>
+            </div>
+          ) : null}
         </div>
       </aside>
 

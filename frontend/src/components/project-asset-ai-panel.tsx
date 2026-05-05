@@ -178,6 +178,26 @@ export function ProjectAssetAIPanel({
 
   const isStreaming = streamingText !== null
 
+  const storageKey = `sw:chat:${sessionId}`
+
+  useEffect(() => {
+    const stored = sessionStorage.getItem(storageKey)
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored) as ProjectAssetAIMessage[]
+        if (parsed.length > 0) {
+          setMessages(parsed)
+          return
+        }
+      } catch {}
+    }
+    setMessages([buildWelcomeMessage(assetType)])
+  }, [sessionId]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    sessionStorage.setItem(storageKey, JSON.stringify(messages))
+  }, [messages, storageKey])
+
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight

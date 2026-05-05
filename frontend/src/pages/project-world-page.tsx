@@ -77,7 +77,7 @@ export function ProjectWorldPage() {
   const [uploadedFiles, setUploadedFiles] = useState<Array<{ file_id: string; filename: string }>>([])
   const [fileIds, setFileIds] = useState<string[]>([])
 
-  const sessionId = useMemo(() => `${projectId ?? 'unknown'}:world_setting:${Date.now()}`, [projectId])
+  const sessionId = useMemo(() => `${projectId ?? 'unknown'}:world_setting`, [projectId])
 
   const projectQuery = useQuery<ProjectDetail, Error>({
     queryKey: ['project', projectId],
