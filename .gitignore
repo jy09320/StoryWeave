@@ -2,3 +2,6 @@
 __pycache__/
 *.pyc
 *.pyo
+
+# Deployment
+deploy/production/.env
