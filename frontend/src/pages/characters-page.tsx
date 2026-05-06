@@ -1,7 +1,7 @@
 import { useMemo, useState, type FormEvent } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { Link, useParams } from 'react-router-dom'
-import { Trash2 } from 'lucide-react'
+import { BrainCircuit, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 
 
@@ -343,6 +343,18 @@ export function CharactersPage() {
               </Link>
             </CardContent>
           </Card>
+        ) : null}
+
+        {isProjectScoped && projectId ? (
+          <div className="flex justify-end">
+            <Link
+              to={`/projects/${projectId}/ai-workspace`}
+              className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-border bg-background px-3 text-sm text-foreground transition hover:bg-muted"
+            >
+              <BrainCircuit className="size-4" />
+              进入 AI 工作区
+            </Link>
+          </div>
         ) : null}
 
         {/* Project scoped: AI panel (left) + character list (right) */}

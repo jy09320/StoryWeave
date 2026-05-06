@@ -212,6 +212,13 @@ export function ProjectWorldPage() {
           <Sparkles className="size-4" />
           设定检查
         </Link>
+        <Link
+          to={`/projects/${project.id}/ai-workspace`}
+          className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-border bg-background px-3 text-sm font-medium text-foreground transition hover:bg-muted"
+        >
+          <BrainCircuit className="size-4" />
+          AI 工作区
+        </Link>
       </div>
 
       {/* Main layout: AI panel (left, primary) + edit form + sidebar (right) */}

@@ -21,6 +21,10 @@ export interface ProjectAssetAIPanelProps {
   projectId: string
   assetType: ProjectAssetAIType
   sessionId: string
+  controlledState?: ProjectAssetAIPanelState
+  onControlledStateChange?: (
+    updater: (prev: ProjectAssetAIPanelState) => ProjectAssetAIPanelState,
+  ) => void
   latestWorldPatch?: WorldSettingPatch | null
   latestCharacterActions?: CharacterActionItem[] | null
   onApplyWorldPatch?: () => void
@@ -30,7 +34,16 @@ export interface ProjectAssetAIPanelProps {
   isUploadingFile?: boolean
   uploadedFiles?: Array<{ file_id: string; filename: string }>
   fileIds?: string[]
+  onSendMessage?: () => Promise<void>
   onDraftReady?: (event: AssetChatSSEDraftReadyEvent) => void
+  onTaskStateChange?: (state: { status: 'idle' | 'running' | 'done' | 'failed'; updatedAt: string; error?: string | null }) => void
+}
+
+export interface ProjectAssetAIPanelState {
+  messages: ProjectAssetAIMessage[]
+  streamingText: string | null
+  inputText: string
+  guidance: string
 }
 
 const assetMeta: Record<
@@ -72,6 +85,15 @@ function buildWelcomeMessage(assetType: ProjectAssetAIType): ProjectAssetAIMessa
     role: 'system',
     title: meta.title,
     content: meta.welcomeContent,
+  }
+}
+
+function createPanelState(assetType: ProjectAssetAIType): ProjectAssetAIPanelState {
+  return {
+    messages: [buildWelcomeMessage(assetType)],
+    streamingText: null,
+    inputText: '',
+    guidance: '',
   }
 }
 
@@ -223,6 +245,8 @@ export function ProjectAssetAIPanel({
   projectId,
   assetType,
   sessionId,
+  controlledState,
+  onControlledStateChange,
   latestWorldPatch = null,
   latestCharacterActions = null,
   onApplyWorldPatch,
@@ -232,7 +256,9 @@ export function ProjectAssetAIPanel({
   isUploadingFile = false,
   uploadedFiles = [],
   fileIds = [],
+  onSendMessage,
   onDraftReady,
+  onTaskStateChange,
 }: ProjectAssetAIPanelProps) {
   const meta = assetMeta[assetType]
   const Icon = meta.icon
@@ -244,36 +270,97 @@ export function ProjectAssetAIPanel({
   const capabilitySnapshot = matchAIRuntimeCapabilitySnapshot(runtimeSettingsQuery.data)
   const structuredCapability = capabilitySnapshot?.structured_output ?? null
 
-  const [messages, setMessages] = useState<ProjectAssetAIMessage[]>(() => [buildWelcomeMessage(assetType)])
-  const [streamingText, setStreamingText] = useState<string | null>(null)
-  const [inputText, setInputText] = useState('')
-  const [guidance, setGuidance] = useState('')
+  const [internalState, setInternalState] = useState<ProjectAssetAIPanelState>(() => createPanelState(assetType))
 
   const scrollRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const abortRef = useRef<(() => void) | null>(null as (() => void) | null)
 
+  const isControlled = Boolean(controlledState && onControlledStateChange)
+  const panelState = controlledState ?? internalState
+  const { messages, streamingText, inputText, guidance } = panelState
   const isStreaming = streamingText !== null
 
   const storageKey = `sw:chat:${sessionId}`
 
+  const updatePanelState = useCallback(
+    (updater: (prev: ProjectAssetAIPanelState) => ProjectAssetAIPanelState) => {
+      if (isControlled && controlledState && onControlledStateChange) {
+        onControlledStateChange(updater)
+        return
+      }
+      setInternalState(updater)
+    },
+    [controlledState, isControlled, onControlledStateChange],
+  )
+
+  const setMessages = useCallback(
+    (updater: ProjectAssetAIMessage[] | ((prev: ProjectAssetAIMessage[]) => ProjectAssetAIMessage[])) => {
+      updatePanelState((prev) => ({
+        ...prev,
+        messages: typeof updater === 'function' ? (updater as (prev: ProjectAssetAIMessage[]) => ProjectAssetAIMessage[])(prev.messages) : updater,
+      }))
+    },
+    [updatePanelState],
+  )
+
+  const setStreamingText = useCallback(
+    (value: string | null) => {
+      updatePanelState((prev) => ({
+        ...prev,
+        streamingText: value,
+      }))
+    },
+    [updatePanelState],
+  )
+
+  const setInputText = useCallback(
+    (value: string | ((prev: string) => string)) => {
+      updatePanelState((prev) => ({
+        ...prev,
+        inputText: typeof value === 'function' ? (value as (prev: string) => string)(prev.inputText) : value,
+      }))
+    },
+    [updatePanelState],
+  )
+
+  const setGuidance = useCallback(
+    (value: string | ((prev: string) => string)) => {
+      updatePanelState((prev) => ({
+        ...prev,
+        guidance: typeof value === 'function' ? (value as (prev: string) => string)(prev.guidance) : value,
+      }))
+    },
+    [updatePanelState],
+  )
+
   useEffect(() => {
+    if (isControlled) {
+      return
+    }
     const stored = sessionStorage.getItem(storageKey)
     if (stored) {
       try {
         const parsed = stripToolMessages(JSON.parse(stored) as ProjectAssetAIMessage[])
         if (parsed.length > 0) {
-          setMessages(parsed)
+          setInternalState((prev) => ({
+            ...prev,
+            messages: parsed,
+            streamingText: null,
+          }))
           return
         }
       } catch {}
     }
-    setMessages([buildWelcomeMessage(assetType)])
-  }, [sessionId]) // eslint-disable-line react-hooks/exhaustive-deps
+    setInternalState(createPanelState(assetType))
+  }, [assetType, isControlled, sessionId, storageKey])
 
   useEffect(() => {
+    if (isControlled) {
+      return
+    }
     sessionStorage.setItem(storageKey, JSON.stringify(stripToolMessages(messages)))
-  }, [messages, storageKey])
+  }, [isControlled, messages, storageKey])
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -299,6 +386,11 @@ export function ProjectAssetAIPanel({
   }
 
   async function handleSend() {
+    if (onSendMessage) {
+      await onSendMessage()
+      return
+    }
+
     const text = inputText.trim()
     if (!text && fileIds.length === 0) {
       toast.error('请先输入消息或上传文件')
@@ -314,9 +406,11 @@ export function ProjectAssetAIPanel({
     setMessages((prev) => [...stripToolMessages(prev), userMessage])
     setInputText('')
     setStreamingText('')
+    onTaskStateChange?.({ status: 'running', updatedAt: new Date().toISOString(), error: null })
 
     let accumulatedText = ''
     let aborted = false
+    let finalTaskStatus: 'running' | 'done' | 'failed' = 'running'
     const controller = new AbortController()
 
     abortRef.current = () => { aborted = true; controller.abort() }
@@ -424,9 +518,12 @@ export function ProjectAssetAIPanel({
         controller.signal,
       )
       }
+      finalTaskStatus = 'done'
     } catch (err) {
       if (!aborted) {
         const message = err instanceof Error ? err.message : '对话请求失败'
+        finalTaskStatus = 'failed'
+        onTaskStateChange?.({ status: 'failed', updatedAt: new Date().toISOString(), error: message })
         toast.error(message)
       }
     } finally {
@@ -443,6 +540,9 @@ export function ProjectAssetAIPanel({
       setMessages((prev) => stripToolMessages(prev))
       setStreamingText(null)
       abortRef.current = null
+      if (!aborted && finalTaskStatus === 'done') {
+        onTaskStateChange?.({ status: 'done', updatedAt: new Date().toISOString(), error: null })
+      }
     }
   }
 

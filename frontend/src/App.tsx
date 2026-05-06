@@ -14,6 +14,7 @@ import { DashboardPage } from '@/pages/dashboard-page'
 import { HomePage } from '@/pages/home-page'
 import { LoginPage } from '@/pages/login-page'
 import { ProjectEditorPage } from '@/pages/project-editor-page'
+import { ProjectAIWorkspacePage } from '@/pages/project-ai-workspace-page'
 import { ProjectWorldPage } from '@/pages/project-world-page'
 import { ProjectWorkspacePage } from '@/pages/project-workspace-page'
 import { RegisterPage } from '@/pages/register-page'
@@ -63,6 +64,10 @@ const router = createBrowserRouter([
       {
         path: 'projects/:projectId/world',
         element: <ProjectWorldPage />,
+      },
+      {
+        path: 'projects/:projectId/ai-workspace',
+        element: <ProjectAIWorkspacePage />,
       },
       {
         path: 'ai-toolbox',
