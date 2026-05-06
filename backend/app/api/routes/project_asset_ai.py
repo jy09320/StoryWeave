@@ -125,6 +125,7 @@ async def analyze_world_setting(
         response = await agent_orchestrator.analyze_world_setting(
             db=db,
             project=project,
+            owner_id=current_user.id,
             message=data.message,
             source_text=combined_source,
             command=data.command,
@@ -209,6 +210,7 @@ async def analyze_characters(
         response = await agent_orchestrator.analyze_characters(
             db=db,
             project=project,
+            owner_id=current_user.id,
             message=data.message,
             source_text=combined_source,
             command=data.command,

@@ -46,6 +46,7 @@ async def propose_world_setting_patch(
     *,
     db: AsyncSession,
     project: "Project",
+    owner_id: str,
     context: dict,
     source_text: str | None,
     command: str | None,
@@ -68,6 +69,7 @@ async def propose_world_setting_patch(
         model_id=None,
         temperature=0.4,
         max_tokens=4000,
+        owner_id=owner_id,
     )
 
     try:
@@ -105,8 +107,11 @@ def _build_instruction(context: dict, *, source_text: str | None, command: str |
         'JSON 结构：{"world_setting":{"title":"","overview":"","rules":"","factions":"","locations":"","timeline":"","extra_notes":""},'
         '"notes":[""],"applied_sources":[""]}。\n'
         "要求：1. 尽量补全所有字段；2. 不要改写现有核心事实；"
-        "3. notes 记录不确定点和推断；4. applied_sources 列出本次参考的信息来源；"
-        "5. 无论是否有资料，必须始终输出合法 JSON，资料不足时 world_setting 各字段保持空字符串，在 notes 中说明原因，禁止输出任何非 JSON 内容。"
+        "3. 如果用户明确要求补全、扩展、设计世界观内容，即使资料不足，也要基于项目标题、简介、已有角色和现有世界观生成候选设定；"
+        "4. 不要因为资料不足就默认把所有字段留空，除非用户输入完全无法判断任务意图；"
+        "5. notes 记录不确定点、推断点和待确认项，明确标注哪些内容是基于上下文创作的；"
+        "6. applied_sources 列出本次参考的信息来源；"
+        "7. 必须始终输出合法 JSON，禁止输出任何非 JSON 内容。"
     )
 
 
@@ -118,7 +123,7 @@ def _build_input(*, source_text: str | None, command: str | None, message: str) 
         parts.append(f"资料：\n{source_text[:6000]}")
     if command:
         parts.append(f"指令：{command.strip()}")
-    return "\n\n".join(parts) or "请基于当前项目信息补全世界观。"
+    return "\n\n".join(parts) or "请基于当前项目信息扩展并补全世界观设定。"
 
 
 def _extract_json(raw: str) -> dict:

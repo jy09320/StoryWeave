@@ -26,6 +26,7 @@ class AgentOrchestrator:
         *,
         db: AsyncSession,
         project: "Project",
+        owner_id: str,
         message: str,
         source_text: str | None,
         command: str | None,
@@ -47,6 +48,7 @@ class AgentOrchestrator:
         patch_raw, notes, applied_sources = await propose_world_setting_patch(
             db=db,
             project=project,
+            owner_id=owner_id,
             context=context,
             source_text=source_text,
             command=command,
@@ -67,6 +69,7 @@ class AgentOrchestrator:
         *,
         db: AsyncSession,
         project: "Project",
+        owner_id: str,
         message: str,
         source_text: str | None,
         command: str | None,
@@ -86,6 +89,7 @@ class AgentOrchestrator:
         actions_raw, notes = await propose_character_patch(
             db=db,
             project=project,
+            owner_id=owner_id,
             context=context,
             source_text=source_text,
             command=command,

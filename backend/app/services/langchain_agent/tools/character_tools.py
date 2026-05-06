@@ -39,6 +39,7 @@ async def propose_character_patch(
     *,
     db: AsyncSession,
     project: "Project",
+    owner_id: str,
     context: dict,
     source_text: str | None,
     command: str | None,
@@ -61,6 +62,7 @@ async def propose_character_patch(
         model_id=None,
         temperature=0.3,
         max_tokens=3000,
+        owner_id=owner_id,
     )
 
     try:
@@ -86,10 +88,13 @@ def _build_instruction(context: dict, *, guidance: str | None) -> str:
         '"name":"","alias":null,"description":null,"profile":null,"personality":null,'
         '"background":null,"relationship_notes":null,"tags":null,'
         '"role_label":null,"summary":null}],"notes":[""]}。\n'
-        "要求：1. 只生成资料中明确出现的角色；2. 已在项目中的角色使用 update_project_character；"
+        "要求：1. 优先遵循用户明确要求；2. 已在项目中的角色使用 update_project_character；"
         "3. 新角色使用 create_and_attach；4. 字段无法确定时设为 null；"
-        "5. notes 记录歧义和待确认点；"
-        "6. 无论是否有资料，必须始终输出合法 JSON，资料不足时 actions 为空数组，在 notes 中说明原因，禁止输出任何非 JSON 内容。"
+        "5. 如果用户明确要求新增、补充、设计角色，即使资料不足，也要基于项目标题、简介、已有角色和世界观上下文生成候选角色建议；"
+        "6. 不要因为资料不足就默认返回空数组，除非用户输入完全无法判断任务意图；"
+        "7. notes 记录歧义、推断点和待确认项，明确标注哪些内容是基于上下文创作的；"
+        "8. 保持与现有项目风格、命名体系、角色层级和关系网络一致；"
+        "9. 必须始终输出合法 JSON，禁止输出任何非 JSON 内容。"
     )
 
 
@@ -101,7 +106,7 @@ def _build_input(*, source_text: str | None, command: str | None, message: str) 
         parts.append(f"资料：\n{source_text[:6000]}")
     if command:
         parts.append(f"指令：{command.strip()}")
-    return "\n\n".join(parts) or "请识别资料中的角色并生成动作建议。"
+    return "\n\n".join(parts) or "请基于当前项目上下文补充一组合理的角色建议，并生成可写入动作。"
 
 
 def _extract_json(raw: str) -> dict:
