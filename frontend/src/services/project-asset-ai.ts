@@ -72,6 +72,7 @@ export async function applyCharacterPatch(
 }
 
 const baseURL = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? 'http://localhost:8000/api'
+const TOKEN_KEY = 'sw_token'
 
 export async function streamAssetChat(
   projectId: string,
@@ -81,7 +82,10 @@ export async function streamAssetChat(
 ): Promise<void> {
   const response = await fetch(`${baseURL}/projects/${projectId}/ai-assets/chat`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${localStorage.getItem(TOKEN_KEY) ?? ''}`,
+    },
     body: JSON.stringify(payload),
     signal,
   })

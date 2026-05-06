@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { ArrowRight, BrainCircuit, FileText, LoaderCircle, Sparkles, WandSparkles } from 'lucide-react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
@@ -7,13 +7,15 @@ import { toast } from 'sonner'
 import { ModelPickerDialog } from '@/components/ai/model-picker-dialog'
 import { EmptyState } from '@/components/empty-state'
 import { LoadingState } from '@/components/loading-state'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Textarea } from '@/components/ui/textarea'
 import { readToolboxInputDraft, writeToolboxInputDraft } from '@/lib/ai-toolbox-context'
+import { getCapabilityStatusMeta, matchAIRuntimeCapabilitySnapshot } from '@/lib/ai-runtime-capabilities'
 import { readEditorRouteContext } from '@/lib/editor-route-context'
 import { formatDate } from '@/lib/format'
-import { getAIRuntimeSettings, listAIRuntimeModels, streamGenerate, type AIModelOption } from '@/services/ai'
+import { getAIRuntimeSettings, isAbortError, listAIRuntimeModels, streamGenerate, type AIModelOption } from '@/services/ai'
 import { getProject } from '@/services/projects'
 import type { AIGeneratePayload, Chapter, ProjectDetail } from '@/types/api'
 
@@ -171,6 +173,7 @@ export function AIToolboxPage() {
   const [isModelDialogOpen, setIsModelDialogOpen] = useState(false)
   const [history, setHistory] = useState<GenerationHistoryItem[]>([])
   const [recommendedSendMode, setRecommendedSendMode] = useState<SendBackMode>(null)
+  const generationAbortRef = useRef<AbortController | null>(null)
   const [generation, setGeneration] = useState<GenerationState>({
     instruction: initialInstruction || getTaskMeta(initialTask).defaultInstruction,
     provider: 'openai',
@@ -249,6 +252,10 @@ export function AIToolboxPage() {
     generation.modelId.trim() || runtimeSettingsQuery.data?.model_id || FALLBACK_MODEL_BY_PROVIDER[generation.provider] || 'gpt-4o'
   const selectedProvider = generation.provider || runtimeSettingsQuery.data?.provider || 'openai'
   const hasSavedRuntimeKey = Boolean(runtimeSettingsQuery.data?.api_key_masked)
+  const capabilitySnapshot = matchAIRuntimeCapabilitySnapshot(runtimeSettingsQuery.data, {
+    provider: selectedProvider,
+    modelId: selectedModelId,
+  })
   const contextText = buildContextText(projectQuery.data, selectedChapter)
   const returnTarget = useMemo(() => {
     if (
@@ -335,6 +342,8 @@ export function AIToolboxPage() {
   }
 
   function handleStopGeneration() {
+    generationAbortRef.current?.abort()
+    generationAbortRef.current = null
     setGeneration((prev) => ({
       ...prev,
       isGenerating: false,
@@ -404,6 +413,8 @@ export function AIToolboxPage() {
     }
 
     const requestId = generation.requestId + 1
+    const controller = new AbortController()
+    generationAbortRef.current = controller
     setGeneration((prev) => ({ ...prev, result: '', isGenerating: true, requestId }))
 
     const payload: AIGeneratePayload = {
@@ -427,7 +438,7 @@ export function AIToolboxPage() {
             result: `${prev.result}${chunk}`,
           }
         })
-      })
+      }, { signal: controller.signal, timeoutMs: 60_000, retryCount: 1 })
 
       setGeneration((prev) => {
         if (prev.requestId !== requestId) {
@@ -456,8 +467,10 @@ export function AIToolboxPage() {
           isGenerating: false,
         }
       })
+      generationAbortRef.current = null
       setRecommendedSendMode(activeTask === 'continue' ? 'append' : 'replace')
     } catch (error) {
+      generationAbortRef.current = null
       setGeneration((prev) => {
         if (prev.requestId !== requestId) {
           return prev
@@ -468,6 +481,9 @@ export function AIToolboxPage() {
           isGenerating: false,
         }
       })
+      if (isAbortError(error)) {
+        return
+      }
       toast.error(error instanceof Error ? error.message : 'AI 任务执行失败')
     }
   }
@@ -636,7 +652,34 @@ export function AIToolboxPage() {
                     <div className="text-sm font-medium text-foreground">本次任务模型</div>
                     <div className="text-xs leading-5 text-muted-foreground">提供商与 Key 统一在设置中心维护，这里只切换当前任务要用的模型。</div>
                   </div>
-                  <div className="rounded-xl border border-border bg-muted/45 px-3 py-2 text-sm text-foreground">当前选择：{selectedModelId}</div>
+                  <div className="rounded-xl border border-border bg-muted/45 px-3 py-2 text-sm text-foreground">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span>当前选择：{selectedModelId}</span>
+                      {capabilitySnapshot ? (
+                        <>
+                          <Badge variant="outline" className={getCapabilityStatusMeta(capabilitySnapshot.text_generation.status).className}>
+                            文本生成：{capabilitySnapshot.text_generation.summary}
+                          </Badge>
+                          <Badge variant="outline" className={getCapabilityStatusMeta(capabilitySnapshot.structured_output.status).className}>
+                            结构化：{capabilitySnapshot.structured_output.summary}
+                          </Badge>
+                        </>
+                      ) : (
+                        <Badge variant="outline" className="border-border bg-background text-muted-foreground">
+                          未检测
+                        </Badge>
+                      )}
+                    </div>
+                    {capabilitySnapshot ? (
+                      <div className="mt-2 text-xs leading-5 text-muted-foreground">
+                        当前快照来自设置中心最近一次能力检测。
+                      </div>
+                    ) : (
+                      <div className="mt-2 text-xs leading-5 text-amber-300">
+                        当前模型还没有匹配的能力快照，建议先到设置中心做一次检测。
+                      </div>
+                    )}
+                  </div>
                   <div className="flex flex-col gap-2 sm:flex-row">
                     <Button variant="outline" className="sm:w-auto" onClick={handleOpenModelDialog} disabled={isLoadingModels}>
                       {isLoadingModels ? '加载中...' : '选择模型'}

@@ -395,11 +395,14 @@ async def asset_chat(
 
         new_messages = list(history) + [HumanMessage(content=user_message)]
         current_ai_text = ""
+        tool_call_count = 0
+        max_tool_calls = 4
 
         try:
             async for event in graph.astream_events(
                 {"messages": new_messages},
                 version="v2",
+                config={"recursion_limit": 8},
             ):
                 kind = event.get("event")
                 name = event.get("name", "")
@@ -423,6 +426,10 @@ async def asset_chat(
 
                 # Tool call start
                 elif kind == "on_tool_start":
+                    tool_call_count += 1
+                    if tool_call_count > max_tool_calls:
+                        yield _sse("error", {"error": "AI 助手连续调用工具次数过多，已停止本次生成。请改成更具体的指令后重试。"})
+                        return
                     tool_input = event.get("data", {}).get("input", {})
                     yield _sse("tool_call", {"name": name, "args": tool_input})
 

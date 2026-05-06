@@ -4,15 +4,25 @@ import { Bot, KeyRound, LoaderCircle, RefreshCw, Server, Sparkles } from 'lucide
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import {
+  clearAIRuntimeCapabilitySnapshot,
+  getCapabilityStatusMeta,
+  matchAIRuntimeCapabilitySnapshot,
+  saveAIRuntimeCapabilitySnapshot,
+} from '@/lib/ai-runtime-capabilities'
 import { queryClient } from '@/lib/query-client'
 import { buildRuntimeModelOptions, MODEL_PROVIDER_OPTIONS } from '@/lib/ai-runtime'
 import {
+  checkAIRuntimeCapabilities,
   getAIRuntimeSettings,
   listAIRuntimeModels,
   updateAIRuntimeSettings,
+  type AIRuntimeCapabilityCheckResponse,
+  type AIRuntimeCapabilityItem,
   type AIModelOption,
 } from '@/services/ai'
 
@@ -30,6 +40,24 @@ const initialFormState: RuntimeSettingsFormState = {
   apiKey: '',
 }
 
+function capabilityBadgeClassName(status: AIRuntimeCapabilityItem['status']) {
+  return getCapabilityStatusMeta(status).className
+}
+
+function CapabilityRow({ label, item }: { label: string; item: AIRuntimeCapabilityItem }) {
+  return (
+    <div className="rounded-2xl border border-border bg-muted/35 p-4">
+      <div className="flex items-center justify-between gap-3">
+        <div className="text-sm font-medium text-foreground">{label}</div>
+        <Badge variant="outline" className={capabilityBadgeClassName(item.status)}>
+          {item.summary}
+        </Badge>
+      </div>
+      {item.detail ? <div className="mt-2 text-xs leading-5 text-muted-foreground">{item.detail}</div> : null}
+    </div>
+  )
+}
+
 export function RuntimeSettingsPanel() {
   const runtimeSettingsQuery = useQuery({
     queryKey: ['ai-runtime-settings'],
@@ -39,6 +67,7 @@ export function RuntimeSettingsPanel() {
   const [form, setForm] = useState<RuntimeSettingsFormState>(initialFormState)
   const [availableModels, setAvailableModels] = useState<AIModelOption[]>([])
   const [isLoadingModels, setIsLoadingModels] = useState(false)
+  const [capabilityResult, setCapabilityResult] = useState<AIRuntimeCapabilityCheckResponse | null>(null)
 
   useEffect(() => {
     if (!runtimeSettingsQuery.data) {
@@ -51,6 +80,7 @@ export function RuntimeSettingsPanel() {
       baseUrl: runtimeSettingsQuery.data.base_url ?? '',
       apiKey: '',
     })
+    setCapabilityResult(matchAIRuntimeCapabilitySnapshot(runtimeSettingsQuery.data))
   }, [runtimeSettingsQuery.data])
 
   const modelOptions = useMemo(
@@ -76,10 +106,24 @@ export function RuntimeSettingsPanel() {
         baseUrl: saved.base_url ?? '',
         apiKey: '',
       })
+      clearAIRuntimeCapabilitySnapshot()
+      setCapabilityResult(null)
       toast.success('AI 运行时配置已更新')
     },
     onError: (error) => {
       toast.error(error instanceof Error ? error.message : '更新 AI 运行时配置失败')
+    },
+  })
+
+  const capabilityMutation = useMutation({
+    mutationFn: checkAIRuntimeCapabilities,
+    onSuccess: (result) => {
+      saveAIRuntimeCapabilitySnapshot(result)
+      setCapabilityResult(result)
+      toast.success('已完成运行时能力检测')
+    },
+    onError: (error) => {
+      toast.error(error instanceof Error ? error.message : '运行时能力检测失败')
     },
   })
 
@@ -116,6 +160,13 @@ export function RuntimeSettingsPanel() {
       model_id: modelId,
       base_url: form.baseUrl.trim() || null,
       api_key: apiKey || null,
+    })
+  }
+
+  function handleCheckCapabilities() {
+    capabilityMutation.mutate({
+      provider: settings.provider,
+      model_id: settings.model_id,
     })
   }
 
@@ -271,10 +322,21 @@ export function RuntimeSettingsPanel() {
       <div className="space-y-4">
         <Card className="border border-border bg-card/95 shadow-[0_16px_36px_rgba(148,163,184,0.16)]">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-lg text-foreground">
-              <Server className="size-4 text-primary" />
-              当前生效配置
-            </CardTitle>
+            <div className="flex items-start justify-between gap-3">
+              <CardTitle className="flex items-center gap-2 text-lg text-foreground">
+                <Server className="size-4 text-primary" />
+                当前生效配置
+              </CardTitle>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleCheckCapabilities}
+                disabled={capabilityMutation.isPending || !settings.api_key_masked}
+              >
+                {capabilityMutation.isPending ? '检测中...' : '检测能力'}
+              </Button>
+            </div>
           </CardHeader>
           <CardContent className="space-y-3 text-sm text-foreground/85">
             <div className="rounded-2xl border border-primary/18 bg-primary/8 p-4">
@@ -286,6 +348,36 @@ export function RuntimeSettingsPanel() {
               <div>Base URL：{settings.base_url || '使用默认地址'}</div>
               <div className="mt-2">Key：{settings.api_key_masked || '未展示'}</div>
             </div>
+            {!settings.api_key_masked ? <div className="text-xs text-amber-300">请先保存可用的 API Key，再进行能力检测。</div> : null}
+          </CardContent>
+        </Card>
+
+        <Card className="border border-border bg-card/95 shadow-[0_16px_36px_rgba(148,163,184,0.16)]">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg text-foreground">
+              <Sparkles className="size-4 text-primary" />
+              兼容性检测
+            </CardTitle>
+            <CardDescription>
+              这里检查的是当前已生效的运行时配置，不代表所有国产网关都具备同等兼容性。
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {capabilityResult ? (
+              <>
+                <div className="rounded-2xl border border-border bg-muted/35 p-4 text-xs leading-5 text-muted-foreground">
+                  已检测 {capabilityResult.provider} / {capabilityResult.model_id}
+                  <span className="ml-2">时间：{new Date(capabilityResult.checked_at).toLocaleString('zh-CN')}</span>
+                </div>
+                <CapabilityRow label="文本生成" item={capabilityResult.text_generation} />
+                <CapabilityRow label="结构化助手" item={capabilityResult.structured_output} />
+                <CapabilityRow label="Tool Calling" item={capabilityResult.tool_calling} />
+              </>
+            ) : (
+              <div className="rounded-2xl border border-dashed border-border bg-muted/20 p-4 text-sm leading-6 text-muted-foreground">
+                保存好当前运行时配置后，执行一次能力检测，就能看到这套模型配置是否适合文本生成和结构化助手。
+              </div>
+            )}
           </CardContent>
         </Card>
 

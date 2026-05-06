@@ -1,6 +1,7 @@
 from collections.abc import AsyncIterator
 import json
 import logging
+from typing import Any
 
 from anthropic import AsyncAnthropic
 from openai import AsyncOpenAI
@@ -618,6 +619,54 @@ class AIService:
             temperature=temperature,
             max_tokens=max_tokens,
         )
+
+    async def generate_runtime_probe_text(
+        self,
+        db: AsyncSession,
+        *,
+        owner_id: str,
+        requested_provider: str | None = None,
+        requested_model_id: str | None = None,
+        instruction: str,
+        text: str,
+        temperature: float = 0,
+        max_tokens: int = 300,
+    ) -> dict[str, Any]:
+        runtime_config = await self.resolve_runtime_config(db, requested_provider, requested_model_id, owner_id)
+        provider = str(runtime_config["provider"])
+        resolved_model_id = str(runtime_config["model_id"])
+        api_key = runtime_config["api_key"]
+        base_url = runtime_config["base_url"]
+
+        if not api_key:
+            raise RuntimeError("当前运行时未配置可用的 API Key")
+
+        if provider == "anthropic":
+            content = await self.generate_text_anthropic(
+                api_key=api_key,
+                base_url=base_url,
+                text=text,
+                instruction=instruction,
+                model=resolved_model_id,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+        else:
+            content = await self._generate_openai_non_stream_text(
+                api_key=api_key,
+                base_url=base_url,
+                text=text,
+                instruction=instruction,
+                model=resolved_model_id,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+
+        return {
+            "provider": provider,
+            "model_id": resolved_model_id,
+            "content": content,
+        }
 
 
 ai_service = AIService()

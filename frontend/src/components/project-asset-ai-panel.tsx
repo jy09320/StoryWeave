@@ -1,11 +1,14 @@
 import { useRef, useEffect, useCallback, useState, type ChangeEvent, type KeyboardEvent } from 'react'
 import { Globe2, Users2, CheckCircle2, Send, Paperclip, Sparkles, Wrench, BrainCircuit } from 'lucide-react'
 import { toast } from 'sonner'
+import { useQuery } from '@tanstack/react-query'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
-import { streamAssetChat } from '@/services/project-asset-ai'
+import { getCapabilityStatusMeta, matchAIRuntimeCapabilitySnapshot } from '@/lib/ai-runtime-capabilities'
+import { getAIRuntimeSettings } from '@/services/ai'
+import { analyzeCharacters, analyzeWorldSetting, streamAssetChat } from '@/services/project-asset-ai'
 import type {
   AssetChatSSEDraftReadyEvent,
   CharacterActionItem,
@@ -70,6 +73,73 @@ function buildWelcomeMessage(assetType: ProjectAssetAIType): ProjectAssetAIMessa
     title: meta.title,
     content: meta.welcomeContent,
   }
+}
+
+function stripToolMessages(messages: ProjectAssetAIMessage[]) {
+  return messages.filter((message) => message.role !== 'tool')
+}
+
+function buildWorldSettingResultMessage(params: {
+  userMessage: string
+  notes: string[]
+  patch: WorldSettingPatch
+  appliedSources: string[]
+}) {
+  const patchLines = [
+    params.patch.title?.trim() ? `标题：${params.patch.title.trim()}` : '',
+    params.patch.overview?.trim() ? `概览：${params.patch.overview.trim()}` : '',
+    params.patch.rules?.trim() ? `规则：${params.patch.rules.trim()}` : '',
+    params.patch.factions?.trim() ? `势力：${params.patch.factions.trim()}` : '',
+    params.patch.locations?.trim() ? `地点：${params.patch.locations.trim()}` : '',
+    params.patch.timeline?.trim() ? `时间线：${params.patch.timeline.trim()}` : '',
+    params.patch.extra_notes?.trim() ? `补充备注：${params.patch.extra_notes.trim()}` : '',
+  ].filter(Boolean)
+
+  const noteLines = params.notes.filter((item) => item.trim()).map((item) => `- ${item.trim()}`)
+  const sourceLine =
+    params.appliedSources.length > 0 ? `参考来源：${params.appliedSources.join('、')}` : ''
+
+  return [
+    params.userMessage.trim() ? `我已根据你的要求整理出一版世界观设定草稿。` : '我已整理出一版世界观设定草稿。',
+    patchLines.length > 0 ? patchLines.join('\n') : '这次没有生成可写入的结构化字段，请调整指令后重试。',
+    noteLines.length > 0 ? `说明：\n${noteLines.join('\n')}` : '',
+    sourceLine,
+    patchLines.length > 0 ? '如果内容方向符合预期，直接点击下方“应用写入”即可保存到项目。' : '',
+  ]
+    .filter(Boolean)
+    .join('\n\n')
+}
+
+function buildCharacterResultMessage(params: {
+  userMessage: string
+  notes: string[]
+  actions: CharacterActionItem[]
+}) {
+  const actionLines = params.actions.map((action, index) => {
+    const parts = [
+      `${index + 1}. ${action.action === 'create_and_attach' ? '新建并绑定' : '更新项目角色'}：${action.name}`,
+      action.role_label?.trim() ? `角色定位：${action.role_label.trim()}` : '',
+      action.summary?.trim() ? `摘要：${action.summary.trim()}` : '',
+      action.description?.trim() ? `描述：${action.description.trim()}` : '',
+      action.personality?.trim() ? `性格：${action.personality.trim()}` : '',
+      action.background?.trim() ? `背景：${action.background.trim()}` : '',
+      action.relationship_notes?.trim() ? `关系备注：${action.relationship_notes.trim()}` : '',
+      action.tags?.trim() ? `标签：${action.tags.trim()}` : '',
+    ].filter(Boolean)
+
+    return parts.join('\n')
+  })
+
+  const noteLines = params.notes.filter((item) => item.trim()).map((item) => `- ${item.trim()}`)
+
+  return [
+    params.userMessage.trim() ? '我已根据你的要求整理出一版角色建议草稿。' : '我已整理出一版角色建议草稿。',
+    actionLines.length > 0 ? actionLines.join('\n\n') : '这次没有生成可写入的角色动作，请调整指令后重试。',
+    noteLines.length > 0 ? `说明：\n${noteLines.join('\n')}` : '',
+    actionLines.length > 0 ? '如果这些角色建议符合预期，直接点击下方“应用写入”即可保存到项目。' : '',
+  ]
+    .filter(Boolean)
+    .join('\n\n')
 }
 
 const messageLeftStyle: Record<Exclude<ProjectAssetAIMessage['role'], 'user'>, string> = {
@@ -166,6 +236,13 @@ export function ProjectAssetAIPanel({
 }: ProjectAssetAIPanelProps) {
   const meta = assetMeta[assetType]
   const Icon = meta.icon
+  const runtimeSettingsQuery = useQuery({
+    queryKey: ['ai-runtime-settings'],
+    queryFn: getAIRuntimeSettings,
+    staleTime: 60_000,
+  })
+  const capabilitySnapshot = matchAIRuntimeCapabilitySnapshot(runtimeSettingsQuery.data)
+  const structuredCapability = capabilitySnapshot?.structured_output ?? null
 
   const [messages, setMessages] = useState<ProjectAssetAIMessage[]>(() => [buildWelcomeMessage(assetType)])
   const [streamingText, setStreamingText] = useState<string | null>(null)
@@ -184,7 +261,7 @@ export function ProjectAssetAIPanel({
     const stored = sessionStorage.getItem(storageKey)
     if (stored) {
       try {
-        const parsed = JSON.parse(stored) as ProjectAssetAIMessage[]
+        const parsed = stripToolMessages(JSON.parse(stored) as ProjectAssetAIMessage[])
         if (parsed.length > 0) {
           setMessages(parsed)
           return
@@ -195,7 +272,7 @@ export function ProjectAssetAIPanel({
   }, [sessionId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    sessionStorage.setItem(storageKey, JSON.stringify(messages))
+    sessionStorage.setItem(storageKey, JSON.stringify(stripToolMessages(messages)))
   }, [messages, storageKey])
 
   useEffect(() => {
@@ -234,7 +311,7 @@ export function ProjectAssetAIPanel({
       role: 'user',
       content: text || `[已上传 ${fileIds.length} 个文件]`,
     }
-    setMessages((prev) => [...prev, userMessage])
+    setMessages((prev) => [...stripToolMessages(prev), userMessage])
     setInputText('')
     setStreamingText('')
 
@@ -245,6 +322,69 @@ export function ProjectAssetAIPanel({
     abortRef.current = () => { aborted = true; controller.abort() }
 
     try {
+      if (assetType === 'world_setting') {
+        setMessages((prev) => [
+          ...stripToolMessages(prev),
+          {
+            id: `tool-${Date.now()}`,
+            role: 'tool',
+            title: '生成世界观建议',
+            content: '正在处理...',
+          },
+        ])
+
+        const response = await analyzeWorldSetting(projectId, {
+          message: text,
+          guidance: guidance.trim() || null,
+          file_ids: fileIds,
+        })
+
+        onDraftReady?.({
+          type: 'draft_ready',
+          asset_type: 'world_setting',
+          patch: response.patch,
+          actions: null,
+          notes: response.notes,
+          applied_sources: response.applied_sources,
+        })
+
+        accumulatedText = buildWorldSettingResultMessage({
+          userMessage: text,
+          notes: response.notes,
+          patch: response.patch,
+          appliedSources: response.applied_sources,
+        })
+      } else if (assetType === 'project_character') {
+        setMessages((prev) => [
+          ...stripToolMessages(prev),
+          {
+            id: `tool-${Date.now()}`,
+            role: 'tool',
+            title: '生成角色建议',
+            content: '正在处理...',
+          },
+        ])
+
+        const response = await analyzeCharacters(projectId, {
+          message: text,
+          guidance: guidance.trim() || null,
+          file_ids: fileIds,
+        })
+
+        onDraftReady?.({
+          type: 'draft_ready',
+          asset_type: 'project_character',
+          patch: null,
+          actions: response.actions,
+          notes: response.notes,
+        })
+
+        accumulatedText = buildCharacterResultMessage({
+          userMessage: text,
+          notes: response.notes,
+          actions: response.actions,
+        })
+      } else {
       await streamAssetChat(
         projectId,
         {
@@ -267,7 +407,7 @@ export function ProjectAssetAIPanel({
               draft_character_actions: '生成角色建议',
             }
             setMessages((prev) => [
-              ...prev,
+              ...stripToolMessages(prev),
               {
                 id: `tool-${Date.now()}`,
                 role: 'tool',
@@ -283,6 +423,7 @@ export function ProjectAssetAIPanel({
         },
         controller.signal,
       )
+      }
     } catch (err) {
       if (!aborted) {
         const message = err instanceof Error ? err.message : '对话请求失败'
@@ -291,7 +432,7 @@ export function ProjectAssetAIPanel({
     } finally {
       if (!aborted && accumulatedText) {
         setMessages((prev) => [
-          ...prev,
+          ...stripToolMessages(prev),
           {
             id: `ai-${Date.now()}`,
             role: 'result',
@@ -299,6 +440,7 @@ export function ProjectAssetAIPanel({
           },
         ])
       }
+      setMessages((prev) => stripToolMessages(prev))
       setStreamingText(null)
       abortRef.current = null
     }
@@ -312,6 +454,15 @@ export function ProjectAssetAIPanel({
           <Icon className={`size-4 ${meta.accentClassName}`} />
           <span className="text-sm font-semibold text-foreground">{meta.title}</span>
           <Badge variant="outline" className="text-[10px]">对话模式</Badge>
+          {structuredCapability ? (
+            <Badge variant="outline" className={`text-[10px] ${getCapabilityStatusMeta(structuredCapability.status).className}`}>
+              结构化助手：{structuredCapability.summary}
+            </Badge>
+          ) : (
+            <Badge variant="outline" className="border-border bg-background text-[10px] text-muted-foreground">
+              结构化助手：未检测
+            </Badge>
+          )}
         </div>
         <div className="flex flex-wrap gap-1.5">
           {meta.quickPrompts.map((prompt) => (
@@ -326,6 +477,18 @@ export function ProjectAssetAIPanel({
           ))}
         </div>
       </div>
+
+      {!structuredCapability ? (
+        <div className="border-b border-amber-500/20 bg-amber-500/5 px-4 py-2 text-xs leading-5 text-amber-200">
+          当前运行时还没有匹配的结构化能力快照。建议先去设置中心检测一次，再使用世界观或角色助手。
+        </div>
+      ) : null}
+
+      {structuredCapability?.status === 'failed' ? (
+        <div className="border-b border-rose-500/20 bg-rose-500/5 px-4 py-2 text-xs leading-5 text-rose-200">
+          当前模型的结构化能力检测未通过：{structuredCapability.detail || '建议切换模型或更换兼容网关。'}
+        </div>
+      ) : null}
 
       {/* Messages */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4">

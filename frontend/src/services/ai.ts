@@ -28,6 +28,25 @@ export interface AIModelListResponse {
   models: AIModelOption[]
 }
 
+export interface AIRuntimeCapabilityItem {
+  status: 'available' | 'failed' | 'unsupported'
+  summary: string
+  detail: string | null
+}
+
+export interface AIRuntimeCapabilityCheckResponse {
+  provider: string
+  model_id: string
+  checked_at: string
+  text_generation: AIRuntimeCapabilityItem
+  structured_output: AIRuntimeCapabilityItem
+  tool_calling: AIRuntimeCapabilityItem
+}
+
+interface AIGenerateOnceResponse {
+  content: string
+}
+
 export async function getAIRuntimeSettings() {
   const { data } = await apiClient.get<AIRuntimeSettings>('/ai/runtime-settings')
   return data
@@ -43,14 +62,69 @@ export async function listAIRuntimeModels() {
   return data
 }
 
-export async function streamGenerate(payload: AIGeneratePayload, onMessage: (chunk: string) => void) {
+export async function checkAIRuntimeCapabilities(payload?: { provider?: string | null; model_id?: string | null }) {
+  const { data } = await apiClient.post<AIRuntimeCapabilityCheckResponse>('/ai/runtime-settings/capabilities/check', payload ?? {})
+  return data
+}
+
+function buildAuthHeaders() {
+  return {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${localStorage.getItem('sw_token')}`,
+  }
+}
+
+function createTimeoutController(timeoutMs: number, externalSignal?: AbortSignal) {
+  const controller = new AbortController()
+  const timeoutId = window.setTimeout(() => controller.abort(new DOMException('AI generation timeout', 'AbortError')), timeoutMs)
+
+  const abortFromExternal = () => controller.abort(externalSignal?.reason)
+  if (externalSignal) {
+    if (externalSignal.aborted) {
+      abortFromExternal()
+    } else {
+      externalSignal.addEventListener('abort', abortFromExternal, { once: true })
+    }
+  }
+
+  return {
+    signal: controller.signal,
+    dispose: () => {
+      window.clearTimeout(timeoutId)
+      if (externalSignal) {
+        externalSignal.removeEventListener('abort', abortFromExternal)
+      }
+    },
+  }
+}
+
+export function isAbortError(error: unknown) {
+  return error instanceof DOMException && error.name === 'AbortError'
+}
+
+async function generateTextOnce(payload: AIGeneratePayload, signal?: AbortSignal) {
+  const response = await fetch(`${apiClient.defaults.baseURL}/ai/generate-once`, {
+    method: 'POST',
+    headers: buildAuthHeaders(),
+    body: JSON.stringify(payload),
+    signal,
+  })
+
+  const text = await response.text()
+  if (!response.ok) {
+    throw new Error(text || 'AI 生成请求失败')
+  }
+
+  const parsed = JSON.parse(text) as AIGenerateOnceResponse
+  return parsed.content ?? ''
+}
+
+async function streamGenerateAttempt(payload: AIGeneratePayload, onMessage: (chunk: string) => void, signal?: AbortSignal) {
   const response = await fetch(`${apiClient.defaults.baseURL}/ai/generate`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${localStorage.getItem('sw_token')}`,
-    },
+    headers: buildAuthHeaders(),
     body: JSON.stringify(payload),
+    signal,
   })
 
   if (!response.ok || !response.body) {
@@ -90,5 +164,42 @@ export async function streamGenerate(payload: AIGeneratePayload, onMessage: (chu
         onMessage(parsed.content)
       }
     }
+  }
+}
+
+export async function streamGenerate(
+  payload: AIGeneratePayload,
+  onMessage: (chunk: string) => void,
+  options?: { signal?: AbortSignal; timeoutMs?: number; retryCount?: number },
+) {
+  const timeoutMs = options?.timeoutMs ?? 60_000
+  const retryCount = options?.retryCount ?? 1
+
+  for (let attempt = 0; attempt <= retryCount; attempt += 1) {
+    const timeoutController = createTimeoutController(timeoutMs, options?.signal)
+    try {
+      await streamGenerateAttempt(payload, onMessage, timeoutController.signal)
+      timeoutController.dispose()
+      return
+    } catch (error) {
+      timeoutController.dispose()
+      if (isAbortError(error)) {
+        throw error
+      }
+
+      if (attempt === retryCount) {
+        break
+      }
+    }
+  }
+
+  const timeoutController = createTimeoutController(timeoutMs, options?.signal)
+  try {
+    const content = await generateTextOnce(payload, timeoutController.signal)
+    if (content) {
+      onMessage(content)
+    }
+  } finally {
+    timeoutController.dispose()
   }
 }

@@ -533,6 +533,31 @@ class AIModelListResponse(BaseModel):
     models: list[AIModelOptionResponse]
 
 
+class AIRuntimeCapabilityCheckRequest(BaseModel):
+    provider: str | None = Field(default=None, max_length=50)
+    model_id: str | None = Field(default=None, max_length=100)
+
+    @field_validator("provider", "model_id", mode="before")
+    @classmethod
+    def normalize_runtime_capability_check_fields(cls, value: str | None) -> str | None:
+        return normalize_optional_text(value)
+
+
+class AIRuntimeCapabilityItemResponse(BaseModel):
+    status: str
+    summary: str
+    detail: str | None = None
+
+
+class AIRuntimeCapabilityCheckResponse(BaseModel):
+    provider: str
+    model_id: str
+    checked_at: datetime
+    text_generation: AIRuntimeCapabilityItemResponse
+    structured_output: AIRuntimeCapabilityItemResponse
+    tool_calling: AIRuntimeCapabilityItemResponse
+
+
 class AIGenerateRequest(BaseModel):
     project_id: str
     chapter_id: str | None = None

@@ -38,3 +38,24 @@ async def generate_text(
             yield {"event": "error", "data": json.dumps({"error": str(e)})}
 
     return EventSourceResponse(event_generator())
+
+
+@router.post("/generate-once")
+async def generate_text_once(
+    req: AIGenerateRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    content = await ai_service.generate_text(
+        db,
+        project_id=req.project_id,
+        chapter_id=req.chapter_id,
+        text=req.text,
+        instruction=req.instruction,
+        model_provider=req.model_provider,
+        model_id=req.model_id,
+        temperature=req.temperature,
+        max_tokens=req.max_tokens,
+        owner_id=current_user.id,
+    )
+    return {"content": content}
