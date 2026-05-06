@@ -1658,7 +1658,7 @@ function ProjectAITaskDock({
   onToggleExpanded: () => void
   onOpenSession: (sessionId: string) => void
 }) {
-  const visibleTasks = isExpanded ? tasks : tasks.slice(0, 3)
+  const visibleTasks = isExpanded ? tasks : []
   const pendingResultCount = tasks.filter(
     ({ state }) =>
       state.taskStatus === 'done' && (Boolean(state.latestWorldPatch) || Boolean(state.latestCharacterActions?.length)),
@@ -1707,32 +1707,34 @@ function ProjectAITaskDock({
           </div>
         </div>
 
-        <div className="mt-3 space-y-2">
-          {visibleTasks.map(({ session, state }) => (
-            <Link
-              key={session.id}
-              to={`/projects/${projectId}/ai-workspace`}
-              onClick={() => onOpenSession(session.id)}
-              className="flex items-center justify-between gap-3 rounded-xl border border-border bg-background/90 px-3 py-2 transition hover:border-primary/20 hover:bg-muted/35"
-            >
-              <div className="min-w-0">
-                <div className="truncate text-sm font-medium text-foreground">{session.title}</div>
-                <div className="truncate text-xs text-muted-foreground">
-                  {session.assetType === 'project_character' ? '角色助手' : '世界观助手'}
-                  {state.updatedAt ? ` · ${new Date(state.updatedAt).toLocaleTimeString('zh-CN')}` : ''}
+        {isExpanded ? (
+          <div className="mt-3 space-y-2">
+            {visibleTasks.map(({ session, state }) => (
+              <Link
+                key={session.id}
+                to={`/projects/${projectId}/ai-workspace`}
+                onClick={() => onOpenSession(session.id)}
+                className="flex items-center justify-between gap-3 rounded-xl border border-border bg-background/90 px-3 py-2 transition hover:border-primary/20 hover:bg-muted/35"
+              >
+                <div className="min-w-0">
+                  <div className="truncate text-sm font-medium text-foreground">{session.title}</div>
+                  <div className="truncate text-xs text-muted-foreground">
+                    {session.assetType === 'project_character' ? '角色助手' : '世界观助手'}
+                    {state.updatedAt ? ` · ${new Date(state.updatedAt).toLocaleTimeString('zh-CN')}` : ''}
+                  </div>
                 </div>
-              </div>
-              <TaskStatusBadge
-                status={state.taskStatus}
-                hasPendingResult={Boolean(state.latestWorldPatch) || Boolean(state.latestCharacterActions?.length)}
-              />
-            </Link>
-          ))}
-        </div>
-
-        {!isExpanded && tasks.length > visibleTasks.length ? (
-          <div className="mt-2 text-right text-xs text-muted-foreground">另有 {tasks.length - visibleTasks.length} 个会话未展开</div>
-        ) : null}
+                <TaskStatusBadge
+                  status={state.taskStatus}
+                  hasPendingResult={Boolean(state.latestWorldPatch) || Boolean(state.latestCharacterActions?.length)}
+                />
+              </Link>
+            ))}
+          </div>
+        ) : (
+          <div className="mt-3 rounded-xl border border-border bg-background/80 px-3 py-2 text-xs text-muted-foreground">
+            已收起，当前共有 {tasks.length} 个项目会话。
+          </div>
+        )}
       </div>
     </div>
   )
