@@ -5,12 +5,16 @@ import {
   ArrowLeft,
   Bot,
   BookCopy,
+  CheckCircle2,
   ChevronRight,
+  Clock3,
   Home,
   LoaderCircle,
   LogOut,
   Maximize2,
   Minimize2,
+  PanelBottomClose,
+  PanelBottomOpen,
   PanelLeftClose,
   PanelLeftOpen,
   PanelRightClose,
@@ -34,6 +38,11 @@ import {
   readEditorUtilityContext,
   type EditorUtilityContext,
 } from '@/lib/editor-utility-context'
+import {
+  useProjectAIWorkspaceStore,
+  type ProjectAIWorkspaceSession,
+  type ProjectAIWorkspaceSessionState,
+} from '@/lib/project-ai-workspace'
 import { formatDate } from '@/lib/format'
 import { getAIRuntimeSettings, listAIRuntimeModels, streamGenerate, type AIModelOption } from '@/services/ai'
 import { getProject } from '@/services/projects'
@@ -132,9 +141,11 @@ export function AppShell() {
   const navigate = useNavigate()
   const { projectId, chapterId } = useParams<{ projectId?: string; chapterId?: string }>()
   const { user, logout } = useAuth()
+  const { state: workspaceAIState, actions: workspaceAIActions } = useProjectAIWorkspaceStore(projectId)
   const [isProjectTreeOpen, setIsProjectTreeOpen] = useState(true)
   const [isUtilityOpen, setIsUtilityOpen] = useState(false)
   const [isAIPanelOpen, setIsAIPanelOpen] = useState(false)
+  const [isProjectAITaskDrawerOpen, setIsProjectAITaskDrawerOpen] = useState(false)
   const [activeUtilityTab, setActiveUtilityTab] = useState<UtilityTabKey>('characters')
   const [aiPanelWidth, setAIPanelWidth] = useState(DEFAULT_AI_PANEL_WIDTH)
   const [aiResizeState, setAIResizeState] = useState<{ startX: number; startWidth: number } | null>(null)
@@ -423,6 +434,14 @@ export function AppShell() {
       }
     }
 
+    if (isProjectScoped && location.pathname.endsWith('/ai-workspace')) {
+      return {
+        eyebrow: project?.title ?? 'AI 工作区',
+        title: 'AI 工作区',
+        description: '',
+      }
+    }
+
     if (location.pathname === '/ai-toolbox') {
       return {
         eyebrow: 'AI Toolbox',
@@ -539,6 +558,40 @@ export function AppShell() {
   const shouldRenderProjectTree = isProjectScoped && isProjectTreeOpen && !isZenMode
   const shouldRenderUtility = isProjectScoped && isUtilityOpen && !isZenMode
   const shouldRenderAIPanel = isEditorRoute && isAIPanelOpen && !isZenMode
+  const aiWorkspaceSessions = workspaceAIState.sessions
+  const aiWorkspaceSessionStateMap = workspaceAIState.sessionStateMap
+  const aiWorkspaceTasks = useMemo(
+    () =>
+      aiWorkspaceSessions
+        .map((session) => ({
+          session,
+          state: aiWorkspaceSessionStateMap[session.id],
+        }))
+        .filter(({ state }) => {
+          if (!state) {
+            return false
+          }
+          return (
+            state.taskStatus !== 'idle' ||
+            Boolean(state.updatedAt) ||
+            Boolean(state.latestWorldPatch) ||
+            Boolean(state.latestCharacterActions?.length)
+          )
+        })
+        .sort((left, right) => {
+          const rank = { running: 0, failed: 1, done: 2, idle: 3 } as const
+          const leftRank = rank[left.state.taskStatus]
+          const rightRank = rank[right.state.taskStatus]
+          if (leftRank !== rightRank) {
+            return leftRank - rightRank
+          }
+          return (right.state.updatedAt ?? '').localeCompare(left.state.updatedAt ?? '')
+        }),
+    [aiWorkspaceSessionStateMap, aiWorkspaceSessions],
+  )
+  const runningAITaskCount = aiWorkspaceTasks.filter((item) => item.state.taskStatus === 'running').length
+  const failedAITaskCount = aiWorkspaceTasks.filter((item) => item.state.taskStatus === 'failed').length
+  const showProjectAITaskDock = isProjectScoped && aiWorkspaceTasks.length > 0
   const scopedEditorAIDraft =
     editorAIDraftContext?.projectId === projectId && editorAIDraftContext?.chapterId === chapterId
       ? editorAIDraftContext
@@ -549,6 +602,18 @@ export function AppShell() {
     FALLBACK_MODEL_BY_PROVIDER[runtimeSettingsQuery.data?.provider ?? 'openai'] ||
     'gpt-4o'
   const hasSavedRuntimeKey = Boolean(runtimeSettingsQuery.data?.api_key_masked)
+
+  useEffect(() => {
+    if (!showProjectAITaskDock) {
+      setIsProjectAITaskDrawerOpen(false)
+    }
+  }, [showProjectAITaskDock])
+
+  useEffect(() => {
+    if (runningAITaskCount > 0) {
+      setIsProjectAITaskDrawerOpen(true)
+    }
+  }, [runningAITaskCount])
 
   useEffect(() => {
     setAIState((prev) => ({
@@ -944,6 +1009,11 @@ export function AppShell() {
               <SectionLabel>导航</SectionLabel>
               <ProjectTreeLink to={`/projects/${projectId}`} label="项目大盘" active={location.pathname === `/projects/${projectId}`} />
               <ProjectTreeLink
+                to={`/projects/${projectId}/ai-workspace`}
+                label="AI 工作区"
+                active={location.pathname === `/projects/${projectId}/ai-workspace`}
+              />
+              <ProjectTreeLink
                 to={`/projects/${projectId}/characters`}
                 label="角色库"
                 active={location.pathname === `/projects/${projectId}/characters`}
@@ -1095,6 +1165,21 @@ export function AppShell() {
 
           <main className="min-h-0 flex-1 overflow-y-auto px-4 py-5 md:px-5">
             <Outlet />
+            {showProjectAITaskDock ? (
+              <ProjectAITaskDock
+                projectId={projectId ?? ''}
+                tasks={aiWorkspaceTasks}
+                runningCount={runningAITaskCount}
+                failedCount={failedAITaskCount}
+                isExpanded={isProjectAITaskDrawerOpen}
+                onToggleExpanded={() => setIsProjectAITaskDrawerOpen((prev) => !prev)}
+                onOpenSession={(sessionId) => {
+                  workspaceAIActions.setActiveSessionId(sessionId)
+                  workspaceAIActions.setDetailTab('task')
+                  setIsProjectAITaskDrawerOpen(true)
+                }}
+              />
+            ) : null}
           </main>
         </div>
 
@@ -1248,6 +1333,12 @@ export function AppShell() {
                   to={`/projects/${projectId}`}
                   label="项目大盘"
                   active={location.pathname === `/projects/${projectId}`}
+                  onNavigate={() => setIsProjectTreeOpen(false)}
+                />
+                <ProjectTreeLink
+                  to={`/projects/${projectId}/ai-workspace`}
+                  label="AI 工作区"
+                  active={location.pathname === `/projects/${projectId}/ai-workspace`}
                   onNavigate={() => setIsProjectTreeOpen(false)}
                 />
                 <ProjectTreeLink
@@ -1547,6 +1638,151 @@ function UtilityInfoCard({
         </div>
       ) : null}
     </div>
+  )
+}
+
+function ProjectAITaskDock({
+  projectId,
+  tasks,
+  runningCount,
+  failedCount,
+  isExpanded,
+  onToggleExpanded,
+  onOpenSession,
+}: {
+  projectId: string
+  tasks: Array<{ session: ProjectAIWorkspaceSession; state: ProjectAIWorkspaceSessionState }>
+  runningCount: number
+  failedCount: number
+  isExpanded: boolean
+  onToggleExpanded: () => void
+  onOpenSession: (sessionId: string) => void
+}) {
+  const visibleTasks = isExpanded ? tasks : tasks.slice(0, 3)
+  const pendingResultCount = tasks.filter(
+    ({ state }) =>
+      state.taskStatus === 'done' && (Boolean(state.latestWorldPatch) || Boolean(state.latestCharacterActions?.length)),
+  ).length
+
+  return (
+    <div className="pointer-events-none sticky bottom-4 z-10 mt-6 flex justify-end">
+      <div className="pointer-events-auto w-full max-w-[420px] rounded-2xl border border-border bg-card/96 p-3 shadow-xl shadow-black/5 backdrop-blur">
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">AI Tasks</div>
+            <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-foreground">
+              <span className="font-medium">项目会话</span>
+              {runningCount > 0 ? (
+                <span className="rounded-full border border-sky-500/20 bg-sky-500/10 px-2 py-0.5 text-xs text-sky-300">
+                  运行中 {runningCount}
+                </span>
+              ) : null}
+              {failedCount > 0 ? (
+                <span className="rounded-full border border-rose-500/20 bg-rose-500/10 px-2 py-0.5 text-xs text-rose-300">
+                  异常 {failedCount}
+                </span>
+              ) : null}
+              {pendingResultCount > 0 ? (
+                <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-xs text-emerald-300">
+                  待处理 {pendingResultCount}
+                </span>
+              ) : null}
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onToggleExpanded}
+              className="inline-flex h-8 items-center gap-1 rounded-lg border border-border bg-background px-3 text-xs text-foreground transition hover:bg-muted"
+            >
+              {isExpanded ? <PanelBottomClose className="size-3.5" /> : <PanelBottomOpen className="size-3.5" />}
+              {isExpanded ? '收起' : '展开'}
+            </button>
+            <Link
+              to={`/projects/${projectId}/ai-workspace`}
+              className="inline-flex h-8 items-center rounded-lg border border-border bg-background px-3 text-xs text-foreground transition hover:bg-muted"
+            >
+              打开工作区
+            </Link>
+          </div>
+        </div>
+
+        <div className="mt-3 space-y-2">
+          {visibleTasks.map(({ session, state }) => (
+            <Link
+              key={session.id}
+              to={`/projects/${projectId}/ai-workspace`}
+              onClick={() => onOpenSession(session.id)}
+              className="flex items-center justify-between gap-3 rounded-xl border border-border bg-background/90 px-3 py-2 transition hover:border-primary/20 hover:bg-muted/35"
+            >
+              <div className="min-w-0">
+                <div className="truncate text-sm font-medium text-foreground">{session.title}</div>
+                <div className="truncate text-xs text-muted-foreground">
+                  {session.assetType === 'project_character' ? '角色助手' : '世界观助手'}
+                  {state.updatedAt ? ` · ${new Date(state.updatedAt).toLocaleTimeString('zh-CN')}` : ''}
+                </div>
+              </div>
+              <TaskStatusBadge
+                status={state.taskStatus}
+                hasPendingResult={Boolean(state.latestWorldPatch) || Boolean(state.latestCharacterActions?.length)}
+              />
+            </Link>
+          ))}
+        </div>
+
+        {!isExpanded && tasks.length > visibleTasks.length ? (
+          <div className="mt-2 text-right text-xs text-muted-foreground">另有 {tasks.length - visibleTasks.length} 个会话未展开</div>
+        ) : null}
+      </div>
+    </div>
+  )
+}
+
+function TaskStatusBadge({
+  status,
+  hasPendingResult = false,
+}: {
+  status: ProjectAIWorkspaceSessionState['taskStatus']
+  hasPendingResult?: boolean
+}) {
+  if (status === 'running') {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full border border-sky-500/20 bg-sky-500/10 px-2 py-1 text-xs text-sky-300">
+        <LoaderCircle className="size-3 animate-spin" />
+        运行中
+      </span>
+    )
+  }
+
+  if (status === 'failed') {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full border border-rose-500/20 bg-rose-500/10 px-2 py-1 text-xs text-rose-300">
+        <Bot className="size-3" />
+        异常
+      </span>
+    )
+  }
+
+  if (status === 'done') {
+    return (
+      <span
+        className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-xs ${
+          hasPendingResult
+            ? 'border-amber-500/20 bg-amber-500/10 text-amber-300'
+            : 'border-emerald-500/20 bg-emerald-500/10 text-emerald-300'
+        }`}
+      >
+        <CheckCircle2 className="size-3" />
+        {hasPendingResult ? '待处理' : '已完成'}
+      </span>
+    )
+  }
+
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full border border-border bg-muted px-2 py-1 text-xs text-muted-foreground">
+      <Clock3 className="size-3" />
+      空闲
+    </span>
   )
 }
 
