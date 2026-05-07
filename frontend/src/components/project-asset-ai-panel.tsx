@@ -421,6 +421,7 @@ export function ProjectAssetAIPanel({
 
     let accumulatedText = ''
     let aborted = false
+    let failed = false
     let finalTaskStatus: 'running' | 'done' | 'failed' = 'running'
     const controller = new AbortController()
 
@@ -532,13 +533,14 @@ export function ProjectAssetAIPanel({
       finalTaskStatus = 'done'
     } catch (err) {
       if (!aborted) {
+        failed = true
         const message = err instanceof Error ? err.message : '对话请求失败'
         finalTaskStatus = 'failed'
         onTaskStateChange?.({ status: 'failed', updatedAt: new Date().toISOString(), error: message })
         toast.error(message)
       }
     } finally {
-      if (!aborted && accumulatedText) {
+      if (!aborted && !failed && accumulatedText) {
         setMessages((prev) => [
           ...stripToolMessages(prev),
           {

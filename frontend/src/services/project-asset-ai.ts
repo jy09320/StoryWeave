@@ -124,12 +124,18 @@ export async function streamAssetChat(
 
       if (!dataValue || !eventName) continue
 
+      let parsed: Record<string, unknown>
       try {
-        const parsed = JSON.parse(dataValue) as Record<string, unknown>
-        onEvent({ type: eventName, ...parsed } as AssetChatSSEEvent)
+        parsed = JSON.parse(dataValue) as Record<string, unknown>
       } catch {
-        // Malformed SSE data — skip
+        continue
       }
+
+      if (eventName === 'error') {
+        throw new Error((parsed.error as string | undefined) ?? '对话请求失败')
+      }
+
+      onEvent({ type: eventName, ...parsed } as AssetChatSSEEvent)
     }
   }
 }
