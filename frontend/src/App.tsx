@@ -15,6 +15,7 @@ import { HomePage } from '@/pages/home-page'
 import { LoginPage } from '@/pages/login-page'
 import { ProjectEditorPage } from '@/pages/project-editor-page'
 import { ProjectAIWorkspacePage } from '@/pages/project-ai-workspace-page'
+import { ProjectSettingsPage } from '@/pages/project-settings-page'
 import { ProjectWorldPage } from '@/pages/project-world-page'
 import { ProjectWorkspacePage } from '@/pages/project-workspace-page'
 import { RegisterPage } from '@/pages/register-page'
@@ -52,6 +53,10 @@ const router = createBrowserRouter([
       {
         path: 'projects/:projectId',
         element: <ProjectWorkspacePage />,
+      },
+      {
+        path: 'projects/:projectId/settings',
+        element: <ProjectSettingsPage />,
       },
       {
         path: 'projects/:projectId/characters',
