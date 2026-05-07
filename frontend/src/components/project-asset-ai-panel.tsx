@@ -579,7 +579,7 @@ export function ProjectAssetAIPanel({
       </div>
 
       {!structuredCapability ? (
-        <div className="border-b border-amber-500/20 bg-amber-500/5 px-4 py-2 text-xs leading-5 text-amber-200">
+        <div className="border-b border-border bg-muted/35 px-4 py-2 text-xs leading-5 text-muted-foreground">
           当前运行时还没有匹配的结构化能力快照。建议先去设置中心检测一次，再使用世界观或角色助手。
         </div>
       ) : null}
@@ -685,9 +685,9 @@ export function ProjectAssetAIPanel({
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder={meta.placeholder}
-            rows={3}
-            className="flex-1 resize-none text-sm"
+            placeholder={meta.placeholder.replace(/\n+/g, ' ')}
+            rows={4}
+            className="min-h-[88px] max-h-40 flex-1 overflow-y-auto resize-none px-3 py-2.5 text-sm leading-6"
             disabled={isStreaming}
           />
 
