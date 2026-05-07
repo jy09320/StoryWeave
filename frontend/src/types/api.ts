@@ -1,5 +1,6 @@
 export type ProjectStatus = 'draft' | 'active' | 'paused' | 'completed'
 export type ProjectType = 'original' | 'fanfiction' | 'acg' | 'tv_movie'
+export type ProjectChannel = 'male' | 'female' | 'general'
 export type ChapterStatus = 'draft' | 'writing' | 'review' | 'done'
 export type ProjectAssetAIType = 'world_setting' | 'project_character'
 export type ProjectAssetAIMessageRole = 'user' | 'system' | 'tool' | 'preview' | 'result'
@@ -92,6 +93,10 @@ export interface Project {
   type: ProjectType | string
   source_work: string | null
   status: ProjectStatus | string
+  channel: ProjectChannel | null
+  genres: string[]
+  tropes: string[]
+  premise: string | null
   default_model_provider: string | null
   default_model_id: string | null
   created_at: string
@@ -110,8 +115,38 @@ export interface ProjectPayload {
   type?: ProjectType
   source_work?: string | null
   status?: ProjectStatus
+  channel?: ProjectChannel | null
+  genres?: string[]
+  tropes?: string[]
+  premise?: string | null
   default_model_provider?: string | null
   default_model_id?: string | null
+  ai_draft?: ProjectDraftResult | null
+}
+
+export interface ProjectDraftPayload {
+  title: string
+  description?: string | null
+  type?: ProjectType
+  source_work?: string | null
+  channel?: ProjectChannel | null
+  genres?: string[]
+  tropes?: string[]
+  premise?: string | null
+  model_provider?: string | null
+  model_id?: string | null
+}
+
+export interface ProjectDraftResult {
+  summary: string
+  world_setting_title: string
+  world_setting_overview: string
+  world_setting_rules: string | null
+  world_setting_factions: string | null
+  world_setting_locations: string | null
+  world_setting_timeline: string | null
+  opening_chapters: string[]
+  notes: string[]
 }
 
 export interface ChapterPayload {

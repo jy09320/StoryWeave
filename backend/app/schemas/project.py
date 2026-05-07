@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field, field_validator
 
 PROJECT_TYPE_VALUES = {"original", "fanfiction", "acg", "tv_movie"}
 PROJECT_STATUS_VALUES = {"draft", "active", "paused", "completed"}
+PROJECT_CHANNEL_VALUES = {"male", "female", "general"}
 CHAPTER_STATUS_VALUES = {"draft", "writing", "review", "done"}
 AI_PROVIDER_VALUES = {"openai", "anthropic"}
 
@@ -16,13 +17,35 @@ def normalize_optional_text(value: str | None) -> str | None:
     return stripped or None
 
 
+def normalize_string_list(value: list[str] | None) -> list[str]:
+    if not value:
+        return []
+
+    normalized: list[str] = []
+    seen: set[str] = set()
+
+    for item in value:
+        stripped = item.strip()
+        if not stripped or stripped in seen:
+            continue
+        normalized.append(stripped)
+        seen.add(stripped)
+
+    return normalized
+
+
 class ProjectCreate(BaseModel):
     title: str = Field(min_length=1, max_length=200)
     description: str | None = Field(default=None, max_length=4000)
     type: str = Field(default="original")
     source_work: str | None = Field(default=None, max_length=200)
+    channel: str | None = Field(default=None, max_length=20)
+    genres: list[str] = Field(default_factory=list, max_length=10)
+    tropes: list[str] = Field(default_factory=list, max_length=20)
+    premise: str | None = Field(default=None, max_length=4000)
     default_model_provider: str | None = Field(default=None, max_length=50)
     default_model_id: str | None = Field(default=None, max_length=100)
+    ai_draft: ProjectDraftSnapshot | None = None
 
     @field_validator("title")
     @classmethod
@@ -32,7 +55,7 @@ class ProjectCreate(BaseModel):
             raise ValueError("Project title cannot be empty")
         return stripped
 
-    @field_validator("description", "source_work", "default_model_provider", "default_model_id", mode="before")
+    @field_validator("description", "source_work", "premise", "default_model_provider", "default_model_id", mode="before")
     @classmethod
     def normalize_optional_fields(cls, value: str | None) -> str | None:
         return normalize_optional_text(value)
@@ -44,6 +67,20 @@ class ProjectCreate(BaseModel):
             raise ValueError("Invalid project type")
         return value
 
+    @field_validator("channel")
+    @classmethod
+    def validate_channel(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        if value not in PROJECT_CHANNEL_VALUES:
+            raise ValueError("Invalid project channel")
+        return value
+
+    @field_validator("genres", "tropes", mode="before")
+    @classmethod
+    def normalize_list_fields(cls, value: list[str] | None) -> list[str]:
+        return normalize_string_list(value)
+
 
 class ProjectUpdate(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=200)
@@ -51,6 +88,10 @@ class ProjectUpdate(BaseModel):
     type: str | None = None
     source_work: str | None = Field(default=None, max_length=200)
     status: str | None = None
+    channel: str | None = Field(default=None, max_length=20)
+    genres: list[str] | None = Field(default=None, max_length=10)
+    tropes: list[str] | None = Field(default=None, max_length=20)
+    premise: str | None = Field(default=None, max_length=4000)
     default_model_provider: str | None = Field(default=None, max_length=50)
     default_model_id: str | None = Field(default=None, max_length=100)
 
@@ -65,7 +106,7 @@ class ProjectUpdate(BaseModel):
             raise ValueError("Project title cannot be empty")
         return stripped
 
-    @field_validator("description", "source_work", "default_model_provider", "default_model_id", mode="before")
+    @field_validator("description", "source_work", "premise", "default_model_provider", "default_model_id", mode="before")
     @classmethod
     def normalize_optional_update_fields(cls, value: str | None) -> str | None:
         return normalize_optional_text(value)
@@ -87,6 +128,117 @@ class ProjectUpdate(BaseModel):
         if value not in PROJECT_STATUS_VALUES:
             raise ValueError("Invalid project status")
         return value
+
+    @field_validator("channel")
+    @classmethod
+    def validate_optional_channel(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        if value not in PROJECT_CHANNEL_VALUES:
+            raise ValueError("Invalid project channel")
+        return value
+
+    @field_validator("genres", "tropes", mode="before")
+    @classmethod
+    def normalize_optional_list_fields(cls, value: list[str] | None) -> list[str] | None:
+        if value is None:
+            return None
+        return normalize_string_list(value)
+
+
+class ProjectDraftRequest(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
+    description: str | None = Field(default=None, max_length=4000)
+    type: str = Field(default="original")
+    source_work: str | None = Field(default=None, max_length=200)
+    channel: str | None = Field(default=None, max_length=20)
+    genres: list[str] = Field(default_factory=list, max_length=10)
+    tropes: list[str] = Field(default_factory=list, max_length=20)
+    premise: str | None = Field(default=None, max_length=4000)
+    model_provider: str | None = Field(default=None, max_length=50)
+    model_id: str | None = Field(default=None, max_length=100)
+
+    @field_validator("title")
+    @classmethod
+    def validate_draft_title(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("Project title cannot be empty")
+        return stripped
+
+    @field_validator("description", "source_work", "premise", "model_provider", "model_id", mode="before")
+    @classmethod
+    def normalize_draft_optional_fields(cls, value: str | None) -> str | None:
+        return normalize_optional_text(value)
+
+    @field_validator("type")
+    @classmethod
+    def validate_draft_type(cls, value: str) -> str:
+        if value not in PROJECT_TYPE_VALUES:
+            raise ValueError("Invalid project type")
+        return value
+
+    @field_validator("channel")
+    @classmethod
+    def validate_draft_channel(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        if value not in PROJECT_CHANNEL_VALUES:
+            raise ValueError("Invalid project channel")
+        return value
+
+    @field_validator("genres", "tropes", mode="before")
+    @classmethod
+    def normalize_draft_list_fields(cls, value: list[str] | None) -> list[str]:
+        return normalize_string_list(value)
+
+
+class ProjectDraftResponse(BaseModel):
+    summary: str
+    world_setting_title: str
+    world_setting_overview: str
+    world_setting_rules: str | None = None
+    world_setting_factions: str | None = None
+    world_setting_locations: str | None = None
+    world_setting_timeline: str | None = None
+    opening_chapters: list[str] = Field(default_factory=list)
+    notes: list[str] = Field(default_factory=list)
+
+
+class ProjectDraftSnapshot(BaseModel):
+    summary: str = Field(min_length=1, max_length=2000)
+    world_setting_title: str = Field(min_length=1, max_length=200)
+    world_setting_overview: str = Field(min_length=1, max_length=4000)
+    world_setting_rules: str | None = Field(default=None, max_length=4000)
+    world_setting_factions: str | None = Field(default=None, max_length=4000)
+    world_setting_locations: str | None = Field(default=None, max_length=4000)
+    world_setting_timeline: str | None = Field(default=None, max_length=4000)
+    opening_chapters: list[str] = Field(default_factory=list, max_length=10)
+    notes: list[str] = Field(default_factory=list, max_length=10)
+
+    @field_validator("summary", "world_setting_title", "world_setting_overview")
+    @classmethod
+    def validate_required_text(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("Draft field cannot be empty")
+        return stripped
+
+    @field_validator("opening_chapters", "notes", mode="before")
+    @classmethod
+    def normalize_snapshot_list_fields(cls, value: list[str] | None) -> list[str]:
+        return normalize_string_list(value)
+
+    @field_validator(
+        "world_setting_rules",
+        "world_setting_factions",
+        "world_setting_locations",
+        "world_setting_timeline",
+        mode="before",
+    )
+    @classmethod
+    def normalize_snapshot_optional_fields(cls, value: str | None) -> str | None:
+        return normalize_optional_text(value)
 
 
 class ChapterCreate(BaseModel):
@@ -471,6 +623,10 @@ class ProjectResponse(BaseModel):
     type: str
     source_work: str | None
     status: str
+    channel: str | None
+    genres: list[str] = Field(default_factory=list)
+    tropes: list[str] = Field(default_factory=list)
+    premise: str | None
     default_model_provider: str | None
     default_model_id: str | None
     created_at: datetime

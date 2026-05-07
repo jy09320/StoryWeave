@@ -11,6 +11,8 @@ import type {
   ProjectCharacter,
   ProjectCharacterPayload,
   ProjectCharacterUpdatePayload,
+  ProjectDraftPayload,
+  ProjectDraftResult,
   ProjectDetail,
   ProjectImportPayload,
   ProjectImportResult,
@@ -28,6 +30,11 @@ export async function listProjects() {
 
 export async function createProject(payload: ProjectPayload) {
   const { data } = await apiClient.post<Project>('/projects/', payload)
+  return data
+}
+
+export async function generateProjectDraft(payload: ProjectDraftPayload) {
+  const { data } = await apiClient.post<ProjectDraftResult>('/projects/draft', payload)
   return data
 }
 

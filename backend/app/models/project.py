@@ -1,7 +1,7 @@
 import ulid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -21,6 +21,10 @@ class Project(Base):
     type: Mapped[str] = mapped_column(String(20), nullable=False, default="original")
     source_work: Mapped[str | None] = mapped_column(String(200))
     status: Mapped[str] = mapped_column(String(20), default="draft")
+    channel: Mapped[str | None] = mapped_column(String(20))
+    genres: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    tropes: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    premise: Mapped[str | None] = mapped_column(Text)
     default_model_provider: Mapped[str | None] = mapped_column(String(20))
     default_model_id: Mapped[str | None] = mapped_column(String(50))
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
