@@ -264,6 +264,24 @@ export interface AIGeneratePayload {
   max_tokens?: number
 }
 
+export interface AIContextPreviewSection {
+  title: string
+  content: string
+}
+
+export interface AIContextPreviewResponse {
+  intent: string
+  sections: AIContextPreviewSection[]
+  final_instruction: string
+  metadata: {
+    project_found?: boolean
+    chapter_found?: boolean
+    recent_memory_count?: number
+    has_previous_chapter_tail?: boolean
+    has_story_memory?: boolean
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Project Asset AI — file upload, analyze, apply
 // ---------------------------------------------------------------------------

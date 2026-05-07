@@ -29,6 +29,8 @@ interface RichTextEditorProps {
   onSelectionChange?: (payload: { text: string; from: number; to: number }) => void
   onBubbleAction?: (action: BubbleActionKey, selectedText: string) => void
   onSlashCommand?: (command: SlashCommandKey) => void
+  previewText?: string
+  isPreviewStreaming?: boolean
   onChange: (payload: { html: string; plainText: string }) => void
 }
 
@@ -62,6 +64,8 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
     onSelectionChange,
     onBubbleAction,
     onSlashCommand,
+    previewText,
+    isPreviewStreaming = false,
     onChange,
   },
   ref,
@@ -651,6 +655,19 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
 
       <div className="px-8 py-8 md:px-10">
         <EditorContent editor={editor} />
+        {previewText?.trim() ? (
+          <div className="mt-6 border-t border-dashed border-emerald-200 pt-6">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div className="text-xs tracking-[0.18em] text-emerald-700/85">AI 续写预览</div>
+              <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] text-emerald-700">
+                {isPreviewStreaming ? '生成中' : '待采纳'}
+              </span>
+            </div>
+            <div className="whitespace-pre-wrap text-[16px] leading-[1.95] text-foreground/72">
+              {previewText}
+            </div>
+          </div>
+        ) : null}
       </div>
     </div>
   )

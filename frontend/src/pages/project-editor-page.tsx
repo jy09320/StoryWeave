@@ -20,8 +20,11 @@ import { Textarea } from '@/components/ui/textarea'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import {
   EDITOR_AI_COMMAND_EVENT,
+  EDITOR_AI_PREVIEW_EVENT,
+  readEditorAIPreviewContext,
   writeEditorAIDraftContext,
   type EditorAICommand,
+  type EditorAIPreviewContext,
 } from '@/lib/editor-ai-bridge'
 import { writeEditorRouteContext } from '@/lib/editor-route-context'
 import { writeEditorUtilityContext, type EditorUtilityAction } from '@/lib/editor-utility-context'
@@ -186,6 +189,9 @@ export function ProjectEditorPage() {
   const [isVersionDialogOpen, setIsVersionDialogOpen] = useState(false)
   const [isStatusMenuOpen, setIsStatusMenuOpen] = useState(false)
   const [bubbleDialog, setBubbleDialog] = useState<BubbleDialogState | null>(null)
+  const [aiPreview, setAIPreview] = useState<EditorAIPreviewContext | null>(() =>
+    typeof window === 'undefined' ? null : readEditorAIPreviewContext(),
+  )
   const [bubbleGen, setBubbleGen] = useState<BubbleGenState>({
     instruction: '',
     result: '',
@@ -556,6 +562,29 @@ export function ProjectEditorPage() {
   }, [activeForm.plainText, chapter?.id, chapter?.title, projectId])
 
   useEffect(() => {
+    function handleAIPreview(event: Event) {
+      const customEvent = event as CustomEvent<EditorAIPreviewContext | null>
+      const preview = customEvent.detail
+
+      if (!preview) {
+        setAIPreview(null)
+        return
+      }
+
+      if (preview.projectId !== projectId || preview.chapterId !== chapter?.id) {
+        return
+      }
+
+      setAIPreview(preview)
+    }
+
+    window.addEventListener(EDITOR_AI_PREVIEW_EVENT, handleAIPreview as EventListener)
+    return () => {
+      window.removeEventListener(EDITOR_AI_PREVIEW_EVENT, handleAIPreview as EventListener)
+    }
+  }, [chapter?.id, projectId])
+
+  useEffect(() => {
     function handleAICommand(event: Event) {
       const customEvent = event as CustomEvent<EditorAICommand>
       const command = customEvent.detail
@@ -564,6 +593,7 @@ export function ProjectEditorPage() {
       }
 
       if (command.type === 'discard-generated-text') {
+        setAIPreview(null)
         writeEditorUtilityContext(null)
         return
       }
@@ -580,6 +610,7 @@ export function ProjectEditorPage() {
         })
 
         if (applied) {
+          setAIPreview(null)
           writeEditorUtilityContext(null)
           toast.success('已在选区后插入扩写结果')
           return
@@ -607,6 +638,7 @@ ${nextText}` : nextText
         [chapter.id]: true,
       }))
       scheduleAutosave(chapter.id, next)
+      setAIPreview(null)
       writeEditorUtilityContext(null)
       toast.success('已追加到正文')
     }
@@ -786,16 +818,16 @@ ${nextText}` : nextText
                   <span>·</span>
                   <span>{projectQuery.data.title}</span>
                 </div>
-                <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-start">
-                  <div className="min-w-0 space-y-3 md:pr-4">
+                <div className="space-y-3">
+                  <div className="min-w-0 space-y-3 text-center">
                     <input
                       value={activeForm.title}
                       onChange={(event) => updateFormField('title', event.target.value)}
                       placeholder="未命名章节"
                       maxLength={200}
-                      className="w-full border-none bg-transparent px-0 text-3xl font-semibold tracking-tight text-foreground outline-none placeholder:text-muted-foreground md:text-center md:text-4xl"
+                      className="w-full border-none bg-transparent px-0 text-center text-3xl font-semibold tracking-tight text-foreground outline-none placeholder:text-muted-foreground md:text-4xl"
                     />
-                    <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-muted-foreground md:justify-center">
+                    <div className="flex flex-col items-center justify-center gap-x-3 gap-y-2 text-sm text-muted-foreground sm:flex-row">
                       <div className="relative" ref={statusMenuRef}>
                         <button
                           type="button"
@@ -835,19 +867,17 @@ ${nextText}` : nextText
                           </div>
                         ) : null}
                       </div>
-                      <span className="text-sm text-muted-foreground/90">最近更新 {formatDate(chapter.updated_at)}</span>
+                      <span className="text-sm text-muted-foreground/90">{'最近更新 '}{formatDate(chapter.updated_at)}</span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-10 shrink-0 rounded-xl border-border bg-background px-4 text-foreground/85"
+                        onClick={() => setIsVersionDialogOpen(true)}
+                      >
+                        <History className="size-4" />
+                        {'版本历史'}
+                      </Button>
                     </div>
-                  </div>
-                  <div className="flex justify-start md:justify-end">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-10 rounded-xl border-border bg-background px-4 text-foreground/85"
-                      onClick={() => setIsVersionDialogOpen(true)}
-                    >
-                      <History className="size-4" />
-                      版本历史
-                    </Button>
                   </div>
                 </div>
               </div>
@@ -859,6 +889,8 @@ ${nextText}` : nextText
                 ref={editorRef}
                 value={activeForm.contentHtml}
                 mentionItems={mentionItems}
+                previewText={aiPreview?.text ?? ''}
+                isPreviewStreaming={aiPreview?.isStreaming ?? false}
                 onSelectionChange={() => {}}
                 onBubbleAction={handleBubbleAction}
                 onSlashCommand={(command) => {

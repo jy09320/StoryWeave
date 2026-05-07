@@ -1,4 +1,7 @@
+from __future__ import annotations
+
 from datetime import datetime
+from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -723,3 +726,15 @@ class AIGenerateRequest(BaseModel):
     model_id: str | None = None
     temperature: float = 0.8
     max_tokens: int = 2000
+
+
+class AIContextPreviewSectionResponse(BaseModel):
+    title: str
+    content: str
+
+
+class AIContextPreviewResponse(BaseModel):
+    intent: str
+    sections: list[AIContextPreviewSectionResponse] = Field(default_factory=list)
+    final_instruction: str
+    metadata: dict[str, Any] = Field(default_factory=dict)

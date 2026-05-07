@@ -1,20 +1,17 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+﻿import { useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { clsx } from 'clsx'
 import {
   ArrowLeft,
   Bot,
   BookCopy,
-  CheckCircle2,
+  ChevronDown,
   ChevronRight,
-  Clock3,
   Home,
   LoaderCircle,
   LogOut,
   Maximize2,
   Minimize2,
-  PanelBottomClose,
-  PanelBottomOpen,
   PanelLeftClose,
   PanelLeftOpen,
   PanelRightClose,
@@ -27,8 +24,10 @@ import { Link, NavLink, Outlet, useLocation, useNavigate, useParams } from 'reac
 import { toast } from 'sonner'
 
 import { ModelPickerDialog } from '@/components/ai/model-picker-dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import {
   EDITOR_AI_DRAFT_EVENT,
+  writeEditorAIPreviewContext,
   dispatchEditorAICommand,
   readEditorAIDraftContext,
   type EditorAIDraftContext,
@@ -38,15 +37,10 @@ import {
   readEditorUtilityContext,
   type EditorUtilityContext,
 } from '@/lib/editor-utility-context'
-import {
-  useProjectAIWorkspaceStore,
-  type ProjectAIWorkspaceSession,
-  type ProjectAIWorkspaceSessionState,
-} from '@/lib/project-ai-workspace'
 import { formatDate } from '@/lib/format'
-import { getAIRuntimeSettings, listAIRuntimeModels, streamGenerate, type AIModelOption } from '@/services/ai'
+import { getAIContextPreview, getAIRuntimeSettings, isAbortError, listAIRuntimeModels, normalizeAIError, streamGenerate, type AIModelOption } from '@/services/ai'
 import { getProject } from '@/services/projects'
-import type { AIGeneratePayload, ProjectDetail } from '@/types/api'
+import type { AIGeneratePayload, AIContextPreviewResponse, ProjectDetail } from '@/types/api'
 import { useAuth } from '@/contexts/auth-context'
 
 const primaryNavItems = [
@@ -63,6 +57,22 @@ interface AIChatMessage {
   id: string
   role: AIChatMessageRole
   content: string
+}
+
+interface AIComposerState {
+  instruction: string
+  modelId: string
+  result: string
+  isGenerating: boolean
+  requestId: number
+}
+
+interface AIPanelSnapshot {
+  aiState: AIComposerState
+  aiMessages: AIChatMessage[]
+  contextPreview: AIContextPreviewResponse | null
+  isContextPreviewOpen: boolean
+  isContextPreviewDialogOpen: boolean
 }
 
 const utilityTabs: Array<{ key: UtilityTabKey; label: string }> = [
@@ -83,6 +93,14 @@ const DEFAULT_AI_PANEL_WIDTH = 420
 const MIN_AI_PANEL_WIDTH = 320
 const MAX_AI_PANEL_WIDTH = 640
 const EDITOR_SHORTCUT_HINT_STORAGE_KEY = 'storyweave-editor-shortcut-hint-dismissed'
+const EDITOR_AI_PANEL_SNAPSHOTS_STORAGE_KEY = 'storyweave-editor-ai-panel-snapshots'
+const DEFAULT_AI_COMPOSER_STATE: AIComposerState = {
+  instruction: DEFAULT_CONTINUE_INSTRUCTION,
+  modelId: '',
+  result: '',
+  isGenerating: false,
+  requestId: 0,
+}
 
 function getAIInstruction(context: EditorUtilityContext | null) {
   if (!context || context.action !== 'expand') {
@@ -117,18 +135,41 @@ function getKeywordMatches(source: string, keywords: string[]) {
   return keywords.filter((keyword) => keyword.length >= 2 && normalizedSource.includes(keyword))
 }
 
-function getToolboxPath(task: string, projectId?: string, chapterId?: string) {
-  const searchParams = new URLSearchParams({ task })
+function buildDefaultAIComposerState(context: EditorUtilityContext | null): AIComposerState {
+  return {
+    ...DEFAULT_AI_COMPOSER_STATE,
+    instruction: getAIInstruction(context),
+  }
+}
 
-  if (projectId) {
-    searchParams.set('projectId', projectId)
+function readAIPanelSnapshots() {
+  if (typeof window === 'undefined') {
+    return {}
   }
 
-  if (chapterId) {
-    searchParams.set('chapterId', chapterId)
+  try {
+    const raw = window.sessionStorage.getItem(EDITOR_AI_PANEL_SNAPSHOTS_STORAGE_KEY)
+    if (!raw) {
+      return {}
+    }
+
+    const parsed = JSON.parse(raw) as Record<string, AIPanelSnapshot>
+    return parsed && typeof parsed === 'object' ? parsed : {}
+  } catch {
+    return {}
+  }
+}
+
+function writeAIPanelSnapshots(snapshots: Record<string, AIPanelSnapshot>) {
+  if (typeof window === 'undefined') {
+    return
   }
 
-  return `/ai-toolbox?${searchParams.toString()}`
+  try {
+    window.sessionStorage.setItem(EDITOR_AI_PANEL_SNAPSHOTS_STORAGE_KEY, JSON.stringify(snapshots))
+  } catch {
+    // ignore storage write failures
+  }
 }
 
 export function AppShell() {
@@ -136,11 +177,9 @@ export function AppShell() {
   const navigate = useNavigate()
   const { projectId, chapterId } = useParams<{ projectId?: string; chapterId?: string }>()
   const { user, logout } = useAuth()
-  const { state: workspaceAIState, actions: workspaceAIActions } = useProjectAIWorkspaceStore(projectId)
   const [isProjectTreeOpen, setIsProjectTreeOpen] = useState(true)
   const [isUtilityOpen, setIsUtilityOpen] = useState(false)
   const [isAIPanelOpen, setIsAIPanelOpen] = useState(false)
-  const [isProjectAITaskDrawerOpen, setIsProjectAITaskDrawerOpen] = useState(false)
   const [activeUtilityTab, setActiveUtilityTab] = useState<UtilityTabKey>('characters')
   const [aiPanelWidth, setAIPanelWidth] = useState(DEFAULT_AI_PANEL_WIDTH)
   const [aiResizeState, setAIResizeState] = useState<{ startX: number; startWidth: number } | null>(null)
@@ -156,19 +195,21 @@ export function AppShell() {
   const [isLoadingModels, setIsLoadingModels] = useState(false)
   const [isModelDialogOpen, setIsModelDialogOpen] = useState(false)
   const [isShortcutMenuOpen, setIsShortcutMenuOpen] = useState(false)
-  const [aiState, setAIState] = useState({
-    instruction: DEFAULT_CONTINUE_INSTRUCTION,
-    modelId: '',
-    result: '',
-    isGenerating: false,
-    requestId: 0,
-  })
+  const [aiState, setAIState] = useState<AIComposerState>(DEFAULT_AI_COMPOSER_STATE)
   const [aiMessages, setAIMessages] = useState<AIChatMessage[]>([])
+  const [contextPreview, setContextPreview] = useState<AIContextPreviewResponse | null>(null)
+  const [isContextPreviewLoading, setIsContextPreviewLoading] = useState(false)
+  const [isContextPreviewOpen, setIsContextPreviewOpen] = useState(false)
+  const [isContextPreviewDialogOpen, setIsContextPreviewDialogOpen] = useState(false)
+  const generationAbortRef = useRef<AbortController | null>(null)
+  const aiPanelSnapshotRef = useRef<Record<string, AIPanelSnapshot>>(readAIPanelSnapshots())
+  const previousAIScopeKeyRef = useRef<string | null>(null)
   const shortcutMenuRef = useRef<HTMLDivElement | null>(null)
 
   const isProjectScoped = Boolean(projectId) && location.pathname.startsWith(`/projects/${projectId}`)
   const isEditorRoute = isProjectScoped && location.pathname.includes('/editor/')
   const isAIWorkspaceRoute = isProjectScoped && location.pathname.endsWith('/ai-workspace')
+  const utilityRouteScope = isEditorRoute ? 'editor' : isAIWorkspaceRoute ? 'ai-workspace' : isProjectScoped ? 'project' : 'global'
 
   const projectQuery = useQuery<ProjectDetail, Error>({
     queryKey: ['project', projectId],
@@ -200,6 +241,14 @@ export function AppShell() {
       setIsZenMode(false)
     }
   }, [isEditorRoute, isZenMode])
+
+  const prevUtilityRouteScopeRef = useRef(utilityRouteScope)
+  useEffect(() => {
+    if (prevUtilityRouteScopeRef.current !== utilityRouteScope) {
+      setIsUtilityOpen(false)
+      prevUtilityRouteScopeRef.current = utilityRouteScope
+    }
+  }, [utilityRouteScope])
 
   useEffect(() => {
     if (!isEditorRoute) {
@@ -554,71 +603,100 @@ export function AppShell() {
   const shouldRenderProjectTree = isProjectScoped && isProjectTreeOpen && !isZenMode
   const shouldRenderUtility = isProjectScoped && isUtilityOpen && !isZenMode
   const shouldRenderAIPanel = isEditorRoute && isAIPanelOpen && !isZenMode
-  const aiWorkspaceSessions = workspaceAIState.sessions
-  const aiWorkspaceSessionStateMap = workspaceAIState.sessionStateMap
-  const aiWorkspaceTasks = useMemo(
-    () =>
-      aiWorkspaceSessions
-        .map((session) => ({
-          session,
-          state: aiWorkspaceSessionStateMap[session.id],
-        }))
-        .filter(({ state }) => {
-          if (!state) {
-            return false
-          }
-          return (
-            state.taskStatus !== 'idle' ||
-            Boolean(state.updatedAt) ||
-            Boolean(state.latestWorldPatch) ||
-            Boolean(state.latestCharacterActions?.length)
-          )
-        })
-        .sort((left, right) => {
-          const rank = { running: 0, failed: 1, done: 2, idle: 3 } as const
-          const leftRank = rank[left.state.taskStatus]
-          const rightRank = rank[right.state.taskStatus]
-          if (leftRank !== rightRank) {
-            return leftRank - rightRank
-          }
-          return (right.state.updatedAt ?? '').localeCompare(left.state.updatedAt ?? '')
-        }),
-    [aiWorkspaceSessionStateMap, aiWorkspaceSessions],
-  )
-  const runningAITaskCount = aiWorkspaceTasks.filter((item) => item.state.taskStatus === 'running').length
-  const failedAITaskCount = aiWorkspaceTasks.filter((item) => item.state.taskStatus === 'failed').length
-  const showProjectAITaskDock = isProjectScoped && !isAIWorkspaceRoute && aiWorkspaceTasks.length > 0
   const scopedEditorAIDraft =
     editorAIDraftContext?.projectId === projectId && editorAIDraftContext?.chapterId === chapterId
       ? editorAIDraftContext
       : null
+  const currentAIScopeKey = projectId && chapterId ? `${projectId}:${chapterId}` : null
   const selectedModelId = aiState.modelId.trim() || runtimeSettingsQuery.data?.model_id || ''
   const hasSavedRuntimeKey = Boolean(runtimeSettingsQuery.data?.api_key_masked)
+  const hasAIPanelHistory =
+    aiMessages.length > 0 ||
+    Boolean(aiState.result.trim()) ||
+    Boolean(contextPreview) ||
+    aiState.instruction.trim() !== getAIInstruction(scopedEditorUtilityContext)
 
   useEffect(() => {
-    if (!showProjectAITaskDock) {
-      setIsProjectAITaskDrawerOpen(false)
+    if (!currentAIScopeKey) {
+      return
     }
-  }, [showProjectAITaskDock])
+
+    aiPanelSnapshotRef.current[currentAIScopeKey] = {
+      aiState: { ...aiState, isGenerating: false },
+      aiMessages,
+      contextPreview,
+      isContextPreviewOpen,
+      isContextPreviewDialogOpen,
+    }
+    writeAIPanelSnapshots(aiPanelSnapshotRef.current)
+  }, [aiMessages, aiState, contextPreview, currentAIScopeKey, isContextPreviewDialogOpen, isContextPreviewOpen])
+
+  useEffect(() => {
+    const previousScopeKey = previousAIScopeKeyRef.current
+    if (previousScopeKey && previousScopeKey !== currentAIScopeKey) {
+      const previousSnapshot = aiPanelSnapshotRef.current[previousScopeKey]
+      if (previousSnapshot) {
+        aiPanelSnapshotRef.current[previousScopeKey] = {
+          ...previousSnapshot,
+          aiState: {
+            ...previousSnapshot.aiState,
+            isGenerating: false,
+          },
+          contextPreview: null,
+          isContextPreviewOpen: false,
+          isContextPreviewDialogOpen: false,
+        }
+        writeAIPanelSnapshots(aiPanelSnapshotRef.current)
+      }
+    }
+
+    generationAbortRef.current?.abort()
+    generationAbortRef.current = null
+    writeEditorAIPreviewContext(null)
+
+    if (!currentAIScopeKey) {
+      setAIState(buildDefaultAIComposerState(null))
+      setAIMessages([])
+      setContextPreview(null)
+      setIsContextPreviewOpen(false)
+      setIsContextPreviewDialogOpen(false)
+      previousAIScopeKeyRef.current = currentAIScopeKey
+      return
+    }
+
+    const nextSnapshot = aiPanelSnapshotRef.current[currentAIScopeKey]
+    if (nextSnapshot) {
+      setAIState(nextSnapshot.aiState)
+      setAIMessages(nextSnapshot.aiMessages)
+      setContextPreview(nextSnapshot.contextPreview)
+      setIsContextPreviewOpen(nextSnapshot.isContextPreviewOpen)
+      setIsContextPreviewDialogOpen(nextSnapshot.isContextPreviewDialogOpen)
+    } else {
+      setAIState(buildDefaultAIComposerState(scopedEditorUtilityContext))
+      setAIMessages([])
+      setContextPreview(null)
+      setIsContextPreviewOpen(false)
+      setIsContextPreviewDialogOpen(false)
+    }
+
+    previousAIScopeKeyRef.current = currentAIScopeKey
+  }, [currentAIScopeKey])
 
   useEffect(() => {
     setAIState((prev) => ({
       ...prev,
       result: '',
+      isGenerating: false,
+      requestId: prev.isGenerating ? prev.requestId + 1 : prev.requestId,
       instruction: getAIInstruction(scopedEditorUtilityContext),
     }))
-    setAIMessages([])
+    setContextPreview(null)
+    setIsContextPreviewOpen(false)
+    setIsContextPreviewDialogOpen(false)
+    generationAbortRef.current?.abort()
+    generationAbortRef.current = null
+    writeEditorAIPreviewContext(null)
   }, [scopedEditorUtilityContext?.updatedAt])
-
-  const prevChapterIdRef = useRef<string | undefined>(chapterId)
-  useEffect(() => {
-    if (chapterId && prevChapterIdRef.current !== chapterId) {
-      setAIMessages([])
-    }
-    if (chapterId) {
-      prevChapterIdRef.current = chapterId
-    }
-  }, [chapterId])
 
   async function handleLoadModels() {
     setIsLoadingModels(true)
@@ -641,8 +719,69 @@ export function AppShell() {
   }
 
   function handleStopGeneration() {
+    generationAbortRef.current?.abort()
+    generationAbortRef.current = null
     setAIState((prev) => ({ ...prev, isGenerating: false, requestId: prev.requestId + 1 }))
+    if (projectId && chapterId) {
+      writeEditorAIPreviewContext({
+        projectId,
+        chapterId,
+        text: aiState.result,
+        isStreaming: false,
+        updatedAt: new Date().toISOString(),
+      })
+    }
     toast.info('已停止本次 AI 续写')
+  }
+
+  function handleClearCurrentAIPanelHistory() {
+    generationAbortRef.current?.abort()
+    generationAbortRef.current = null
+
+    if (currentAIScopeKey) {
+      delete aiPanelSnapshotRef.current[currentAIScopeKey]
+      writeAIPanelSnapshots(aiPanelSnapshotRef.current)
+    }
+
+    setAIState(buildDefaultAIComposerState(scopedEditorUtilityContext))
+    setAIMessages([])
+    setContextPreview(null)
+    setIsContextPreviewOpen(false)
+    setIsContextPreviewDialogOpen(false)
+    writeEditorAIPreviewContext(null)
+    toast.message('已清空当前章节的 AI 记录')
+  }
+
+  async function handleLoadContextPreview() {
+    if (!projectId || !chapterId) {
+      return
+    }
+
+    const sourceText =
+      (scopedEditorUtilityContext?.action === 'expand'
+        ? scopedEditorUtilityContext.selectedText
+        : scopedEditorAIDraft?.plainText)?.trim() ?? ''
+
+    const payload: AIGeneratePayload = {
+      project_id: projectId,
+      chapter_id: chapterId,
+      text: sourceText,
+      instruction: aiState.instruction.trim() || DEFAULT_CONTINUE_INSTRUCTION,
+      model_provider: runtimeSettingsQuery.data?.provider ?? null,
+      model_id: selectedModelId || null,
+    }
+
+    setIsContextPreviewLoading(true)
+    try {
+      const preview = await getAIContextPreview(payload)
+      setContextPreview(preview)
+      setIsContextPreviewOpen(true)
+      setIsContextPreviewDialogOpen(false)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '上下文预览加载失败')
+    } finally {
+      setIsContextPreviewLoading(false)
+    }
   }
 
   async function handleGenerate() {
@@ -650,11 +789,16 @@ export function AppShell() {
       return
     }
 
+    generationAbortRef.current?.abort()
+    const abortController = new AbortController()
+    generationAbortRef.current = abortController
+
     const sourceText = (scopedEditorUtilityContext?.action === 'expand' ? scopedEditorUtilityContext.selectedText : scopedEditorAIDraft?.plainText)?.trim() ?? ''
 
     const submittedInstruction = aiState.instruction.trim() || DEFAULT_CONTINUE_INSTRUCTION
     const requestId = aiState.requestId + 1
     const assistantMessageId = `assistant-${requestId}`
+    let accumulatedResult = ''
 
     setAIMessages((prev) => [
       ...prev,
@@ -670,6 +814,13 @@ export function AppShell() {
       },
     ])
     setAIState((prev) => ({ ...prev, result: '', isGenerating: true, requestId }))
+    writeEditorAIPreviewContext({
+      projectId,
+      chapterId,
+      text: '',
+      isStreaming: true,
+      updatedAt: new Date().toISOString(),
+    })
 
     const payload: AIGeneratePayload = {
       project_id: projectId,
@@ -681,37 +832,70 @@ export function AppShell() {
     }
 
     try {
-      await streamGenerate(payload, (chunk) => {
-        setAIState((prev) => {
-          if (prev.requestId !== requestId || !prev.isGenerating) {
-            return prev
-          }
+      await streamGenerate(
+        payload,
+        (chunk) => {
+          accumulatedResult += chunk
+          setAIState((prev) => {
+            if (prev.requestId !== requestId || !prev.isGenerating) {
+              return prev
+            }
 
-          return {
-            ...prev,
-            result: `${prev.result}${chunk}`,
+            return {
+              ...prev,
+              result: accumulatedResult,
+            }
+          })
+          if (projectId && chapterId) {
+            writeEditorAIPreviewContext({
+              projectId,
+              chapterId,
+              text: accumulatedResult,
+              isStreaming: true,
+              updatedAt: new Date().toISOString(),
+            })
           }
+          setAIMessages((prev) =>
+            prev.map((message) =>
+              message.id === assistantMessageId
+                ? { ...message, content: accumulatedResult }
+                : message,
+            ),
+          )
+        },
+        { signal: abortController.signal, timeoutMs: 90_000, retryCount: 1 },
+      )
+
+      if (projectId && chapterId) {
+        writeEditorAIPreviewContext({
+          projectId,
+          chapterId,
+          text: accumulatedResult,
+          isStreaming: false,
+          updatedAt: new Date().toISOString(),
         })
+      }
+      setAIState((prev) => (prev.requestId === requestId ? { ...prev, isGenerating: false } : prev))
+    } catch (error) {
+      const normalizedError = normalizeAIError(error)
+      setAIState((prev) => (prev.requestId === requestId ? { ...prev, isGenerating: false } : prev))
+      if (isAbortError(normalizedError)) {
+        setAIMessages((prev) => prev.filter((message) => message.id !== assistantMessageId || message.content.trim()))
+        toast.message('已停止本次 AI 续写')
+      } else {
         setAIMessages((prev) =>
           prev.map((message) =>
-            message.id === assistantMessageId
-              ? { ...message, content: `${message.content}${chunk}` }
+            message.id === assistantMessageId && !message.content.trim()
+              ? { ...message, content: normalizedError instanceof Error ? normalizedError.message : 'AI 续写失败' }
               : message,
           ),
         )
-      })
-
-      setAIState((prev) => (prev.requestId === requestId ? { ...prev, isGenerating: false } : prev))
-    } catch (error) {
-      setAIState((prev) => (prev.requestId === requestId ? { ...prev, isGenerating: false } : prev))
-      setAIMessages((prev) =>
-        prev.map((message) =>
-          message.id === assistantMessageId && !message.content.trim()
-            ? { ...message, content: error instanceof Error ? error.message : 'AI 续写失败' }
-            : message,
-        ),
-      )
-      toast.error(error instanceof Error ? error.message : 'AI 续写失败')
+        toast.error(normalizedError instanceof Error ? normalizedError.message : 'AI 续写失败')
+      }
+    } finally {
+      if (generationAbortRef.current === abortController) {
+        generationAbortRef.current = null
+      }
     }
   }
 
@@ -728,17 +912,7 @@ export function AppShell() {
       mode: scopedEditorUtilityContext?.action === 'expand' ? 'append-after-selection' : 'append-chapter',
       selectionAction: scopedEditorUtilityContext?.action ?? null,
     })
-    setAIState((prev) => ({ ...prev, result: '', isGenerating: false }))
-  }
-
-  function handleDiscardGeneratedText() {
-    if (projectId && chapterId) {
-      dispatchEditorAICommand({
-        projectId,
-        chapterId,
-        type: 'discard-generated-text',
-      })
-    }
+    writeEditorAIPreviewContext(null)
     setAIState((prev) => ({ ...prev, result: '', isGenerating: false }))
   }
 
@@ -762,18 +936,19 @@ export function AppShell() {
     const primaryLabel = scopedEditorUtilityContext?.action === 'expand' ? '选区扩写' : '章节续写'
     const resultApplyLabel = scopedEditorUtilityContext?.action === 'expand' ? '插入到选区后' : '追加到正文'
     return (
-      <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
-        <div className="mb-4 flex items-center justify-between">
+      <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-[#fcfcfd]">
+        <div className="flex items-center justify-between border-b border-[#eef0f3] px-4 py-3">
           <SectionLabel>AI 侧栏</SectionLabel>
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={handleOpenModelDialog}
-              disabled={isLoadingModels || !hasSavedRuntimeKey || runtimeSettingsQuery.isLoading}
-              className="inline-flex h-8 items-center justify-center rounded-full border border-[#d1d5db] bg-white px-3 text-[11px] text-[#4b5563] transition hover:border-[#9ca3af] hover:text-[#111827] disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {isLoadingModels ? '加载中' : '模型'}
-            </button>
+            {hasAIPanelHistory ? (
+              <button
+                type="button"
+                onClick={handleClearCurrentAIPanelHistory}
+                className="inline-flex h-8 items-center justify-center rounded-full border border-[#d1d5db] bg-white px-3 text-[11px] text-[#4b5563] transition hover:border-[#9ca3af] hover:text-[#111827]"
+              >
+                清空记录
+              </button>
+            ) : null}
             <button
               type="button"
               onClick={() => onClose?.()}
@@ -784,7 +959,7 @@ export function AppShell() {
           </div>
         </div>
 
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[24px] border border-[#e5e7eb] bg-[#fcfcfd] shadow-[0_12px_28px_rgba(15,23,42,0.04)]">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
           <div className="border-b border-[#eef0f3] px-4 py-4">
             <div className="flex items-start gap-3">
               <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
@@ -793,54 +968,52 @@ export function AppShell() {
               <div className="min-w-0">
                 <div className="text-sm font-semibold text-[#111827]">{primaryLabel}</div>
                 <div className="mt-1 text-xs leading-5 text-[#6b7280]">
-                  当前模型：{selectedModelId}
-                  {!hasSavedRuntimeKey ? '，请先在设置中心保存 API Key。' : ''}
+                  {!hasSavedRuntimeKey
+                    ? '请先在设置中心保存 API Key 后再开始生成。'
+                    : '补充续写目标、情绪和限制条件后即可开始生成。'}
                 </div>
               </div>
             </div>
           </div>
 
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4">
-            <div className="space-y-4">
-              {scopedEditorUtilityContext ? (
-                <div className="mr-8 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
-                  <div className="mb-1 text-[11px] uppercase tracking-[0.18em] text-amber-700">
-                    {actionLabelMap[scopedEditorUtilityContext.action]}
+            <div className="flex min-h-full flex-col justify-end">
+              <div className="space-y-4">
+                {scopedEditorUtilityContext ? (
+                  <div className="mr-8 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
+                    <div className="mb-1 text-[11px] uppercase tracking-[0.18em] text-amber-700">
+                      {actionLabelMap[scopedEditorUtilityContext.action]}
+                    </div>
+                    <div className="text-sm leading-6 text-[#4b5563]">{scopedEditorUtilityContext.selectedText}</div>
                   </div>
-                  <div className="text-sm leading-6 text-[#4b5563]">{scopedEditorUtilityContext.selectedText}</div>
-                </div>
-              ) : null}
+                ) : null}
 
-              {aiMessages.length === 0 ? null : null}
-
-              {aiMessages.map((message) => (
-                <div key={message.id} className={clsx('flex', message.role === 'user' ? 'justify-end' : 'justify-start')}>
-                  <div
-                    className={clsx(
-                      'max-w-[88%] rounded-2xl px-4 py-3 text-sm leading-6',
-                      message.role === 'user'
-                        ? 'bg-[#111827] text-white'
-                        : 'border border-[#e5e7eb] bg-white text-[#374151]',
-                    )}
-                  >
-                    {message.content.trim() || (message.role === 'assistant' && aiState.isGenerating ? '正在生成...' : '')}
+                {aiMessages.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-[#d1d5db] bg-white/80 px-4 py-5 text-sm leading-6 text-[#6b7280]">
+                    暂无对话。直接输入这次续写的目标、情绪推进、禁用内容或文风限制，消息区会优先保留给生成结果。
                   </div>
-                </div>
-              ))}
+                ) : null}
+
+                {aiMessages.map((message) => (
+                  <div key={message.id} className={clsx('flex', message.role === 'user' ? 'justify-end' : 'justify-start')}>
+                    <div
+                      className={clsx(
+                        'max-w-[92%] rounded-2xl px-4 py-3 text-sm leading-6',
+                        message.role === 'user'
+                          ? 'bg-[#111827] text-white'
+                          : 'border border-[#e5e7eb] bg-white text-[#374151]',
+                      )}
+                    >
+                      {message.content.trim() || (message.role === 'assistant' && aiState.isGenerating ? '正在生成...' : '')}
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
 
-          <div className="border-t border-[#eef0f3] bg-white px-4 py-4">
-            <div className="mb-3 flex flex-wrap items-center gap-2">
-              <span className="rounded-full border border-[#d1d5db] bg-[#f9fafb] px-3 py-1 text-[11px] text-[#6b7280]">
-                {primaryLabel}
-              </span>
-              <span className="rounded-full border border-[#d1d5db] bg-[#f9fafb] px-3 py-1 text-[11px] text-[#6b7280]">
-                模型 {selectedModelId}
-              </span>
-            </div>
-
-            <div className="rounded-[20px] border border-[#d1d5db] bg-[#fcfcfd] p-3">
+          <div className="border-t border-[#eef0f3] bg-white px-4 py-3">
+            <div className="rounded-[18px] border border-[#d1d5db] bg-[#fcfcfd] p-3">
               <textarea
                 value={aiState.instruction}
                 onChange={(event) => setAIState((prev) => ({ ...prev, result: '', instruction: event.target.value }))}
@@ -852,57 +1025,116 @@ export function AppShell() {
                     }
                   }
                 }}
-                rows={4}
-                className="min-h-[96px] w-full resize-none border-none bg-transparent text-sm leading-6 text-[#111827] outline-none placeholder:text-[#9ca3af]"
+                rows={3}
+                className="min-h-[72px] w-full resize-none border-none bg-transparent text-sm leading-6 text-[#111827] outline-none placeholder:text-[#9ca3af]"
                 placeholder="描述续写目标、情绪、节奏或限制条件。按 Enter 发送，Shift+Enter 换行。"
               />
 
-              <div className="mt-3 grid grid-cols-2 gap-2">
+              <div className="mt-3 flex items-center justify-between gap-2 border-t border-[#eef0f3] pt-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleOpenModelDialog}
+                    disabled={isLoadingModels || !hasSavedRuntimeKey || runtimeSettingsQuery.isLoading}
+                    className="inline-flex h-8 items-center gap-2 rounded-full border border-[#d1d5db] bg-white px-3 text-[11px] text-[#4b5563] transition hover:border-[#9ca3af] hover:text-[#111827] disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <span className="max-w-[180px] truncate">
+                      {isLoadingModels ? '加载模型中...' : selectedModelId || '选择模型'}
+                    </span>
+                    <ChevronRight className="size-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleLoadContextPreview()}
+                    disabled={isContextPreviewLoading || aiState.isGenerating}
+                    className="inline-flex h-8 items-center gap-2 rounded-full border border-[#d1d5db] bg-white px-3 text-[11px] text-[#4b5563] transition hover:border-[#9ca3af] hover:text-[#111827] disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {isContextPreviewLoading ? <LoaderCircle className="size-3 animate-spin" /> : <BookCopy className="size-3.5" />}
+                    上下文预览
+                  </button>
+                </div>
+                {aiState.result.trim() && !aiState.isGenerating ? (
+                  <button
+                    type="button"
+                    onClick={handleApplyGeneratedText}
+                    className="inline-flex h-9 items-center justify-center rounded-xl bg-[#111827] px-4 text-xs font-medium text-white transition hover:bg-[#1f2937]"
+                  >
+                    {resultApplyLabel}
+                  </button>
+                ) : null}
+              </div>
+
+              <div className="mt-3">
                 <button
                   type="button"
-                  onClick={handleStopGeneration}
-                  disabled={!aiState.isGenerating}
-                  className="inline-flex h-9 items-center justify-center rounded-xl border border-[#d1d5db] bg-white px-3 text-xs text-[#4b5563] transition hover:border-[#9ca3af] hover:text-[#111827] disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  停止
-                </button>
-                <button
-                  type="button"
-                  onClick={handleDiscardGeneratedText}
-                  disabled={!aiState.result.trim() && !aiState.isGenerating}
-                  className="inline-flex h-9 items-center justify-center rounded-xl border border-[#d1d5db] bg-white px-3 text-xs text-[#4b5563] transition hover:border-[#9ca3af] hover:text-[#111827] disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  丢弃
-                </button>
-                <button
-                  type="button"
-                  onClick={handleApplyGeneratedText}
-                  disabled={!aiState.result.trim() || aiState.isGenerating}
-                  className="inline-flex h-9 items-center justify-center rounded-xl bg-[#111827] px-3 text-xs font-medium text-white transition hover:bg-[#1f2937] disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {resultApplyLabel}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void handleGenerate()}
-                  disabled={aiState.isGenerating}
-                  className="inline-flex h-9 items-center justify-center gap-2 rounded-xl bg-emerald-500 px-3 text-xs font-medium text-white transition hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-50"
+                  onClick={() => {
+                    if (aiState.isGenerating) {
+                      handleStopGeneration()
+                      return
+                    }
+                    void handleGenerate()
+                  }}
+                  className={clsx(
+                    'inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl px-3 text-sm font-medium text-white transition',
+                    aiState.isGenerating ? 'bg-[#f59e0b] hover:bg-[#d97706]' : 'bg-emerald-500 hover:bg-emerald-600',
+                  )}
                 >
                   {aiState.isGenerating ? <LoaderCircle className="size-3.5 animate-spin" /> : <SendHorizontal className="size-3.5" />}
-                  发送
+                  {aiState.isGenerating ? '停止生成' : '发送'}
                 </button>
               </div>
+
+              {contextPreview ? (
+                <div className="mt-3 rounded-[18px] border border-[#dbe3ea] bg-white">
+                  <button
+                    type="button"
+                    onClick={() => setIsContextPreviewOpen((prev) => !prev)}
+                    className="flex w-full items-center justify-between px-3 py-2 text-left"
+                  >
+                    <div>
+                      <div className="text-xs font-medium text-[#111827]">上下文预览</div>
+                      <div className="mt-0.5 text-[11px] text-[#6b7280]">
+                        intent: {contextPreview.intent} ? sections: {contextPreview.sections.length}
+                      </div>
+                    </div>
+                    <ChevronDown className={clsx('size-4 text-[#6b7280] transition', isContextPreviewOpen && 'rotate-180')} />
+                  </button>
+                  {isContextPreviewOpen ? (
+                    <div className="space-y-3 border-t border-[#eef0f3] px-3 py-3">
+                      <div className="grid grid-cols-2 gap-2 text-[11px] text-[#6b7280]">
+                        <div>recent memory: {contextPreview.metadata.recent_memory_count ?? 0}</div>
+                        <div>story memory: {contextPreview.metadata.has_story_memory ? 'yes' : 'no'}</div>
+                        <div>chapter found: {contextPreview.metadata.chapter_found ? 'yes' : 'no'}</div>
+                        <div>prev tail: {contextPreview.metadata.has_previous_chapter_tail ? 'yes' : 'no'}</div>
+                      </div>
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="text-[11px] text-[#6b7280]">侧栏仅展示摘要，完整内容可在弹窗中查看。</div>
+                        <button
+                          type="button"
+                          onClick={() => setIsContextPreviewDialogOpen(true)}
+                          className="inline-flex h-7 items-center rounded-full border border-[#d1d5db] bg-white px-3 text-[11px] text-[#4b5563] transition hover:border-[#9ca3af] hover:text-[#111827]"
+                        >
+                          全量查看
+                        </button>
+                      </div>
+                      <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
+                        {contextPreview.sections.map((section) => (
+                          <div key={section.title} className="rounded-2xl border border-[#eef0f3] bg-[#fcfcfd] px-3 py-3">
+                            <div className="mb-1 text-[11px] uppercase tracking-[0.18em] text-[#6b7280]">{section.title}</div>
+                            <pre className="max-h-32 overflow-y-auto whitespace-pre-wrap break-words text-xs leading-6 text-[#374151]">{section.content}</pre>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="rounded-2xl border border-[#dbe3ea] bg-[#f8fafc] px-3 py-3">
+                        <div className="mb-1 text-[11px] uppercase tracking-[0.18em] text-[#6b7280]">Final Instruction</div>
+                        <pre className="max-h-56 overflow-y-auto whitespace-pre-wrap break-words text-xs leading-6 text-[#111827]">{contextPreview.final_instruction}</pre>
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
 
-            <div className="mt-3 grid gap-2">
-              <NavLink
-                to={getToolboxPath('continue', projectId, chapterId)}
-                onClick={onClose}
-                className="inline-flex h-9 items-center justify-center rounded-xl border border-[#d1d5db] bg-white px-3 text-xs text-[#4b5563] transition hover:border-[#9ca3af] hover:text-[#111827]"
-              >
-                打开 AI 工具箱
-              </NavLink>
-            </div>
           </div>
         </div>
       </div>
@@ -925,9 +1157,58 @@ export function AppShell() {
     />
   )
 
+  const contextPreviewDialog = contextPreview ? (
+    <Dialog open={isContextPreviewDialogOpen} onOpenChange={setIsContextPreviewDialogOpen}>
+      <DialogContent className="max-w-5xl gap-0 overflow-hidden p-0">
+        <DialogHeader className="border-b border-border px-6 py-5">
+          <DialogTitle>上下文预览</DialogTitle>
+        </DialogHeader>
+        <div className="max-h-[78vh] space-y-4 overflow-y-auto px-6 py-5">
+          <div className="grid grid-cols-2 gap-3 text-xs text-muted-foreground">
+            <div>intent: {contextPreview.intent}</div>
+            <div>sections: {contextPreview.sections.length}</div>
+            <div>recent memory: {contextPreview.metadata.recent_memory_count ?? 0}</div>
+            <div>story memory: {contextPreview.metadata.has_story_memory ? 'yes' : 'no'}</div>
+            <div>chapter found: {contextPreview.metadata.chapter_found ? 'yes' : 'no'}</div>
+            <div>prev tail: {contextPreview.metadata.has_previous_chapter_tail ? 'yes' : 'no'}</div>
+          </div>
+          <div className="space-y-3">
+            {contextPreview.sections.map((section) => (
+              <div key={section.title} className="rounded-2xl border border-border bg-background px-4 py-4">
+                <div className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground">{section.title}</div>
+                <pre className="whitespace-pre-wrap break-words text-sm leading-7 text-foreground">{section.content}</pre>
+              </div>
+            ))}
+          </div>
+          <div className="rounded-2xl border border-border bg-muted/25 px-4 py-4">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Final Instruction</div>
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(contextPreview.final_instruction)
+                    toast.success('已复制完整上下文指令')
+                  } catch {
+                    toast.error('复制失败')
+                  }
+                }}
+                className="inline-flex h-7 items-center rounded-full border border-border bg-background px-3 text-[11px] text-foreground/75 transition hover:border-primary/35 hover:text-foreground"
+              >
+                复制
+              </button>
+            </div>
+            <pre className="whitespace-pre-wrap break-words text-sm leading-7 text-foreground">{contextPreview.final_instruction}</pre>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  ) : null
+
   return (
     <div className="flex h-screen bg-background text-foreground selection:bg-primary/15 selection:text-foreground">
       {modelDialog}
+      {contextPreviewDialog}
       <aside className="flex w-[88px] shrink-0 flex-col items-center border-r border-border bg-[#f6f1e8] px-3 py-5">
         <div className="flex size-12 items-center justify-center rounded-2xl border border-primary/15 bg-primary/10 text-primary shadow-[0_12px_30px_rgba(16,185,129,0.08)]">
           <Sparkles className="size-4" />
@@ -1156,21 +1437,6 @@ export function AppShell() {
             )}
           >
             <Outlet />
-            {showProjectAITaskDock ? (
-              <ProjectAITaskDock
-                projectId={projectId ?? ''}
-                tasks={aiWorkspaceTasks}
-                runningCount={runningAITaskCount}
-                failedCount={failedAITaskCount}
-                isExpanded={isProjectAITaskDrawerOpen}
-                onToggleExpanded={() => setIsProjectAITaskDrawerOpen((prev) => !prev)}
-                onOpenSession={(sessionId) => {
-                  workspaceAIActions.setActiveSessionId(sessionId)
-                  workspaceAIActions.setDetailTab('task')
-                  setIsProjectAITaskDrawerOpen(true)
-                }}
-              />
-            ) : null}
           </main>
         </div>
 
@@ -1284,10 +1550,10 @@ export function AppShell() {
               }}
             />
             <aside
-              className="ml-3 flex h-full flex-col border-l border-border bg-card/96"
+              className="ml-3 flex h-full flex-col border-l border-border bg-[#fcfcfd]"
               style={{ width: aiPanelWidth - 12 }}
             >
-              <div className="min-h-0 flex-1 px-5 py-5">{renderAIPanel(closeAIPanel)}</div>
+              <div className="min-h-0 flex-1">{renderAIPanel(closeAIPanel)}</div>
             </aside>
           </div>
         ) : null}
@@ -1493,10 +1759,10 @@ export function AppShell() {
           aria-hidden="true"
         >
           <aside
-            className="ml-auto flex h-full w-[min(92vw,440px)] flex-col border-l border-[#e5e7eb] bg-white shadow-2xl shadow-black/10"
+            className="ml-auto flex h-full w-[min(92vw,440px)] flex-col border-l border-[#e5e7eb] bg-[#fcfcfd] shadow-2xl shadow-black/10"
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="min-h-0 flex-1 px-5 py-5">{renderAIPanel(closeAIPanel)}</div>
+            <div className="min-h-0 flex-1">{renderAIPanel(closeAIPanel)}</div>
           </aside>
         </div>
       ) : null}
@@ -1632,222 +1898,4 @@ function UtilityInfoCard({
   )
 }
 
-function ProjectAITaskDock({
-  projectId,
-  tasks,
-  runningCount,
-  failedCount,
-  isExpanded,
-  onToggleExpanded,
-  onOpenSession,
-}: {
-  projectId: string
-  tasks: Array<{ session: ProjectAIWorkspaceSession; state: ProjectAIWorkspaceSessionState }>
-  runningCount: number
-  failedCount: number
-  isExpanded: boolean
-  onToggleExpanded: () => void
-  onOpenSession: (sessionId: string) => void
-}) {
-  const dockRef = useRef<HTMLDivElement | null>(null)
-  const [dockPosition, setDockPosition] = useState<{ x: number; y: number } | null>(null)
-  const dragRef = useRef<{ offsetX: number; offsetY: number } | null>(null)
-  const visibleTasks = isExpanded ? tasks : []
-  const pendingResultCount = tasks.filter(
-    ({ state }) =>
-      state.taskStatus === 'done' && (Boolean(state.latestWorldPatch) || Boolean(state.latestCharacterActions?.length)),
-  ).length
-
-  useEffect(() => {
-    function handlePointerMove(event: PointerEvent) {
-      const drag = dragRef.current
-      const dock = dockRef.current
-      if (!drag || !dock) {
-        return
-      }
-
-      const rect = dock.getBoundingClientRect()
-      const margin = 12
-      const nextX = Math.min(
-        Math.max(event.clientX - drag.offsetX, margin),
-        Math.max(window.innerWidth - rect.width - margin, margin),
-      )
-      const nextY = Math.min(
-        Math.max(event.clientY - drag.offsetY, margin),
-        Math.max(window.innerHeight - rect.height - margin, margin),
-      )
-      setDockPosition({ x: nextX, y: nextY })
-    }
-
-    function handlePointerUp() {
-      dragRef.current = null
-      document.body.style.userSelect = ''
-    }
-
-    window.addEventListener('pointermove', handlePointerMove)
-    window.addEventListener('pointerup', handlePointerUp)
-    window.addEventListener('pointercancel', handlePointerUp)
-    return () => {
-      window.removeEventListener('pointermove', handlePointerMove)
-      window.removeEventListener('pointerup', handlePointerUp)
-      window.removeEventListener('pointercancel', handlePointerUp)
-    }
-  }, [])
-
-  function handleDragStart(event: React.PointerEvent<HTMLDivElement>) {
-    if (event.button !== 0 || !dockRef.current) {
-      return
-    }
-
-    const rect = dockRef.current.getBoundingClientRect()
-    dragRef.current = {
-      offsetX: event.clientX - rect.left,
-      offsetY: event.clientY - rect.top,
-    }
-    setDockPosition({ x: rect.left, y: rect.top })
-    document.body.style.userSelect = 'none'
-  }
-
-  return (
-    <div
-      ref={dockRef}
-      className="fixed z-50"
-      style={
-        dockPosition
-          ? { left: dockPosition.x, top: dockPosition.y }
-          : { right: 24, bottom: 24 }
-      }
-    >
-      <div
-        className={clsx(
-          'border border-border bg-card/96 p-3 shadow-xl shadow-black/10 backdrop-blur',
-          isExpanded ? 'w-[min(420px,calc(100vw-24px))] rounded-2xl' : 'max-w-[calc(100vw-24px)] rounded-full',
-        )}
-      >
-        <div className="flex items-center justify-between gap-3">
-          <div className="min-w-0">
-            <div
-              className={clsx('cursor-move touch-none text-xs uppercase tracking-[0.18em] text-muted-foreground', !isExpanded && 'sr-only')}
-              onPointerDown={handleDragStart}
-              title="拖动任务窗"
-            >
-              AI Tasks
-            </div>
-            <div
-              className={clsx('flex cursor-move touch-none flex-wrap items-center gap-2 text-sm text-foreground', isExpanded && 'mt-1')}
-              onPointerDown={handleDragStart}
-              title="拖动任务窗"
-            >
-              <span className="font-medium">项目会话</span>
-              {runningCount > 0 ? (
-                <span className="rounded-full border border-sky-500/20 bg-sky-500/10 px-2 py-0.5 text-xs text-sky-300">
-                  运行中 {runningCount}
-                </span>
-              ) : null}
-              {failedCount > 0 ? (
-                <span className="rounded-full border border-rose-500/20 bg-rose-500/10 px-2 py-0.5 text-xs text-rose-300">
-                  异常 {failedCount}
-                </span>
-              ) : null}
-              {pendingResultCount > 0 ? (
-                <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-xs text-emerald-300">
-                  待处理 {pendingResultCount}
-                </span>
-              ) : null}
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={onToggleExpanded}
-              className="inline-flex h-8 items-center gap-1 rounded-lg border border-border bg-background px-3 text-xs text-foreground transition hover:bg-muted"
-            >
-              {isExpanded ? <PanelBottomClose className="size-3.5" /> : <PanelBottomOpen className="size-3.5" />}
-              {isExpanded ? '收起' : '展开'}
-            </button>
-            <Link
-              to={`/projects/${projectId}/ai-workspace`}
-              className="inline-flex h-8 items-center rounded-lg border border-border bg-background px-3 text-xs text-foreground transition hover:bg-muted"
-            >
-              打开工作区
-            </Link>
-          </div>
-        </div>
-
-        {isExpanded ? (
-          <div className="mt-3 space-y-2">
-            {visibleTasks.map(({ session, state }) => (
-              <Link
-                key={session.id}
-                to={`/projects/${projectId}/ai-workspace`}
-                onClick={() => onOpenSession(session.id)}
-                className="flex items-center justify-between gap-3 rounded-xl border border-border bg-background/90 px-3 py-2 transition hover:border-primary/20 hover:bg-muted/35"
-              >
-                <div className="min-w-0">
-                  <div className="truncate text-sm font-medium text-foreground">{session.title}</div>
-                  <div className="truncate text-xs text-muted-foreground">
-                    {session.assetType === 'project_character' ? '角色助手' : '世界观助手'}
-                    {state.updatedAt ? ` · ${new Date(state.updatedAt).toLocaleTimeString('zh-CN')}` : ''}
-                  </div>
-                </div>
-                <TaskStatusBadge
-                  status={state.taskStatus}
-                  hasPendingResult={Boolean(state.latestWorldPatch) || Boolean(state.latestCharacterActions?.length)}
-                />
-              </Link>
-            ))}
-          </div>
-        ) : null}
-      </div>
-    </div>
-  )
-}
-
-function TaskStatusBadge({
-  status,
-  hasPendingResult = false,
-}: {
-  status: ProjectAIWorkspaceSessionState['taskStatus']
-  hasPendingResult?: boolean
-}) {
-  if (status === 'running') {
-    return (
-      <span className="inline-flex items-center gap-1 rounded-full border border-sky-500/20 bg-sky-500/10 px-2 py-1 text-xs text-sky-300">
-        <LoaderCircle className="size-3 animate-spin" />
-        运行中
-      </span>
-    )
-  }
-
-  if (status === 'failed') {
-    return (
-      <span className="inline-flex items-center gap-1 rounded-full border border-rose-500/20 bg-rose-500/10 px-2 py-1 text-xs text-rose-300">
-        <Bot className="size-3" />
-        异常
-      </span>
-    )
-  }
-
-  if (status === 'done') {
-    return (
-      <span
-        className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-xs ${
-          hasPendingResult
-            ? 'border-amber-500/20 bg-amber-500/10 text-amber-300'
-            : 'border-emerald-500/20 bg-emerald-500/10 text-emerald-300'
-        }`}
-      >
-        <CheckCircle2 className="size-3" />
-        {hasPendingResult ? '待处理' : '已完成'}
-      </span>
-    )
-  }
-
-  return (
-    <span className="inline-flex items-center gap-1 rounded-full border border-border bg-muted px-2 py-1 text-xs text-muted-foreground">
-      <Clock3 className="size-3" />
-      空闲
-    </span>
-  )
-}
 

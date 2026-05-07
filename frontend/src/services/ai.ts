@@ -1,4 +1,4 @@
-import type { AIGeneratePayload } from '@/types/api'
+import type { AIGeneratePayload, AIContextPreviewResponse } from '@/types/api'
 import { apiClient } from '@/lib/api-client'
 
 export interface AIRuntimeSettings {
@@ -45,6 +45,11 @@ export interface AIRuntimeCapabilityCheckResponse {
 
 interface AIGenerateOnceResponse {
   content: string
+}
+
+export async function getAIContextPreview(payload: AIGeneratePayload) {
+  const { data } = await apiClient.post<AIContextPreviewResponse>('/ai/context-preview', payload)
+  return data
 }
 
 export async function getAIRuntimeSettings() {
@@ -100,6 +105,18 @@ function createTimeoutController(timeoutMs: number, externalSignal?: AbortSignal
 
 export function isAbortError(error: unknown) {
   return error instanceof DOMException && error.name === 'AbortError'
+}
+
+function isStreamAbortedError(error: unknown) {
+  return error instanceof Error && /BodyStreamBuffer was aborted|aborted/i.test(error.message)
+}
+
+export function normalizeAIError(error: unknown) {
+  if (isAbortError(error) || isStreamAbortedError(error)) {
+    return new DOMException('AI generation aborted', 'AbortError')
+  }
+
+  return error instanceof Error ? error : new Error('AI 生成失败')
 }
 
 async function generateTextOnce(payload: AIGeneratePayload, signal?: AbortSignal) {
@@ -183,8 +200,9 @@ export async function streamGenerate(
       return
     } catch (error) {
       timeoutController.dispose()
-      if (isAbortError(error)) {
-        throw error
+      const normalizedError = normalizeAIError(error)
+      if (isAbortError(normalizedError)) {
+        throw normalizedError
       }
 
       if (attempt === retryCount) {

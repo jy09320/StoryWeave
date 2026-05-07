@@ -1,10 +1,12 @@
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
 from app.core.database import get_db
-from app.models.project import Chapter, ChapterVersion, Project
+from app.models.project import Chapter, ChapterVersion, DocumentChunk, Project
 from app.models.user import User
 from app.schemas.project import (
     ChapterCreate,
@@ -13,8 +15,12 @@ from app.schemas.project import (
     ChapterUpdate,
     ChapterVersionResponse,
 )
+from app.services.chapter_chunk_service import chapter_chunk_service
+from app.services.chapter_memory_service import chapter_memory_service
+from app.services.story_memory_service import story_memory_service
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 async def _require_project(project_id: str, user_id: str, db: AsyncSession) -> Project:
@@ -37,6 +43,21 @@ async def _require_chapter(chapter_id: str, user_id: str, db: AsyncSession) -> C
     if not chapter:
         raise HTTPException(status_code=404, detail="Chapter not found")
     return chapter
+
+
+async def _refresh_story_memory_for_chapter(db: AsyncSession, chapter: Chapter) -> None:
+    try:
+        await chapter_chunk_service.refresh_for_chapter(db, chapter_id=chapter.id)
+        memory = await chapter_memory_service.refresh_for_chapter(db, chapter_id=chapter.id)
+        await story_memory_service.refresh_for_project(
+            db,
+            project_id=chapter.project_id,
+            updated_from_chapter_id=chapter.id if memory is not None else None,
+        )
+    except Exception:
+        # Context refresh is best-effort in Phase 2 and should not block chapter writes.
+        logger.exception("Context refresh failed for chapter=%s", chapter.id)
+        return
 
 
 @router.get("/by-project/{project_id}", response_model=list[ChapterResponse])
@@ -76,6 +97,8 @@ async def create_chapter(
         chapter.word_count = len(data.plain_text)
     db.add(chapter)
     await db.commit()
+    await db.refresh(chapter)
+    await _refresh_story_memory_for_chapter(db, chapter)
     await db.refresh(chapter)
     return chapter
 
@@ -117,6 +140,9 @@ async def update_chapter(
 
     await db.commit()
     await db.refresh(chapter)
+    if any(field in update_data for field in {"content", "plain_text", "summary", "notes", "status", "title"}):
+        await _refresh_story_memory_for_chapter(db, chapter)
+        await db.refresh(chapter)
     return chapter
 
 
@@ -140,6 +166,10 @@ async def reorder_chapters(
         if not chapter:
             raise HTTPException(status_code=404, detail=f"Chapter not found: {item.id}")
         chapter.order_index = item.order_index
+
+        chunk_result = await db.execute(select(DocumentChunk).where(DocumentChunk.chapter_id == item.id))
+        for chunk in chunk_result.scalars().all():
+            chunk.chapter_order = item.order_index
 
     await db.commit()
 

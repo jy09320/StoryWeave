@@ -1,5 +1,4 @@
 from collections.abc import AsyncIterator
-import json
 import logging
 from typing import Any
 
@@ -10,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.config import settings
-from app.models.project import Chapter, Project, ProjectCharacter
+from app.models.project import Chapter, ChapterMemory, Project, ProjectCharacter, ProjectStoryMemory
 from app.services.runtime_ai_config import runtime_ai_config_service
 
 logger = logging.getLogger(__name__)
@@ -110,6 +109,82 @@ class AIService:
             lines.append(f"章节备注：{self._clip_text(chapter.notes, 500)}")
         return "\n".join(lines)
 
+    def _build_chapter_memory_section(self, memory: ChapterMemory | None, *, label: str) -> str | None:
+        if not memory:
+            return None
+
+        lines = [label]
+        if memory.summary_short:
+            lines.append(f"简要摘要：{self._clip_text(memory.summary_short, 180)}")
+        if memory.summary_long:
+            lines.append(f"详细摘要：{self._clip_text(memory.summary_long, 420)}")
+
+        key_events = memory.key_events[:4] if memory.key_events else []
+        if key_events:
+            lines.append("关键事件：")
+            for item in key_events:
+                summary = self._clip_text(item.get("summary") or item.get("title"), 140)
+                if summary:
+                    lines.append(f"- {summary}")
+
+        open_loops = memory.open_loops[:3] if memory.open_loops else []
+        if open_loops:
+            lines.append("待推进线索：")
+            for item in open_loops:
+                summary = self._clip_text(item.get("description") or item.get("label"), 120)
+                if summary:
+                    lines.append(f"- {summary}")
+
+        return "\n".join(lines) if len(lines) > 1 else None
+
+    def _build_story_memory_section(self, story_memory: ProjectStoryMemory | None) -> str | None:
+        if not story_memory:
+            return None
+
+        lines = ["长篇主体记忆"]
+        if story_memory.global_plot_summary:
+            lines.append(f"主线进度：{self._clip_text(story_memory.global_plot_summary, 500)}")
+
+        active_conflicts = story_memory.active_conflicts[:4] if story_memory.active_conflicts else []
+        if active_conflicts:
+            lines.append("当前冲突：")
+            for item in active_conflicts:
+                summary = self._clip_text(item.get("description") or item.get("label"), 120)
+                if summary:
+                    lines.append(f"- {summary}")
+
+        character_arcs = story_memory.character_arcs[:4] if story_memory.character_arcs else []
+        if character_arcs:
+            lines.append("角色状态变化：")
+            for item in character_arcs:
+                summary = self._clip_text(
+                    item.get("after") or item.get("summary") or item.get("character_id_or_name") or item.get("name"),
+                    120,
+                )
+                if summary:
+                    lines.append(f"- {summary}")
+
+        global_open_loops = story_memory.global_open_loops[:5] if story_memory.global_open_loops else []
+        if global_open_loops:
+            lines.append("未回收主要伏笔：")
+            for item in global_open_loops:
+                summary = self._clip_text(item.get("description") or item.get("label"), 120)
+                if summary:
+                    lines.append(f"- {summary}")
+
+        return "\n".join(lines) if len(lines) > 1 else None
+
+    def _build_previous_chapter_tail_section(self, previous_chapter: Chapter | None) -> str | None:
+        if not previous_chapter or not previous_chapter.plain_text:
+            return None
+
+        tail = previous_chapter.plain_text.strip()
+        if not tail:
+            return None
+
+        excerpt = tail[-1500:]
+        return f"上一章结尾原文（{previous_chapter.title}）：\n{excerpt}"
+
     def _build_character_context_section(self, project: Project, *, detail_level: str) -> str | None:
         if not project.project_characters:
             return None
@@ -161,59 +236,157 @@ class AIService:
             lines.append(f"补充说明：{self._clip_text(world_setting.extra_notes, 300)}")
         return "\n".join(lines)
 
-    def _build_project_context_block(
+    def _build_intent_guide(self, intent: str) -> str:
+        return {
+            "continue": "当前任务偏向生成续写，请优先延续已有情节、角色口吻与章节节奏。",
+            "rewrite": "当前任务偏向改写润色，请优先保留既有剧情事实，只调整表达、节奏和语气。",
+            "consistency": "当前任务偏向一致性检查，请优先识别角色设定、世界观规则、叙事逻辑和时间线冲突，并给出证据与建议。",
+            "general": "请将以下项目上下文作为约束与参考，避免脱离既有设定。",
+        }[intent]
+
+    async def _load_generation_context(
         self,
+        db: AsyncSession,
         *,
-        project: Project,
-        chapter: Chapter | None,
-        intent: str,
-    ) -> str | None:
-        sections: list[str] = []
+        project_id: str,
+        chapter_id: str | None,
+        owner_id: str | None = None,
+    ) -> dict[str, Any] | None:
+        project_query = (
+            select(Project)
+            .options(
+                selectinload(Project.project_characters).selectinload(ProjectCharacter.character),
+                selectinload(Project.world_setting),
+                selectinload(Project.story_memory),
+            )
+            .where(Project.id == project_id)
+        )
+        if owner_id:
+            project_query = project_query.where(Project.owner_id == owner_id)
 
-        project_summary = self._build_project_summary_section(project)
-        if project_summary:
-            sections.append(project_summary)
+        result = await db.execute(project_query)
+        project = result.scalar_one_or_none()
+        if not project:
+            return None
 
-        if intent == "continue":
-            chapter_section = self._build_chapter_context_section(chapter, include_notes=True)
-            if chapter_section:
-                sections.append(chapter_section)
-            character_section = self._build_character_context_section(project, detail_level="medium")
-            if character_section:
-                sections.append(character_section)
-            world_section = self._build_world_context_section(project, detail_level="medium")
-            if world_section:
-                sections.append(world_section)
-        elif intent == "rewrite":
-            chapter_section = self._build_chapter_context_section(chapter, include_notes=False)
-            if chapter_section:
-                sections.append(chapter_section)
-            character_section = self._build_character_context_section(project, detail_level="medium")
-            if character_section:
-                sections.append(character_section)
-        elif intent == "consistency":
-            chapter_section = self._build_chapter_context_section(chapter, include_notes=True)
-            if chapter_section:
-                sections.append(chapter_section)
-            character_section = self._build_character_context_section(project, detail_level="full")
-            if character_section:
-                sections.append(character_section)
-            world_section = self._build_world_context_section(project, detail_level="full")
-            if world_section:
-                sections.append(world_section)
+        chapter: Chapter | None = None
+        previous_chapter: Chapter | None = None
+        recent_memories: list[ChapterMemory] = []
+        if chapter_id:
+            chapter_result = await db.execute(
+                select(Chapter).where(Chapter.id == chapter_id, Chapter.project_id == project_id)
+            )
+            chapter = chapter_result.scalar_one_or_none()
+            if chapter:
+                previous_result = await db.execute(
+                    select(Chapter)
+                    .where(Chapter.project_id == project_id, Chapter.order_index < chapter.order_index)
+                    .order_by(Chapter.order_index.desc())
+                    .limit(1)
+                )
+                previous_chapter = previous_result.scalar_one_or_none()
+
+                memory_result = await db.execute(
+                    select(ChapterMemory)
+                    .join(Chapter, Chapter.id == ChapterMemory.chapter_id)
+                    .where(
+                        ChapterMemory.project_id == project_id,
+                        Chapter.order_index < chapter.order_index,
+                    )
+                    .order_by(Chapter.order_index.desc())
+                    .limit(3)
+                )
+                recent_memories = memory_result.scalars().all()
+
+        return {
+            "project": project,
+            "chapter": chapter,
+            "previous_chapter": previous_chapter,
+            "recent_memories": recent_memories,
+            "story_memory": project.story_memory,
+        }
+
+    async def build_generation_context_preview(
+        self,
+        db: AsyncSession,
+        *,
+        project_id: str,
+        chapter_id: str | None,
+        text: str,
+        instruction: str,
+        owner_id: str | None = None,
+    ) -> dict[str, Any]:
+        loaded = await self._load_generation_context(
+            db,
+            project_id=project_id,
+            chapter_id=chapter_id,
+            owner_id=owner_id,
+        )
+        intent = self._detect_generation_intent(instruction, text)
+        if not loaded:
+            return {
+                "intent": intent,
+                "sections": [],
+                "final_instruction": instruction,
+                "metadata": {"project_found": False, "chapter_found": False},
+            }
+
+        project = loaded["project"]
+        chapter = loaded["chapter"]
+        previous_chapter = loaded["previous_chapter"]
+        recent_memories = loaded["recent_memories"]
+        story_memory = loaded["story_memory"]
+
+        sections: list[dict[str, str]] = []
+
+        def add_section(title: str, content: str | None) -> None:
+            if content and content.strip():
+                sections.append({"title": title, "content": content})
+
+        add_section("项目摘要", self._build_project_summary_section(project))
+        add_section("长篇主体记忆", self._build_story_memory_section(story_memory))
+        add_section(
+            "当前章节",
+            self._build_chapter_context_section(chapter, include_notes=intent in {"continue", "consistency"}),
+        )
+        for index, memory in enumerate(recent_memories, start=1):
+            add_section(
+                f"近期剧情记忆 {index}",
+                self._build_chapter_memory_section(memory, label=f"近期剧情记忆 {index}"),
+            )
+        add_section("上一章结尾原文", self._build_previous_chapter_tail_section(previous_chapter))
+        add_section(
+            "角色上下文",
+            self._build_character_context_section(project, detail_level="full" if intent == "consistency" else "medium"),
+        )
+        add_section(
+            "世界观上下文",
+            self._build_world_context_section(project, detail_level="full" if intent == "consistency" else "medium"),
+        )
+
+        context_block = "\n\n".join(section["content"] for section in sections)
+        if context_block:
+            final_instruction = (
+                f"{instruction}\n\n"
+                f"{self._build_intent_guide(intent)}\n"
+                "如果生成内容与上下文冲突，优先保持角色设定、世界观规则、章节记忆和长期主线一致。\n\n"
+                f"{context_block}"
+            )
         else:
-            chapter_section = self._build_chapter_context_section(chapter, include_notes=False)
-            if chapter_section:
-                sections.append(chapter_section)
-            character_section = self._build_character_context_section(project, detail_level="medium")
-            if character_section:
-                sections.append(character_section)
-            world_section = self._build_world_context_section(project, detail_level="medium")
-            if world_section:
-                sections.append(world_section)
+            final_instruction = instruction
 
-        context = "\n\n".join(section for section in sections if section.strip())
-        return context or None
+        return {
+            "intent": intent,
+            "sections": sections,
+            "final_instruction": final_instruction,
+            "metadata": {
+                "project_found": True,
+                "chapter_found": chapter is not None,
+                "recent_memory_count": len(recent_memories),
+                "has_previous_chapter_tail": previous_chapter is not None and bool(previous_chapter.plain_text),
+                "has_story_memory": story_memory is not None,
+            },
+        }
 
     async def build_generation_instruction(
         self,
@@ -223,42 +396,17 @@ class AIService:
         chapter_id: str | None,
         text: str,
         instruction: str,
+        owner_id: str | None = None,
     ) -> str:
-        result = await db.execute(
-            select(Project)
-            .options(
-                selectinload(Project.project_characters).selectinload(ProjectCharacter.character),
-                selectinload(Project.world_setting),
-            )
-            .where(Project.id == project_id)
+        preview = await self.build_generation_context_preview(
+            db,
+            project_id=project_id,
+            chapter_id=chapter_id,
+            text=text,
+            instruction=instruction,
+            owner_id=owner_id,
         )
-        project = result.scalar_one_or_none()
-        if not project:
-            return instruction
-
-        chapter: Chapter | None = None
-        if chapter_id:
-            chapter = await db.get(Chapter, chapter_id)
-            if chapter and chapter.project_id != project_id:
-                chapter = None
-
-        intent = self._detect_generation_intent(instruction, text)
-        context_block = self._build_project_context_block(project=project, chapter=chapter, intent=intent)
-        if not context_block:
-            return instruction
-
-        intent_guide = {
-            "continue": "当前任务偏向生成续写，请优先延续已有情节、角色口吻与章节节奏。",
-            "rewrite": "当前任务偏向改写润色，请优先保留既有剧情事实，只调整表达、节奏和语气。",
-            "consistency": "当前任务偏向一致性检查，请优先识别角色设定、世界观规则、叙事逻辑和时间线冲突，并给出证据与建议。",
-            "general": "请将以下项目上下文作为约束与参考，避免脱离既有设定。",
-        }
-        return (
-            f"{instruction}\n\n"
-            f"{intent_guide[intent]}\n"
-            "若生成内容与上下文冲突，优先保持角色设定、世界观规则、章节信息一致。\n"
-            f"{context_block}"
-        )
+        return str(preview["final_instruction"])
 
     async def resolve_runtime_config(
         self,
@@ -541,6 +689,7 @@ class AIService:
             chapter_id=chapter_id,
             text=text,
             instruction=instruction,
+            owner_id=owner_id,
         )
         runtime_config = await self.resolve_runtime_config(db, model_provider, model_id, owner_id)
         provider = str(runtime_config["provider"])
@@ -592,6 +741,7 @@ class AIService:
             chapter_id=chapter_id,
             text=text,
             instruction=instruction,
+            owner_id=owner_id,
         )
         runtime_config = await self.resolve_runtime_config(db, model_provider, model_id, owner_id)
         provider = str(runtime_config["provider"])
@@ -615,6 +765,45 @@ class AIService:
             base_url=base_url,
             text=text,
             instruction=resolved_instruction,
+            model=resolved_model_id,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
+
+    async def generate_plain_text(
+        self,
+        db: AsyncSession,
+        *,
+        text: str,
+        instruction: str,
+        model_provider: str | None,
+        model_id: str | None,
+        temperature: float,
+        max_tokens: int,
+        owner_id: str | None = None,
+    ) -> str:
+        runtime_config = await self.resolve_runtime_config(db, model_provider, model_id, owner_id)
+        provider = str(runtime_config["provider"])
+        resolved_model_id = str(runtime_config["model_id"])
+        api_key = runtime_config["api_key"]
+        base_url = runtime_config["base_url"]
+
+        if provider == "anthropic":
+            return await self.generate_text_anthropic(
+                api_key=api_key,
+                base_url=base_url,
+                text=text,
+                instruction=instruction,
+                model=resolved_model_id,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+
+        return await self._generate_openai_non_stream_text(
+            api_key=api_key,
+            base_url=base_url,
+            text=text,
+            instruction=instruction,
             model=resolved_model_id,
             temperature=temperature,
             max_tokens=max_tokens,

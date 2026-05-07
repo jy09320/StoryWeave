@@ -6,7 +6,7 @@ from sse_starlette.sse import EventSourceResponse
 from app.api.deps import get_current_user
 from app.core.database import get_db
 from app.models.user import User
-from app.schemas.project import AIGenerateRequest
+from app.schemas.project import AIGenerateRequest, AIContextPreviewResponse
 from app.services.ai_service import ai_service
 
 router = APIRouter()
@@ -59,3 +59,20 @@ async def generate_text_once(
         owner_id=current_user.id,
     )
     return {"content": content}
+
+
+@router.post("/context-preview", response_model=AIContextPreviewResponse)
+async def generate_context_preview(
+    req: AIGenerateRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    preview = await ai_service.build_generation_context_preview(
+        db,
+        project_id=req.project_id,
+        chapter_id=req.chapter_id,
+        text=req.text,
+        instruction=req.instruction,
+        owner_id=current_user.id,
+    )
+    return AIContextPreviewResponse(**preview)

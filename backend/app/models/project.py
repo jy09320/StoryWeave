@@ -1,7 +1,7 @@
 import ulid
 from datetime import datetime
 
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import Float, JSON, Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -40,6 +40,16 @@ class Project(Base):
         cascade="all, delete-orphan",
         uselist=False,
     )
+    story_memory: Mapped["ProjectStoryMemory | None"] = relationship(
+        back_populates="project",
+        cascade="all, delete-orphan",
+        uselist=False,
+    )
+    document_chunks: Mapped[list["DocumentChunk"]] = relationship(
+        back_populates="project",
+        cascade="all, delete-orphan",
+        order_by="DocumentChunk.chapter_order, DocumentChunk.chunk_index",
+    )
 
 
 class Chapter(Base):
@@ -60,6 +70,20 @@ class Chapter(Base):
 
     project: Mapped["Project"] = relationship(back_populates="chapters")
     versions: Mapped[list["ChapterVersion"]] = relationship(back_populates="chapter", cascade="all, delete-orphan")
+    memory: Mapped["ChapterMemory | None"] = relationship(
+        back_populates="chapter",
+        cascade="all, delete-orphan",
+        uselist=False,
+    )
+    memory_evidence_links: Mapped[list["MemoryEvidenceLink"]] = relationship(
+        back_populates="source_chapter",
+        cascade="all, delete-orphan",
+    )
+    document_chunks: Mapped[list["DocumentChunk"]] = relationship(
+        back_populates="chapter",
+        cascade="all, delete-orphan",
+        order_by="DocumentChunk.chunk_index",
+    )
 
 
 class ChapterVersion(Base):
@@ -146,3 +170,91 @@ class AIRuntimeSetting(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
+class ChapterMemory(Base):
+    __tablename__ = "chapter_memories"
+    __table_args__ = (UniqueConstraint("chapter_id", name="uq_chapter_memories_chapter_id"),)
+
+    id: Mapped[str] = mapped_column(String(26), primary_key=True, default=generate_ulid)
+    project_id: Mapped[str] = mapped_column(String(26), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
+    chapter_id: Mapped[str] = mapped_column(String(26), ForeignKey("chapters.id", ondelete="CASCADE"), nullable=False)
+    summary_short: Mapped[str | None] = mapped_column(Text)
+    summary_long: Mapped[str | None] = mapped_column(Text)
+    key_events: Mapped[list[dict]] = mapped_column(JSON, nullable=False, default=list)
+    character_state_changes: Mapped[list[dict]] = mapped_column(JSON, nullable=False, default=list)
+    relationship_changes: Mapped[list[dict]] = mapped_column(JSON, nullable=False, default=list)
+    open_loops: Mapped[list[dict]] = mapped_column(JSON, nullable=False, default=list)
+    resolved_loops: Mapped[list[dict]] = mapped_column(JSON, nullable=False, default=list)
+    timeline_markers: Mapped[list[dict]] = mapped_column(JSON, nullable=False, default=list)
+    important_objects: Mapped[list[dict]] = mapped_column(JSON, nullable=False, default=list)
+    knowledge_state_changes: Mapped[list[dict]] = mapped_column(JSON, nullable=False, default=list)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+
+    project: Mapped["Project"] = relationship()
+    chapter: Mapped["Chapter"] = relationship(back_populates="memory")
+
+
+class ProjectStoryMemory(Base):
+    __tablename__ = "project_story_memories"
+    __table_args__ = (UniqueConstraint("project_id", name="uq_project_story_memories_project_id"),)
+
+    id: Mapped[str] = mapped_column(String(26), primary_key=True, default=generate_ulid)
+    project_id: Mapped[str] = mapped_column(String(26), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
+    global_plot_summary: Mapped[str | None] = mapped_column(Text)
+    active_conflicts: Mapped[list[dict]] = mapped_column(JSON, nullable=False, default=list)
+    resolved_conflicts: Mapped[list[dict]] = mapped_column(JSON, nullable=False, default=list)
+    character_arcs: Mapped[list[dict]] = mapped_column(JSON, nullable=False, default=list)
+    global_open_loops: Mapped[list[dict]] = mapped_column(JSON, nullable=False, default=list)
+    timeline_constraints: Mapped[list[dict]] = mapped_column(JSON, nullable=False, default=list)
+    world_rules_active: Mapped[list[dict]] = mapped_column(JSON, nullable=False, default=list)
+    updated_from_chapter_id: Mapped[str | None] = mapped_column(
+        String(26),
+        ForeignKey("chapters.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+
+    project: Mapped["Project"] = relationship(back_populates="story_memory")
+    updated_from_chapter: Mapped["Chapter | None"] = relationship()
+
+
+class MemoryEvidenceLink(Base):
+    __tablename__ = "memory_evidence_links"
+
+    id: Mapped[str] = mapped_column(String(26), primary_key=True, default=generate_ulid)
+    memory_kind: Mapped[str] = mapped_column(String(50), nullable=False)
+    memory_owner_id: Mapped[str] = mapped_column(String(26), nullable=False, index=True)
+    source_chapter_id: Mapped[str] = mapped_column(String(26), ForeignKey("chapters.id", ondelete="CASCADE"), nullable=False, index=True)
+    source_excerpt: Mapped[str | None] = mapped_column(Text)
+    source_offset_start: Mapped[int | None] = mapped_column(Integer)
+    source_offset_end: Mapped[int | None] = mapped_column(Integer)
+    confidence: Mapped[float | None] = mapped_column(Float)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    source_chapter: Mapped["Chapter"] = relationship(back_populates="memory_evidence_links")
+
+
+class DocumentChunk(Base):
+    __tablename__ = "document_chunks"
+
+    id: Mapped[str] = mapped_column(String(26), primary_key=True, default=generate_ulid)
+    project_id: Mapped[str] = mapped_column(String(26), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
+    chapter_id: Mapped[str] = mapped_column(String(26), ForeignKey("chapters.id", ondelete="CASCADE"), nullable=False, index=True)
+    chapter_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0, index=True)
+    chunk_index: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    scene_label: Mapped[str | None] = mapped_column(String(200))
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    content_short: Mapped[str | None] = mapped_column(Text)
+    characters: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    tags: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    start_offset: Mapped[int | None] = mapped_column(Integer)
+    end_offset: Mapped[int | None] = mapped_column(Integer)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+
+    project: Mapped["Project"] = relationship(back_populates="document_chunks")
+    chapter: Mapped["Chapter"] = relationship(back_populates="document_chunks")
