@@ -1,10 +1,21 @@
+const ISO_TIMEZONE_SUFFIX = /(?:[zZ]|[+\-]\d{2}:\d{2})$/
+
+export function parseApiDate(value: string) {
+  if (!value) {
+    return new Date(Number.NaN)
+  }
+
+  const normalized = ISO_TIMEZONE_SUFFIX.test(value) ? value : `${value}Z`
+  return new Date(normalized)
+}
+
 export function formatDate(value: string) {
   return new Intl.DateTimeFormat('zh-CN', {
     month: 'short',
     day: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
-  }).format(new Date(value))
+  }).format(parseApiDate(value))
 }
 
 export function formatProjectType(value: string) {

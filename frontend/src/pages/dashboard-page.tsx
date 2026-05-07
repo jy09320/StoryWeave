@@ -27,7 +27,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
-import { formatDate, formatProjectType } from '@/lib/format'
+import { formatDate, formatProjectType, parseApiDate } from '@/lib/format'
 import {
   formatProjectChannel,
   PROJECT_CHANNEL_OPTIONS,
@@ -156,7 +156,7 @@ function buildHeatmapDays(projects: Project[]) {
   const counts = new Map<string, number>()
 
   for (const project of projects) {
-    const updatedAt = startOfDay(new Date(project.updated_at))
+    const updatedAt = startOfDay(parseApiDate(project.updated_at))
     if (updatedAt < start || updatedAt > today) {
       continue
     }
@@ -266,7 +266,7 @@ export function DashboardPage() {
   const projects = useMemo(
     () =>
       [...(projectsQuery.data ?? [])].sort(
-        (left, right) => new Date(right.updated_at).getTime() - new Date(left.updated_at).getTime(),
+        (left, right) => parseApiDate(right.updated_at).getTime() - parseApiDate(left.updated_at).getTime(),
       ),
     [projectsQuery.data],
   )

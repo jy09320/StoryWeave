@@ -14,7 +14,7 @@ import {
 import { Link } from 'react-router-dom'
 
 import heroArtwork from '@/assets/hero.png'
-import { formatDate } from '@/lib/format'
+import { formatDate, parseApiDate } from '@/lib/format'
 import { listProjects } from '@/services/projects'
 import type { Project } from '@/types/api'
 
@@ -82,7 +82,7 @@ export function HomePage() {
   const recentProjects = useMemo(
     () =>
       [...projects]
-        .sort((left, right) => new Date(right.updated_at).getTime() - new Date(left.updated_at).getTime())
+        .sort((left, right) => parseApiDate(right.updated_at).getTime() - parseApiDate(left.updated_at).getTime())
         .slice(0, 3),
     [projects],
   )

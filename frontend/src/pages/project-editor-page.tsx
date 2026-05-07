@@ -82,7 +82,7 @@ const BUBBLE_ACTION_META: Record<EditorUtilityAction, { label: string; defaultIn
   },
   consistency: {
     label: '一致性检查',
-    defaultInstruction: '请从角色设定、世界规则、叙事逻辑和时间线四个角度检查这段内容，列出冲突点和修改建议。',
+    defaultInstruction: '请从角色设定、世界规则、叙事逻辑和时间线四个角度检查这段内容，列出冲突点和修改建议。最后请单独使用“建议替换文本：”这个小节给出可以直接替换原文的终稿版本，不要把分析过程写进这个小节。',
   },
 }
 
@@ -167,6 +167,153 @@ function normalizeChapterContent(content: string | null | undefined, plainText: 
   return plainTextToHtml(plainText ?? content ?? '')
 }
 
+function stripLeadingMarkdownDecorators(text: string) {
+  return text
+    .replace(/^\s*```[\w-]*\s*/u, '')
+    .replace(/\s*```\s*$/u, '')
+    .split('\n')
+    .map((line) => line.replace(/^\s*>\s?/u, ''))
+    .join('\n')
+    .trim()
+}
+
+function splitTextBlocks(text: string) {
+  return text
+    .split(/\n\s*\n/u)
+    .map((block) => block.trim())
+    .filter(Boolean)
+}
+
+function isExplanationLikeBlock(block: string) {
+  const normalized = block.replace(/\s+/g, '')
+  const cues = [
+    '你提供的文本似乎不完整',
+    '您提供的文本似乎不完整',
+    '根据上下文',
+    '我推测',
+    '以下是',
+    '补全并润色的版本',
+    '改写版本',
+    '润色版本',
+    '扩写版本',
+    '如果这不是您想要',
+    '如果这不是你想要',
+    '请提供完整',
+    '我会为您进行更全面',
+  ]
+
+  return cues.some((cue) => normalized.includes(cue.replace(/\s+/g, '')))
+}
+
+function extractBetweenDividers(text: string) {
+  const lines = text.split('\n')
+  const dividerIndexes = lines
+    .map((line, index) => (/^\s*[-*_]{3,}\s*$/u.test(line) ? index : -1))
+    .filter((index) => index >= 0)
+
+  for (let index = 0; index < dividerIndexes.length - 1; index += 1) {
+    const start = dividerIndexes[index] + 1
+    const end = dividerIndexes[index + 1]
+    const candidate = lines.slice(start, end).join('\n').trim()
+    if (candidate) {
+      return candidate
+    }
+  }
+
+  return ''
+}
+
+function extractConsistencyReplacementText(result: string) {
+  const normalized = result.replace(/\r\n/g, '\n').trim()
+  if (!normalized) {
+    return ''
+  }
+
+  const markers = [
+    '建议替换文本',
+    '建议将该段修改为',
+    '建议改为',
+    '可直接替换为',
+    '修改后文本',
+    '修正后文本',
+    '改写如下',
+  ]
+
+  for (const marker of markers) {
+    const markerIndex = normalized.lastIndexOf(marker)
+    if (markerIndex < 0) {
+      continue
+    }
+
+    let candidate = normalized.slice(markerIndex + marker.length)
+    candidate = candidate.replace(/^[：:\s]+/u, '').trim()
+    if (!candidate) {
+      continue
+    }
+
+    const lines = candidate.split('\n')
+    const collected: string[] = []
+
+    for (const line of lines) {
+      const trimmed = line.trim()
+      if (!trimmed) {
+        if (collected.length > 0) {
+          break
+        }
+        continue
+      }
+
+      if (collected.length > 0 && /^(#{1,6}\s|[-*_]{3,}\s*$|\*\*[^*]+\*\*[:：]?$)/u.test(trimmed)) {
+        break
+      }
+
+      collected.push(line)
+    }
+
+    const extracted = stripLeadingMarkdownDecorators(collected.join('\n'))
+    if (extracted) {
+      return extracted
+    }
+  }
+
+  return ''
+}
+
+function extractBubbleReplacementText(action: SelectionAction | undefined, result: string) {
+  const normalized = stripLeadingMarkdownDecorators(result.replace(/\r\n/g, '\n').trim())
+  if (!normalized) {
+    return ''
+  }
+
+  if (action === 'consistency') {
+    return extractConsistencyReplacementText(normalized) || normalized
+  }
+
+  const betweenDividers = stripLeadingMarkdownDecorators(extractBetweenDividers(normalized))
+  if (betweenDividers) {
+    return betweenDividers
+  }
+
+  const blocks = splitTextBlocks(normalized)
+  if (blocks.length <= 1) {
+    return normalized
+  }
+
+  let start = 0
+  let end = blocks.length
+
+  while (start < end && isExplanationLikeBlock(blocks[start])) {
+    start += 1
+  }
+
+  while (end > start && isExplanationLikeBlock(blocks[end - 1])) {
+    end -= 1
+  }
+
+  const candidate = blocks.slice(start, end).join('\n\n').trim()
+  return candidate || normalized
+}
+
 export function ProjectEditorPage() {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -234,6 +381,7 @@ export function ProjectEditorPage() {
     }: {
       targetChapterId: string
       payload: EditorFormState
+      saveMode: 'auto' | 'manual'
     }) => {
       return updateChapter(targetChapterId, {
         title: payload.title.trim(),
@@ -243,7 +391,7 @@ export function ProjectEditorPage() {
         notes: payload.notes.trim() || null,
       })
     },
-    onSuccess: async (updatedChapter: Chapter) => {
+    onSuccess: async (updatedChapter: Chapter, variables) => {
       await queryClient.invalidateQueries({ queryKey: ['project', projectId] })
       setDrafts((prev) => ({
         ...prev,
@@ -253,7 +401,9 @@ export function ProjectEditorPage() {
         ...prev,
         [updatedChapter.id]: false,
       }))
-      toast.success('章节已保存')
+      if (variables.saveMode === 'manual') {
+        toast.success('章节已保存')
+      }
     },
     onError: (error: Error) => {
       toast.error(error.message)
@@ -284,6 +434,7 @@ export function ProjectEditorPage() {
       saveChapterMutation.mutate({
         targetChapterId,
         payload: nextForm,
+        saveMode: 'auto',
       })
       autosaveTimerRef.current = null
     }, 1200)
@@ -451,8 +602,10 @@ export function ProjectEditorPage() {
     }
 
     if (mode === 'replace') {
+      const replacementText = extractBubbleReplacementText(bubbleDialog?.action, bubbleGen.result) || bubbleGen.result.trim()
+
       const applied = editorRef.current?.applyGeneratedText({
-        text: bubbleGen.result.trim(),
+        text: replacementText,
         mode: 'replace-selection',
       })
       if (!applied) {
@@ -499,6 +652,7 @@ export function ProjectEditorPage() {
     await saveChapterMutation.mutateAsync({
       targetChapterId: chapter.id,
       payload: activeForm,
+      saveMode: 'manual',
     })
   }
 

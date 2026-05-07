@@ -19,7 +19,7 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
-import { formatDate, formatProjectType } from '@/lib/format'
+import { formatDate, formatProjectType, parseApiDate } from '@/lib/format'
 import { formatProjectChannel } from '@/lib/project-profile'
 import { queryClient } from '@/lib/query-client'
 import {
@@ -67,7 +67,9 @@ function getLatestUpdatedChapter(chapters: Chapter[]) {
     return null
   }
 
-  return [...chapters].sort((left, right) => new Date(right.updated_at).getTime() - new Date(left.updated_at).getTime())[0]
+  return [...chapters].sort(
+    (left, right) => parseApiDate(right.updated_at).getTime() - parseApiDate(left.updated_at).getTime(),
+  )[0]
 }
 
 export function ProjectWorkspacePage() {
