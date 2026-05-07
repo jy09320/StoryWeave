@@ -1,11 +1,10 @@
 import { useMemo, useState, type FormEvent } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { Link, useParams } from 'react-router-dom'
-import { BrainCircuit, Trash2 } from 'lucide-react'
+import { Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 
 
-import { ProjectAssetAIPanel } from '@/components/project-asset-ai-panel'
 import { EmptyState } from '@/components/empty-state'
 import { LoadingState } from '@/components/loading-state'
 import { Button } from '@/components/ui/button'
@@ -38,14 +37,8 @@ import {
   listCharacters,
   updateCharacter,
 } from '@/services/projects'
-import {
-  applyCharacterPatch,
-  uploadProjectAssetFile,
-} from '@/services/project-asset-ai'
 import type {
-  AssetChatSSEDraftReadyEvent,
   Character,
-  CharacterActionItem,
   CharacterPayload,
   ProjectDetail,
 } from '@/types/api'
@@ -123,12 +116,6 @@ export function CharactersPage() {
   const [selectedCharacterId, setSelectedCharacterId] = useState<string | null>(null)
   const [editingCharacter, setEditingCharacter] = useState<Character | null>(null)
   const [editForm, setEditForm] = useState<CharacterFormState>(defaultFormState)
-  const [latestCharacterActions, setLatestCharacterActions] = useState<CharacterActionItem[] | null>(null)
-  const [uploadedFiles, setUploadedFiles] = useState<Array<{ file_id: string; filename: string }>>([])
-  const [fileIds, setFileIds] = useState<string[]>([])
-
-  const sessionId = useMemo(() => `${projectId ?? 'unknown'}:project_character`, [projectId])
-
   const projectQuery = useQuery<ProjectDetail, Error>({
     queryKey: ['project', projectId],
     queryFn: () => getProject(projectId ?? ''),
@@ -181,32 +168,6 @@ export function CharactersPage() {
       toast.error(error.message)
     },
   })
-
-  const applyCharacterActionsMutation = useMutation({
-    mutationFn: () => applyCharacterPatch(projectId ?? '', { actions: latestCharacterActions! }),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['project', projectId] })
-      await queryClient.invalidateQueries({ queryKey: ['characters'] })
-      setLatestCharacterActions(null)
-      toast.success('角色动作已写入')
-    },
-    onError: (error: Error) => {
-      toast.error(error.message)
-    },
-  })
-
-  const uploadCharacterFileMutation = useMutation({
-    mutationFn: (file: File) => uploadProjectAssetFile(projectId ?? '', file),
-    onSuccess: (result) => {
-      setUploadedFiles((prev) => [...prev, { file_id: result.file_id, filename: result.filename }])
-      setFileIds((prev) => [...prev, result.file_id])
-      toast.success(`已上传：${result.filename}（约 ${result.token_estimate} tokens）`)
-    },
-    onError: (error: Error) => {
-      toast.error(error.message)
-    },
-  })
-
   const characters = useMemo(() => charactersQuery.data ?? [], [charactersQuery.data])
   const projectCharacters = useMemo(() => projectQuery.data?.project_characters ?? [], [projectQuery.data?.project_characters])
   const linkedCharacterIds = useMemo(() => new Set(projectCharacters.map((item) => item.character_id)), [projectCharacters])
@@ -275,14 +236,6 @@ export function CharactersPage() {
 
     attachCharacterMutation.mutate({ projectId, characterId: character.id })
   }
-
-  function handleDraftReady(event: AssetChatSSEDraftReadyEvent) {
-    if (event.asset_type === 'project_character' && event.actions) {
-      setLatestCharacterActions(event.actions)
-      toast.info('AI 已生成角色建议，请在面板中确认后写入')
-    }
-  }
-
   if (isProjectScoped && !projectId) {
     return <EmptyState title="项目标识缺失" description="当前路由中没有有效的项目 ID。" />
   }
@@ -345,69 +298,36 @@ export function CharactersPage() {
           </Card>
         ) : null}
 
-        {isProjectScoped && projectId ? (
-          <div className="flex justify-end">
-            <Link
-              to={`/projects/${projectId}/ai-workspace`}
-              className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-border bg-background px-3 text-sm text-foreground transition hover:bg-muted"
-            >
-              <BrainCircuit className="size-4" />
-              进入 AI 工作区
-            </Link>
-          </div>
-        ) : null}
-
-        {/* Project scoped: AI panel (left) + character list (right) */}
         {isProjectScoped ? (
-          <section className="grid gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
-            {/* AI panel — primary, always visible */}
-            <div className="xl:sticky xl:top-4 xl:self-start xl:h-[calc(100vh-4rem)]">
-              <ProjectAssetAIPanel
-                projectId={projectId ?? ''}
-                assetType="project_character"
-                sessionId={sessionId}
-                latestCharacterActions={latestCharacterActions}
-                onApplyCharacterActions={() => applyCharacterActionsMutation.mutate()}
-                isApplying={applyCharacterActionsMutation.isPending}
-                onFileUpload={async (file) => { await uploadCharacterFileMutation.mutateAsync(file) }}
-                isUploadingFile={uploadCharacterFileMutation.isPending}
-                uploadedFiles={uploadedFiles}
-                fileIds={fileIds}
-                onDraftReady={handleDraftReady}
+          <section className="space-y-4">
+            {displayedCharacters.length === 0 ? (
+              <EmptyState
+                title={searchKeyword ? '没有匹配的角色' : '当前项目还没有角色'}
+                description={searchKeyword ? '换个关键词再试试。' : '先创建角色，或把已有角色绑定到当前项目。'}
               />
-            </div>
-
-            {/* Character list + detail */}
-            <div className="space-y-4">
-              {displayedCharacters.length === 0 ? (
-                <EmptyState
-                  title={searchKeyword ? '没有匹配的角色' : '当前项目还没有角色'}
-                  description={searchKeyword ? '换个关键词再试。' : '先创建角色，或把已有角色绑定到当前项目。'}
+            ) : (
+              <>
+                <CharacterList
+                  characters={displayedCharacters}
+                  selectedCharacter={selectedCharacter}
+                  linkedCharacterIds={linkedCharacterIds}
+                  isProjectScoped={isProjectScoped}
+                  onSelect={setSelectedCharacterId}
                 />
-              ) : (
-                <>
-                  <CharacterList
-                    characters={displayedCharacters}
-                    selectedCharacter={selectedCharacter}
-                    linkedCharacterIds={linkedCharacterIds}
+                {selectedCharacter ? (
+                  <CharacterDetail
+                    character={selectedCharacter}
                     isProjectScoped={isProjectScoped}
-                    onSelect={setSelectedCharacterId}
+                    linkedCharacterIds={linkedCharacterIds}
+                    attachPending={attachCharacterMutation.isPending}
+                    deletePending={deleteCharacterMutation.isPending}
+                    onAttach={() => handleAttachToProject(selectedCharacter)}
+                    onEdit={() => openEditDialog(selectedCharacter)}
+                    onDelete={() => handleDelete(selectedCharacter)}
                   />
-                  {selectedCharacter ? (
-                    <CharacterDetail
-                      character={selectedCharacter}
-                      isProjectScoped={isProjectScoped}
-                      linkedCharacterIds={linkedCharacterIds}
-                      attachPending={attachCharacterMutation.isPending}
-                      deletePending={deleteCharacterMutation.isPending}
-                      onAttach={() => handleAttachToProject(selectedCharacter)}
-                      onEdit={() => openEditDialog(selectedCharacter)}
-                      onDelete={() => handleDelete(selectedCharacter)}
-                    />
-                  ) : null}
-                </>
-              )}
-            </div>
+                ) : null}
+              </>
+            )}
           </section>
         ) : (
           /* Global: original layout */

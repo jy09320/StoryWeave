@@ -1,5 +1,15 @@
 import { useRef, useEffect, useCallback, useState, type ChangeEvent, type KeyboardEvent } from 'react'
-import { Globe2, Users2, CheckCircle2, Send, Paperclip, Sparkles, Wrench, BrainCircuit } from 'lucide-react'
+import {
+  Globe2,
+  Users2,
+  CheckCircle2,
+  Send,
+  Paperclip,
+  Sparkles,
+  Wrench,
+  BrainCircuit,
+  TriangleAlert,
+} from 'lucide-react'
 import { toast } from 'sonner'
 import { useQuery } from '@tanstack/react-query'
 
@@ -143,6 +153,7 @@ function buildCharacterResultMessage(params: {
       action.role_label?.trim() ? `角色定位：${action.role_label.trim()}` : '',
       action.summary?.trim() ? `摘要：${action.summary.trim()}` : '',
       action.description?.trim() ? `描述：${action.description.trim()}` : '',
+      action.profile?.trim() ? `人物档案：${action.profile.trim()}` : '',
       action.personality?.trim() ? `性格：${action.personality.trim()}` : '',
       action.background?.trim() ? `背景：${action.background.trim()}` : '',
       action.relationship_notes?.trim() ? `关系备注：${action.relationship_notes.trim()}` : '',
@@ -549,27 +560,29 @@ export function ProjectAssetAIPanel({
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-border bg-card/95">
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-3">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-2.5">
         <div className="flex items-center gap-2">
           <Icon className={`size-4 ${meta.accentClassName}`} />
           <span className="text-sm font-semibold text-foreground">{meta.title}</span>
-          <Badge variant="outline" className="text-[10px]">对话模式</Badge>
           {structuredCapability ? (
-            <Badge variant="outline" className={`text-[10px] ${getCapabilityStatusMeta(structuredCapability.status).className}`}>
-              结构化助手：{structuredCapability.summary}
+            <Badge
+              variant="outline"
+              className={`text-[10px] ${getCapabilityStatusMeta(structuredCapability.status).className}`}
+            >
+              {structuredCapability.summary}
             </Badge>
           ) : (
             <Badge variant="outline" className="border-border bg-background text-[10px] text-muted-foreground">
-              结构化助手：未检测
+              未检测
             </Badge>
           )}
         </div>
         <div className="flex flex-wrap gap-1.5">
-          {meta.quickPrompts.map((prompt) => (
+          {meta.quickPrompts.slice(0, 2).map((prompt) => (
             <button
               key={prompt}
               type="button"
-              className="rounded-full border border-border bg-muted/50 px-2.5 py-0.5 text-[11px] text-muted-foreground transition hover:border-primary/30 hover:bg-muted hover:text-foreground"
+              className="rounded-full border border-border bg-muted/50 px-2 py-0.5 text-[10px] text-muted-foreground transition hover:border-primary/30 hover:bg-muted hover:text-foreground"
               onClick={() => setInputText((prev) => prev.trim() ? prev : prompt)}
             >
               {prompt}
@@ -579,14 +592,16 @@ export function ProjectAssetAIPanel({
       </div>
 
       {!structuredCapability ? (
-        <div className="border-b border-border bg-muted/35 px-4 py-2 text-xs leading-5 text-muted-foreground">
-          当前运行时还没有匹配的结构化能力快照。建议先去设置中心检测一次，再使用世界观或角色助手。
+        <div className="flex items-center gap-1.5 border-b border-border bg-muted/25 px-4 py-1.5 text-[11px] text-muted-foreground">
+          <TriangleAlert className="size-3.5 shrink-0" />
+          <span>未检测结构化能力，建议先去设置中心检测。</span>
         </div>
       ) : null}
 
       {structuredCapability?.status === 'failed' ? (
-        <div className="border-b border-rose-500/20 bg-rose-500/5 px-4 py-2 text-xs leading-5 text-rose-200">
-          当前模型的结构化能力检测未通过：{structuredCapability.detail || '建议切换模型或更换兼容网关。'}
+        <div className="flex items-center gap-1.5 border-b border-rose-500/20 bg-rose-500/5 px-4 py-1.5 text-[11px] text-rose-200">
+          <TriangleAlert className="size-3.5 shrink-0" />
+          <span>{structuredCapability.detail || '当前结构化能力不可用，建议切换模型或兼容网关。'}</span>
         </div>
       ) : null}
 
