@@ -421,8 +421,8 @@ export function ProjectEditorPage() {
       chapter_id: chapterId,
       text: bubbleDialog.selectedText,
       instruction: bubbleGen.instruction.trim() || BUBBLE_ACTION_META[bubbleDialog.action].defaultInstruction,
-      model_provider: runtimeSettingsQuery.data?.provider ?? 'openai',
-      model_id: runtimeSettingsQuery.data?.model_id ?? 'gpt-4o',
+      model_provider: runtimeSettingsQuery.data?.provider ?? null,
+      model_id: runtimeSettingsQuery.data?.model_id ?? null,
     }
 
     try {

@@ -102,11 +102,6 @@ interface GenerationHistoryItem {
   createdAt: string
 }
 
-const FALLBACK_MODEL_BY_PROVIDER: Record<string, string> = {
-  openai: 'gpt-4o',
-  anthropic: 'claude-3-5-sonnet-latest',
-}
-
 function getTaskMeta(task: ToolboxTaskType) {
   return TASK_OPTIONS.find((item) => item.value === task) ?? TASK_OPTIONS[0]
 }
@@ -176,8 +171,8 @@ export function AIToolboxPage() {
   const generationAbortRef = useRef<AbortController | null>(null)
   const [generation, setGeneration] = useState<GenerationState>({
     instruction: initialInstruction || getTaskMeta(initialTask).defaultInstruction,
-    provider: 'openai',
-    modelId: 'gpt-4o',
+    provider: '',
+    modelId: '',
     input: '',
     result: '',
     isGenerating: false,
@@ -248,9 +243,8 @@ export function AIToolboxPage() {
 
   const taskMeta = getTaskMeta(activeTask)
   const editorRouteContext = useMemo(() => readEditorRouteContext(), [chapterId, projectId])
-  const selectedModelId =
-    generation.modelId.trim() || runtimeSettingsQuery.data?.model_id || FALLBACK_MODEL_BY_PROVIDER[generation.provider] || 'gpt-4o'
-  const selectedProvider = generation.provider || runtimeSettingsQuery.data?.provider || 'openai'
+  const selectedModelId = generation.modelId.trim() || runtimeSettingsQuery.data?.model_id || ''
+  const selectedProvider = generation.provider || runtimeSettingsQuery.data?.provider || ''
   const hasSavedRuntimeKey = Boolean(runtimeSettingsQuery.data?.api_key_masked)
   const capabilitySnapshot = matchAIRuntimeCapabilitySnapshot(runtimeSettingsQuery.data, {
     provider: selectedProvider,
@@ -422,8 +416,8 @@ export function AIToolboxPage() {
       chapter_id: chapterId || null,
       text: input,
       instruction: generation.instruction.trim() || taskMeta.defaultInstruction,
-      model_provider: selectedProvider,
-      model_id: selectedModelId,
+      model_provider: selectedProvider || null,
+      model_id: selectedModelId || null,
     }
 
     try {

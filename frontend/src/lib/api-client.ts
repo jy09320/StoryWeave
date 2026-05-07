@@ -29,6 +29,10 @@ apiClient.interceptors.response.use(
       }
     }
 
+    if (error.response?.status === 504) {
+      return Promise.reject(new Error('AI 请求超时：世界观生成通常更慢，请稍后重试；如果你使用 Docker，请重新构建前端以应用更长的 Nginx 代理超时。'))
+    }
+
     const message =
       error.response?.data?.error?.message ??
       error.response?.data?.detail ??

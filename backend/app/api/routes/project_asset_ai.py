@@ -152,14 +152,21 @@ async def apply_world_setting_patch(
     if not project or project.owner_id != current_user.id:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    result = await db.execute(select(WorldSetting).where(WorldSetting.project_id == project_id))
+    result = await db.execute(
+        select(WorldSetting)
+        .join(Project, Project.id == WorldSetting.project_id)
+        .where(WorldSetting.project_id == project_id, Project.owner_id == current_user.id)
+    )
     world_setting = result.scalar_one_or_none()
 
     patch = data.patch
     world_setting_updated = False
 
     if not world_setting:
-        world_setting = WorldSetting(project_id=project_id, **patch.model_dump())
+        world_setting = WorldSetting(
+            project_id=project_id,
+            **{field: value for field, value in patch.model_dump().items() if value is not None},
+        )
         db.add(world_setting)
         world_setting_updated = True
     else:
@@ -260,6 +267,7 @@ async def apply_character_patch(
         try:
             if action.action == "create_and_attach":
                 char = Character(
+                    owner_id=current_user.id,
                     name=name,
                     alias=action.alias,
                     description=action.description,

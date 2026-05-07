@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 
 def make_asset_tools(*, db: "AsyncSession", project: "Project") -> list[Any]:
     """Return the four asset tools with db/project captured in closures."""
+    owner_id = getattr(project, "owner_id", None)
 
     @tool
     async def query_world_setting() -> str:
@@ -56,6 +57,7 @@ def make_asset_tools(*, db: "AsyncSession", project: "Project") -> list[Any]:
         patch_raw, notes, applied_sources = await propose_world_setting_patch(
             db=db,
             project=project,
+            owner_id=owner_id or "",
             context=context,
             source_text=None,
             command=command or None,
@@ -88,6 +90,7 @@ def make_asset_tools(*, db: "AsyncSession", project: "Project") -> list[Any]:
         actions_raw, notes = await propose_character_patch(
             db=db,
             project=project,
+            owner_id=owner_id or "",
             context=context,
             source_text=None,
             command=command or None,

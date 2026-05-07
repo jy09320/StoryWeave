@@ -563,7 +563,7 @@ class AIGenerateRequest(BaseModel):
     chapter_id: str | None = None
     text: str
     instruction: str = "请续写以下内容，保持风格一致"
-    model_provider: str = "openai"
-    model_id: str = "gpt-4o"
+    model_provider: str | None = None
+    model_id: str | None = None
     temperature: float = 0.8
     max_tokens: int = 2000

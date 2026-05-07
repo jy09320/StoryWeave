@@ -79,11 +79,6 @@ const actionLabelMap = {
 
 const DEFAULT_CONTINUE_INSTRUCTION = '请基于当前正文继续写下去，保持风格一致，并自然衔接上一段。'
 
-const FALLBACK_MODEL_BY_PROVIDER: Record<string, string> = {
-  openai: 'gpt-4o',
-  anthropic: 'claude-3-5-sonnet-latest',
-}
-
 const DEFAULT_AI_PANEL_WIDTH = 420
 const MIN_AI_PANEL_WIDTH = 320
 const MAX_AI_PANEL_WIDTH = 640
@@ -173,6 +168,7 @@ export function AppShell() {
 
   const isProjectScoped = Boolean(projectId) && location.pathname.startsWith(`/projects/${projectId}`)
   const isEditorRoute = isProjectScoped && location.pathname.includes('/editor/')
+  const isAIWorkspaceRoute = isProjectScoped && location.pathname.endsWith('/ai-workspace')
 
   const projectQuery = useQuery<ProjectDetail, Error>({
     queryKey: ['project', projectId],
@@ -596,11 +592,7 @@ export function AppShell() {
     editorAIDraftContext?.projectId === projectId && editorAIDraftContext?.chapterId === chapterId
       ? editorAIDraftContext
       : null
-  const selectedModelId =
-    aiState.modelId.trim() ||
-    runtimeSettingsQuery.data?.model_id ||
-    FALLBACK_MODEL_BY_PROVIDER[runtimeSettingsQuery.data?.provider ?? 'openai'] ||
-    'gpt-4o'
+  const selectedModelId = aiState.modelId.trim() || runtimeSettingsQuery.data?.model_id || ''
   const hasSavedRuntimeKey = Boolean(runtimeSettingsQuery.data?.api_key_masked)
 
   useEffect(() => {
@@ -608,12 +600,6 @@ export function AppShell() {
       setIsProjectAITaskDrawerOpen(false)
     }
   }, [showProjectAITaskDock])
-
-  useEffect(() => {
-    if (runningAITaskCount > 0) {
-      setIsProjectAITaskDrawerOpen(true)
-    }
-  }, [runningAITaskCount])
 
   useEffect(() => {
     setAIState((prev) => ({
@@ -690,8 +676,8 @@ export function AppShell() {
       chapter_id: chapterId,
       text: sourceText,
       instruction: submittedInstruction,
-      model_provider: runtimeSettingsQuery.data?.provider ?? 'openai',
-      model_id: selectedModelId,
+      model_provider: runtimeSettingsQuery.data?.provider ?? null,
+      model_id: selectedModelId || null,
     }
 
     try {
@@ -1163,7 +1149,12 @@ export function AppShell() {
             </div>
           </header>
 
-          <main className="min-h-0 flex-1 overflow-y-auto px-4 py-5 md:px-5">
+          <main
+            className={clsx(
+              'min-h-0 flex-1 px-4 md:px-5',
+              isAIWorkspaceRoute ? 'overflow-hidden py-4' : 'overflow-y-auto py-5',
+            )}
+          >
             <Outlet />
             {showProjectAITaskDock ? (
               <ProjectAITaskDock
@@ -1658,19 +1649,95 @@ function ProjectAITaskDock({
   onToggleExpanded: () => void
   onOpenSession: (sessionId: string) => void
 }) {
+  const dockRef = useRef<HTMLDivElement | null>(null)
+  const [dockPosition, setDockPosition] = useState<{ x: number; y: number } | null>(null)
+  const dragRef = useRef<{ offsetX: number; offsetY: number } | null>(null)
   const visibleTasks = isExpanded ? tasks : []
   const pendingResultCount = tasks.filter(
     ({ state }) =>
       state.taskStatus === 'done' && (Boolean(state.latestWorldPatch) || Boolean(state.latestCharacterActions?.length)),
   ).length
 
+  useEffect(() => {
+    function handlePointerMove(event: PointerEvent) {
+      const drag = dragRef.current
+      const dock = dockRef.current
+      if (!drag || !dock) {
+        return
+      }
+
+      const rect = dock.getBoundingClientRect()
+      const margin = 12
+      const nextX = Math.min(
+        Math.max(event.clientX - drag.offsetX, margin),
+        Math.max(window.innerWidth - rect.width - margin, margin),
+      )
+      const nextY = Math.min(
+        Math.max(event.clientY - drag.offsetY, margin),
+        Math.max(window.innerHeight - rect.height - margin, margin),
+      )
+      setDockPosition({ x: nextX, y: nextY })
+    }
+
+    function handlePointerUp() {
+      dragRef.current = null
+      document.body.style.userSelect = ''
+    }
+
+    window.addEventListener('pointermove', handlePointerMove)
+    window.addEventListener('pointerup', handlePointerUp)
+    window.addEventListener('pointercancel', handlePointerUp)
+    return () => {
+      window.removeEventListener('pointermove', handlePointerMove)
+      window.removeEventListener('pointerup', handlePointerUp)
+      window.removeEventListener('pointercancel', handlePointerUp)
+    }
+  }, [])
+
+  function handleDragStart(event: React.PointerEvent<HTMLDivElement>) {
+    if (event.button !== 0 || !dockRef.current) {
+      return
+    }
+
+    const rect = dockRef.current.getBoundingClientRect()
+    dragRef.current = {
+      offsetX: event.clientX - rect.left,
+      offsetY: event.clientY - rect.top,
+    }
+    setDockPosition({ x: rect.left, y: rect.top })
+    document.body.style.userSelect = 'none'
+  }
+
   return (
-    <div className="pointer-events-none sticky bottom-4 z-10 mt-6 flex justify-end">
-      <div className="pointer-events-auto w-full max-w-[420px] rounded-2xl border border-border bg-card/96 p-3 shadow-xl shadow-black/5 backdrop-blur">
+    <div
+      ref={dockRef}
+      className="fixed z-50"
+      style={
+        dockPosition
+          ? { left: dockPosition.x, top: dockPosition.y }
+          : { right: 24, bottom: 24 }
+      }
+    >
+      <div
+        className={clsx(
+          'border border-border bg-card/96 p-3 shadow-xl shadow-black/10 backdrop-blur',
+          isExpanded ? 'w-[min(420px,calc(100vw-24px))] rounded-2xl' : 'max-w-[calc(100vw-24px)] rounded-full',
+        )}
+      >
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
-            <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">AI Tasks</div>
-            <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-foreground">
+            <div
+              className={clsx('cursor-move touch-none text-xs uppercase tracking-[0.18em] text-muted-foreground', !isExpanded && 'sr-only')}
+              onPointerDown={handleDragStart}
+              title="拖动任务窗"
+            >
+              AI Tasks
+            </div>
+            <div
+              className={clsx('flex cursor-move touch-none flex-wrap items-center gap-2 text-sm text-foreground', isExpanded && 'mt-1')}
+              onPointerDown={handleDragStart}
+              title="拖动任务窗"
+            >
               <span className="font-medium">项目会话</span>
               {runningCount > 0 ? (
                 <span className="rounded-full border border-sky-500/20 bg-sky-500/10 px-2 py-0.5 text-xs text-sky-300">
@@ -1730,11 +1797,7 @@ function ProjectAITaskDock({
               </Link>
             ))}
           </div>
-        ) : (
-          <div className="mt-3 rounded-xl border border-border bg-background/80 px-3 py-2 text-xs text-muted-foreground">
-            已收起，当前共有 {tasks.length} 个项目会话。
-          </div>
-        )}
+        ) : null}
       </div>
     </div>
   )

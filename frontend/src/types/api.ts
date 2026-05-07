@@ -223,8 +223,8 @@ export interface AIGeneratePayload {
   chapter_id?: string | null
   text: string
   instruction?: string
-  model_provider?: string
-  model_id?: string
+  model_provider?: string | null
+  model_id?: string | null
   temperature?: number
   max_tokens?: number
 }

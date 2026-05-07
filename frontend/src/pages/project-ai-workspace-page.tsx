@@ -9,7 +9,7 @@ import {
   Globe2,
   LoaderCircle,
   Plus,
-  Sparkles,
+  Trash2,
   TriangleAlert,
   Users2,
 } from 'lucide-react'
@@ -57,6 +57,10 @@ const tabOptions: Array<{ key: ProjectAIWorkspaceDetailTab; label: string }> = [
   { key: 'context', label: '上下文' },
   { key: 'task', label: '任务' },
 ]
+
+function displaySessionTitle(session: ProjectAIWorkspaceSession) {
+  return session.title.replace(/^角色助手\s*\/\s*/, '').replace(/^世界观助手\s*\/\s*/, '')
+}
 
 function stripToolMessages(messages: ProjectAssetAIMessage[]) {
   return messages.filter((message) => message.role !== 'tool')
@@ -194,6 +198,16 @@ export function ProjectAIWorkspacePage() {
   function handleCreateSession(assetType: ProjectAssetAIType) {
     actions.createSession(assetType)
     actions.setDetailTab('result')
+  }
+
+  function handleDeleteSession(session: ProjectAIWorkspaceSession) {
+    const confirmed = window.confirm(`确认删除“${session.title}”吗？该会话的消息、上传文件引用和待应用结果都会清除。`)
+    if (!confirmed) {
+      return
+    }
+    actions.deleteSession(session.id)
+    actions.setDetailTab('task')
+    toast.success('会话已删除')
   }
 
   async function handleUploadFile(session: ProjectAIWorkspaceSession, file: File) {
@@ -398,9 +412,9 @@ export function ProjectAIWorkspacePage() {
   }
 
   return (
-    <div className="space-y-6 pb-8">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="space-y-1">
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="mb-3 flex shrink-0 justify-end">
+        <div className="hidden">
           <div className="text-sm uppercase tracking-[0.18em] text-primary/80">{project.title}</div>
           <h1 className="text-3xl font-semibold text-foreground">AI 工作区</h1>
           <p className="text-sm text-muted-foreground">
@@ -426,9 +440,9 @@ export function ProjectAIWorkspacePage() {
         </div>
       </div>
 
-      <section className="grid gap-6 xl:grid-cols-[280px_minmax(0,1fr)_360px]">
-        <aside className="space-y-4">
-          <Card className="border border-border bg-card/95">
+      <section className="grid min-h-0 flex-1 overflow-hidden rounded-2xl border border-border bg-card/95 shadow-[0_16px_36px_rgba(148,163,184,0.12)] xl:grid-cols-[300px_minmax(0,1fr)_360px]">
+        <aside className="min-h-0 border-b border-border bg-muted/15 xl:border-b-0 xl:border-r">
+          <Card className="h-full rounded-none border-0 bg-transparent shadow-none">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
                 <Bot className="size-4 text-primary" />
@@ -436,7 +450,7 @@ export function ProjectAIWorkspacePage() {
               </CardTitle>
               <CardDescription>按功能分组管理 AI 会话。</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="max-h-[calc(100vh-18rem)] space-y-4 overflow-y-auto">
               <SessionGroup
                 title="角色助手"
                 icon={Users2}
@@ -445,6 +459,7 @@ export function ProjectAIWorkspacePage() {
                 sessionStateMap={sessionStateMap}
                 onSelect={(sessionId) => actions.setActiveSessionId(sessionId)}
                 onCreate={() => handleCreateSession('project_character')}
+                onDelete={handleDeleteSession}
               />
               <SessionGroup
                 title="世界观助手"
@@ -454,12 +469,13 @@ export function ProjectAIWorkspacePage() {
                 sessionStateMap={sessionStateMap}
                 onSelect={(sessionId) => actions.setActiveSessionId(sessionId)}
                 onCreate={() => handleCreateSession('world_setting')}
+                onDelete={handleDeleteSession}
               />
             </CardContent>
           </Card>
         </aside>
 
-        <div className="space-y-4">
+        <div className="min-h-0 border-b border-border xl:border-b-0 xl:border-r">
           {sessions.map((session) => {
             const state = sessionStateMap[session.id]
             const visible = session.id === activeSession?.id
@@ -471,8 +487,8 @@ export function ProjectAIWorkspacePage() {
             }
 
             return (
-              <div key={session.id} className={visible ? 'block' : 'hidden'}>
-                <Card className="border border-border bg-card/95">
+              <div key={session.id} className={visible ? 'flex h-full min-h-0 flex-col' : 'hidden'}>
+                <Card className="flex h-full min-h-0 flex-col rounded-none border-0 bg-transparent shadow-none">
                   <CardHeader className="border-b border-border">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div>
@@ -508,8 +524,8 @@ export function ProjectAIWorkspacePage() {
                       </div>
                     </div>
                   </CardHeader>
-                  <CardContent className="p-0">
-                    <div className="h-[calc(100vh-17rem)] min-h-[620px]">
+                  <CardContent className="min-h-0 flex-1 p-0">
+                    <div className="h-full min-h-0 [&>div]:rounded-none [&>div]:border-0">
                       <ProjectAssetAIPanel
                         projectId={project.id}
                         assetType={session.assetType}
@@ -548,8 +564,8 @@ export function ProjectAIWorkspacePage() {
           })}
         </div>
 
-        <aside className="space-y-4">
-          <Card className="border border-border bg-card/95">
+        <aside className="min-h-0 bg-muted/10">
+          <Card className="rounded-none border-0 bg-transparent shadow-none">
             <CardHeader>
               <div className="grid grid-cols-3 rounded-xl bg-muted/70 p-1">
                 {tabOptions.map((tab) => (
@@ -582,35 +598,6 @@ export function ProjectAIWorkspacePage() {
             </CardContent>
           </Card>
 
-          <Card className="border border-border bg-card/95">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base">
-                <Sparkles className="size-4 text-primary" />
-                任务概览
-              </CardTitle>
-              <CardDescription>快速查看当前项目里的会话状态。</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              {sessions.map((session) => (
-                <button
-                  key={`task-${session.id}`}
-                  type="button"
-                  onClick={() => actions.setActiveSessionId(session.id)}
-                  className="flex w-full items-center justify-between rounded-xl border border-border bg-background/85 px-3 py-2 text-left transition hover:border-primary/20 hover:bg-muted/35"
-                >
-                  <div className="min-w-0">
-                    <div className="truncate text-sm font-medium text-foreground">{session.title}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {sessionStateMap[session.id]?.updatedAt
-                        ? `最近更新：${new Date(sessionStateMap[session.id].updatedAt as string).toLocaleTimeString('zh-CN')}`
-                        : '尚未开始'}
-                    </div>
-                  </div>
-                  <StatusPill status={sessionStateMap[session.id]?.taskStatus ?? 'idle'} compact />
-                </button>
-              ))}
-            </CardContent>
-          </Card>
         </aside>
       </section>
     </div>
@@ -625,6 +612,7 @@ function SessionGroup({
   sessionStateMap,
   onSelect,
   onCreate,
+  onDelete,
 }: {
   title: string
   icon: typeof Users2
@@ -633,6 +621,7 @@ function SessionGroup({
   sessionStateMap: Record<string, ProjectAIWorkspaceSessionState>
   onSelect: (sessionId: string) => void
   onCreate: () => void
+  onDelete: (session: ProjectAIWorkspaceSession) => void
 }) {
   return (
     <div className="space-y-2">
@@ -651,22 +640,36 @@ function SessionGroup({
       </div>
       <div className="space-y-2">
         {sessions.map((session) => (
-          <button
+          <div
             key={session.id}
-            type="button"
-            onClick={() => onSelect(session.id)}
             className={[
-              'flex w-full items-center justify-between rounded-xl border px-3 py-2.5 text-left transition',
+              'flex w-full items-center justify-between gap-2 rounded-xl border px-3 py-2.5 text-left transition',
               session.id === activeSessionId
                 ? 'border-primary/30 bg-primary/10'
                 : 'border-border bg-background/90 hover:border-primary/20 hover:bg-muted/35',
             ].join(' ')}
           >
-            <div className="min-w-0">
-              <div className="truncate text-sm font-medium text-foreground">{session.title}</div>
-            </div>
+            <button type="button" className="min-w-0 flex-1 text-left" onClick={() => onSelect(session.id)}>
+              <div className="truncate text-sm font-medium text-foreground">{displaySessionTitle(session)}</div>
+              <div className="mt-1 truncate text-xs text-muted-foreground">
+                {sessionStateMap[session.id]?.updatedAt
+                  ? `最近更新：${new Date(sessionStateMap[session.id].updatedAt as string).toLocaleTimeString('zh-CN')}`
+                  : '尚未开始'}
+              </div>
+            </button>
             <StatusPill status={sessionStateMap[session.id]?.taskStatus ?? 'idle'} compact />
-          </button>
+            <button
+              type="button"
+              title="删除会话"
+              className="inline-flex size-7 shrink-0 items-center justify-center rounded-full text-muted-foreground transition hover:bg-rose-500/10 hover:text-rose-500"
+              onClick={(event) => {
+                event.stopPropagation()
+                onDelete(session)
+              }}
+            >
+              <Trash2 className="size-3.5" />
+            </button>
+          </div>
         ))}
       </div>
     </div>
@@ -789,7 +792,7 @@ function TaskTab({
   return (
     <div className="space-y-3">
       <div className="rounded-xl border border-border bg-muted/35 p-4">
-        <div className="text-sm font-medium text-foreground">{session.title}</div>
+        <div className="text-sm font-medium text-foreground">{displaySessionTitle(session)}</div>
         <div className="mt-2 flex items-center gap-2">
           <Badge variant="outline" className={meta.className}>
             {meta.label}

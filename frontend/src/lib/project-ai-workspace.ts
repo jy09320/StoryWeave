@@ -97,13 +97,13 @@ export function buildDefaultAISessions(projectId: string): ProjectAIWorkspaceSes
     {
       id: `${projectId}:project_character:default`,
       assetType: 'project_character',
-      title: '角色助手 / 默认会话',
+      title: '默认会话',
       createdAt: now,
     },
     {
       id: `${projectId}:world_setting:default`,
       assetType: 'world_setting',
-      title: '世界观助手 / 默认会话',
+      title: '默认会话',
       createdAt: now,
     },
   ]
@@ -233,7 +233,7 @@ export function useProjectAIWorkspaceStore(projectId: string | undefined) {
           const nextSession: ProjectAIWorkspaceSession = {
             id: `${resolvedProjectId}:${assetType}:${Date.now()}`,
             assetType,
-            title: `${assetType === 'project_character' ? '角色助手' : '世界观助手'} / 会话 ${index}`,
+            title: `会话 ${index}`,
             createdAt: new Date().toISOString(),
           }
 
@@ -241,6 +241,25 @@ export function useProjectAIWorkspaceStore(projectId: string | undefined) {
             ...current,
             sessions: [...current.sessions, nextSession],
             activeSessionId: nextSession.id,
+          }
+        })
+      },
+      deleteSession(sessionId: string) {
+        updateStoreState(resolvedProjectId, (current) => {
+          const nextSessions = current.sessions.filter((item) => item.id !== sessionId)
+          const nextSessionStateMap = { ...current.sessionStateMap }
+          delete nextSessionStateMap[sessionId]
+
+          const nextActiveSessionId =
+            current.activeSessionId === sessionId
+              ? nextSessions[0]?.id ?? null
+              : current.activeSessionId
+
+          return {
+            ...current,
+            sessions: nextSessions,
+            activeSessionId: nextActiveSessionId,
+            sessionStateMap: nextSessionStateMap,
           }
         })
       },
