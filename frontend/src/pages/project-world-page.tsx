@@ -1,38 +1,20 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { Link, useParams } from 'react-router-dom'
-import { ArrowLeft, BrainCircuit, Sparkles, Users2 } from 'lucide-react'
+import { ArrowLeft, BrainCircuit, Sparkles, Users2, Wand2 } from 'lucide-react'
 import { toast } from 'sonner'
 
-import { ProjectAssetAIPanel } from '@/components/project-asset-ai-panel'
 import { EmptyState } from '@/components/empty-state'
 import { LoadingState } from '@/components/loading-state'
 import { Button } from '@/components/ui/button'
-import {
-  Card,
-  CardContent,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Separator } from '@/components/ui/separator'
 import { Textarea } from '@/components/ui/textarea'
 import { readEditorRouteContext } from '@/lib/editor-route-context'
 import { queryClient } from '@/lib/query-client'
-import { getProject, updateProjectWorldSetting } from '@/services/projects'
-import {
-  applyWorldSettingPatch,
-  uploadProjectAssetFile,
-} from '@/services/project-asset-ai'
-import type {
-  AssetChatSSEDraftReadyEvent,
-  ProjectCharacter,
-  ProjectDetail,
-  WorldSetting,
-  WorldSettingPatch,
-  WorldSettingPayload,
-} from '@/types/api'
+import { generateProjectDraft, getProject, updateProjectWorldSetting } from '@/services/projects'
+import type { ProjectCharacter, ProjectDetail, ProjectDraftResult, WorldSetting, WorldSettingPayload } from '@/types/api'
 
 interface WorldSettingDraftState {
   title: string
@@ -73,11 +55,7 @@ function buildWorldSettingDraft(worldSetting: WorldSetting | null | undefined): 
 export function ProjectWorldPage() {
   const { projectId } = useParams<{ projectId: string }>()
   const [draft, setDraft] = useState<WorldSettingDraftState>(defaultWorldSettingDraft)
-  const [latestWorldPatch, setLatestWorldPatch] = useState<WorldSettingPatch | null>(null)
-  const [uploadedFiles, setUploadedFiles] = useState<Array<{ file_id: string; filename: string }>>([])
-  const [fileIds, setFileIds] = useState<string[]>([])
-
-  const sessionId = useMemo(() => `${projectId ?? 'unknown'}:world_setting`, [projectId])
+  const [aiDraft, setAiDraft] = useState<ProjectDraftResult | null>(null)
 
   const projectQuery = useQuery<ProjectDetail, Error>({
     queryKey: ['project', projectId],
@@ -108,36 +86,16 @@ export function ProjectWorldPage() {
     },
   })
 
-  const applyWorldPatchMutation = useMutation({
-    mutationFn: () => applyWorldSettingPatch(projectId ?? '', { patch: latestWorldPatch! }),
-    onSuccess: async (result) => {
-      await queryClient.invalidateQueries({ queryKey: ['project', projectId] })
-      setLatestWorldPatch(null)
-      toast.success(result.world_setting_updated ? '世界观已更新' : '无需更新')
-    },
-    onError: (error: Error) => {
-      toast.error(error.message)
-    },
-  })
-
-  const uploadFileMutation = useMutation({
-    mutationFn: (file: File) => uploadProjectAssetFile(projectId ?? '', file),
+  const generateDraftMutation = useMutation({
+    mutationFn: generateProjectDraft,
     onSuccess: (result) => {
-      setUploadedFiles((prev) => [...prev, { file_id: result.file_id, filename: result.filename }])
-      setFileIds((prev) => [...prev, result.file_id])
-      toast.success(`已上传：${result.filename}（约 ${result.token_estimate} tokens）`)
+      setAiDraft(result)
+      toast.success('AI 世界观草案已生成')
     },
     onError: (error: Error) => {
       toast.error(error.message)
     },
   })
-
-  function handleDraftReady(event: AssetChatSSEDraftReadyEvent) {
-    if (event.asset_type === 'world_setting' && event.patch) {
-      setLatestWorldPatch(event.patch)
-      toast.info('AI 已生成世界观建议，请在面板中确认后写入')
-    }
-  }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -159,6 +117,41 @@ export function ProjectWorldPage() {
     })
   }
 
+  function handleGenerateAIDraft() {
+    if (!project) {
+      return
+    }
+
+    generateDraftMutation.mutate({
+      title: project.title,
+      description: project.description,
+      type: project.type as any,
+      source_work: project.source_work,
+      channel: project.channel,
+      genres: project.genres,
+      tropes: project.tropes,
+      premise: project.premise,
+    })
+  }
+
+  function handleApplyAIDraft() {
+    if (!aiDraft) {
+      return
+    }
+
+    setDraft((prev) => ({
+      ...prev,
+      title: aiDraft.world_setting_title,
+      overview: aiDraft.world_setting_overview,
+      rules: aiDraft.world_setting_rules ?? prev.rules,
+      factions: aiDraft.world_setting_factions ?? prev.factions,
+      locations: aiDraft.world_setting_locations ?? prev.locations,
+      timeline: aiDraft.world_setting_timeline ?? prev.timeline,
+      extra_notes: aiDraft.notes.length > 0 ? aiDraft.notes.join('\n') : prev.extra_notes,
+    }))
+    toast.success('AI 草案已回填到编辑区，记得保存')
+  }
+
   if (!projectId) {
     return (
       <EmptyState
@@ -166,10 +159,10 @@ export function ProjectWorldPage() {
         description="当前路由中没有有效的项目 ID，无法加载世界观设定。"
         action={
           <Link
-            to="/"
+            to="/workspace"
             className="inline-flex h-8 items-center justify-center rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground transition hover:opacity-90"
           >
-            返回首页
+            返回工作台
           </Link>
         }
       />
@@ -196,7 +189,6 @@ export function ProjectWorldPage() {
 
   return (
     <div className="space-y-6">
-      {/* Nav buttons */}
       <div className="flex flex-wrap items-center gap-2">
         <Link
           to={returnToEditor ? `/projects/${returnToEditor.projectId}/editor/${returnToEditor.chapterId}` : `/projects/${project.id}`}
@@ -210,50 +202,58 @@ export function ProjectWorldPage() {
           className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-primary/20 bg-primary/10 px-3 text-sm font-medium text-primary transition hover:bg-primary/15"
         >
           <Sparkles className="size-4" />
-          设定检查
-        </Link>
-        <Link
-          to={`/projects/${project.id}/ai-workspace`}
-          className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-border bg-background px-3 text-sm font-medium text-foreground transition hover:bg-muted"
-        >
-          <BrainCircuit className="size-4" />
-          AI 工作区
+          设定巡检模板
         </Link>
       </div>
 
-      {/* Main layout: AI panel (left, primary) + edit form + sidebar (right) */}
       <div className="grid gap-6 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
-        {/* AI panel — primary, always visible */}
-        <div className="xl:sticky xl:top-4 xl:self-start xl:h-[calc(100vh-4rem)]">
-          <ProjectAssetAIPanel
-            projectId={project.id}
-            assetType="world_setting"
-            sessionId={sessionId}
-            latestWorldPatch={latestWorldPatch}
-            onApplyWorldPatch={() => applyWorldPatchMutation.mutate()}
-            isApplying={applyWorldPatchMutation.isPending}
-            onFileUpload={async (file) => { await uploadFileMutation.mutateAsync(file) }}
-            isUploadingFile={uploadFileMutation.isPending}
-            uploadedFiles={uploadedFiles}
-            fileIds={fileIds}
-            onDraftReady={handleDraftReady}
-          />
-        </div>
-
-        {/* Right column: edit form + summary + characters */}
         <div className="space-y-6">
           <Card className="border border-border bg-card/95">
-            <CardHeader>
-              <CardTitle className="text-lg text-foreground">{worldSetting ? '编辑世界观设定' : '创建世界观设定'}</CardTitle>
+            <CardHeader className="space-y-3">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <CardTitle className="text-lg text-foreground">{worldSetting ? '编辑世界观设定' : '创建世界观设定'}</CardTitle>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    保留手工编辑，同时支持基于当前项目标签即时生成结构化世界观草案。
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  {aiDraft ? (
+                    <Button type="button" variant="outline" onClick={() => setAiDraft(null)}>
+                      清空草案
+                    </Button>
+                  ) : null}
+                  <Button type="button" variant="outline" onClick={handleGenerateAIDraft} disabled={generateDraftMutation.isPending}>
+                    <Wand2 className="mr-2 size-4" />
+                    {generateDraftMutation.isPending ? '生成中...' : 'AI 生成草案'}
+                  </Button>
+                  <Button type="button" onClick={handleApplyAIDraft} disabled={!aiDraft}>
+                    应用到编辑区
+                  </Button>
+                </div>
+              </div>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-5">
+              {aiDraft ? (
+                <div className="rounded-xl border border-border bg-background px-4 py-4">
+                  <div className="text-sm font-medium text-foreground">{aiDraft.world_setting_title}</div>
+                  <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-muted-foreground">{aiDraft.world_setting_overview}</p>
+                  <div className="mt-4 grid gap-3 md:grid-cols-2">
+                    <AIDraftInfo label="核心规则" value={aiDraft.world_setting_rules} />
+                    <AIDraftInfo label="主要势力" value={aiDraft.world_setting_factions} />
+                    <AIDraftInfo label="关键地点" value={aiDraft.world_setting_locations} />
+                    <AIDraftInfo label="时间线" value={aiDraft.world_setting_timeline} />
+                  </div>
+                </div>
+              ) : null}
+
               <form className="space-y-4" onSubmit={handleSubmit}>
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-foreground/85">标题</label>
                   <Input
                     value={draft.title}
                     onChange={(event) => setDraft((prev) => ({ ...prev, title: event.target.value }))}
-                    placeholder="例如：蒸汽帝国边境纪事"
+                    placeholder="例如：蒸汽帝国边境纪元"
                     maxLength={200}
                   />
                 </div>
@@ -274,7 +274,7 @@ export function ProjectWorldPage() {
                     value={draft.rules}
                     onChange={(event) => setDraft((prev) => ({ ...prev, rules: event.target.value }))}
                     rows={4}
-                    placeholder="例如：能力来源、科技或魔法边界、制度限制和越界代价。"
+                    placeholder="例如：力量来源、科技或魔法边界、制度限制和越界代价。"
                   />
                 </div>
 
@@ -316,18 +316,14 @@ export function ProjectWorldPage() {
                     value={draft.extra_notes}
                     onChange={(event) => setDraft((prev) => ({ ...prev, extra_notes: event.target.value }))}
                     rows={4}
-                    placeholder="记录暂未结构化但需要长期保留的设定碎片、约束和创作边界。"
+                    placeholder="记录尚未结构化但需要长期保留的设定碎片、约束和创作边界。"
                   />
                 </div>
 
                 <div className="flex flex-wrap items-center gap-3">
                   <Button type="submit" disabled={updateWorldSettingMutation.isPending}>
                     <BrainCircuit className="size-4" />
-                    {updateWorldSettingMutation.isPending
-                      ? '保存中...'
-                      : worldSetting
-                        ? '保存世界观修改'
-                        : '创建世界观'}
+                    {updateWorldSettingMutation.isPending ? '保存中...' : worldSetting ? '保存世界观修改' : '创建世界观'}
                   </Button>
                   <Button
                     type="button"
@@ -346,10 +342,13 @@ export function ProjectWorldPage() {
             <CardHeader>
               <CardTitle className="text-lg text-foreground">当前摘要</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3 text-sm text-foreground/85">
+            <CardContent className="grid gap-3 md:grid-cols-2">
               <SummaryBlock label="标题" value={worldSetting?.title || '尚未设置'} />
               <SummaryBlock label="概览" value={worldSetting?.overview?.trim() || '尚未填写世界观概览'} />
               <SummaryBlock label="规则" value={worldSetting?.rules?.trim() || '尚未填写世界规则'} />
+              <SummaryBlock label="势力" value={worldSetting?.factions?.trim() || '尚未填写势力摘要'} />
+              <SummaryBlock label="地点" value={worldSetting?.locations?.trim() || '尚未填写关键地点'} />
+              <SummaryBlock label="时间线" value={worldSetting?.timeline?.trim() || '尚未填写时间线'} />
             </CardContent>
           </Card>
 
@@ -371,13 +370,22 @@ export function ProjectWorldPage() {
                 to={`/projects/${project.id}/characters`}
                 className="inline-flex h-9 w-full items-center justify-center rounded-lg border border-border bg-background px-3 text-sm font-medium text-foreground transition hover:bg-muted"
               >
-                <Users2 className="size-4 mr-2" />
+                <Users2 className="mr-2 size-4" />
                 管理项目角色
               </Link>
             </CardFooter>
           </Card>
         </div>
       </div>
+    </div>
+  )
+}
+
+function AIDraftInfo({ label, value }: { label: string; value: string | null | undefined }) {
+  return (
+    <div className="rounded-lg border border-border/70 bg-muted/25 px-3 py-3">
+      <div className="text-xs font-medium text-foreground/85">{label}</div>
+      <div className="mt-1 text-sm leading-6 text-muted-foreground">{value?.trim() || '本轮草案未生成该字段。'}</div>
     </div>
   )
 }
