@@ -1,4 +1,10 @@
-import type { AIGeneratePayload, AIContextPreviewResponse, AIRetrievalPreviewResponse } from '@/types/api'
+import type {
+  AIGeneratePayload,
+  AIContextPreviewResponse,
+  AIContinuationDebugResponse,
+  AIContinuationGenerateResponse,
+  AIRetrievalPreviewResponse,
+} from '@/types/api'
 import { apiClient } from '@/lib/api-client'
 
 export interface AIRuntimeSettings {
@@ -54,6 +60,20 @@ export async function getAIContextPreview(payload: AIGeneratePayload) {
 
 export async function getAIRetrievalPreview(payload: AIGeneratePayload) {
   const { data } = await apiClient.post<AIRetrievalPreviewResponse>('/ai/retrieval-preview', payload)
+  return data
+}
+
+export async function generateWithContinuationPipeline(payload: AIGeneratePayload) {
+  const { data } = await apiClient.post<AIContinuationGenerateResponse>('/ai/continuation/generate', payload, {
+    timeout: 300_000,
+  })
+  return data
+}
+
+export async function debugContinuationPipeline(payload: AIGeneratePayload) {
+  const { data } = await apiClient.post<AIContinuationDebugResponse>('/ai/continuation/debug', payload, {
+    timeout: 300_000,
+  })
   return data
 }
 

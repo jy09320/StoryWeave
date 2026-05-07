@@ -38,9 +38,9 @@ import {
   type EditorUtilityContext,
 } from '@/lib/editor-utility-context'
 import { formatDate } from '@/lib/format'
-import { getAIContextPreview, getAIRetrievalPreview, getAIRuntimeSettings, isAbortError, listAIRuntimeModels, normalizeAIError, streamGenerate, type AIModelOption } from '@/services/ai'
+import { debugContinuationPipeline, generateWithContinuationPipeline, getAIContextPreview, getAIRetrievalPreview, getAIRuntimeSettings, isAbortError, listAIRuntimeModels, normalizeAIError, streamGenerate, type AIModelOption } from '@/services/ai'
 import { getProject } from '@/services/projects'
-import type { AIGeneratePayload, AIContextPreviewResponse, AIRetrievalPreviewResponse, ProjectDetail } from '@/types/api'
+import type { AIGeneratePayload, AIContextPreviewResponse, AIContinuationDebugResponse, AIContinuationGenerateResponse, AIRetrievalPreviewResponse, ProjectDetail } from '@/types/api'
 import { useAuth } from '@/contexts/auth-context'
 
 const primaryNavItems = [
@@ -72,9 +72,14 @@ interface AIPanelSnapshot {
   aiMessages: AIChatMessage[]
   contextPreview: AIContextPreviewResponse | null
   retrievalPreview: AIRetrievalPreviewResponse | null
+  pipelineDebug: AIContinuationDebugResponse | null
+  pipelineResult: AIContinuationGenerateResponse | null
+  useContinuationPipeline: boolean
   isContextPreviewOpen: boolean
   isContextPreviewDialogOpen: boolean
   isRetrievalPreviewOpen: boolean
+  isPipelineDebugOpen: boolean
+  isPipelineResultOpen: boolean
 }
 
 const utilityTabs: Array<{ key: UtilityTabKey; label: string }> = [
@@ -201,11 +206,17 @@ export function AppShell() {
   const [aiMessages, setAIMessages] = useState<AIChatMessage[]>([])
   const [contextPreview, setContextPreview] = useState<AIContextPreviewResponse | null>(null)
   const [retrievalPreview, setRetrievalPreview] = useState<AIRetrievalPreviewResponse | null>(null)
+  const [pipelineDebug, setPipelineDebug] = useState<AIContinuationDebugResponse | null>(null)
+  const [pipelineResult, setPipelineResult] = useState<AIContinuationGenerateResponse | null>(null)
+  const [useContinuationPipeline, setUseContinuationPipeline] = useState(false)
   const [isContextPreviewLoading, setIsContextPreviewLoading] = useState(false)
   const [isRetrievalPreviewLoading, setIsRetrievalPreviewLoading] = useState(false)
+  const [isPipelineDebugLoading, setIsPipelineDebugLoading] = useState(false)
   const [isContextPreviewOpen, setIsContextPreviewOpen] = useState(false)
   const [isContextPreviewDialogOpen, setIsContextPreviewDialogOpen] = useState(false)
   const [isRetrievalPreviewOpen, setIsRetrievalPreviewOpen] = useState(false)
+  const [isPipelineDebugOpen, setIsPipelineDebugOpen] = useState(false)
+  const [isPipelineResultOpen, setIsPipelineResultOpen] = useState(true)
   const generationAbortRef = useRef<AbortController | null>(null)
   const aiPanelSnapshotRef = useRef<Record<string, AIPanelSnapshot>>(readAIPanelSnapshots())
   const previousAIScopeKeyRef = useRef<string | null>(null)
@@ -620,6 +631,8 @@ export function AppShell() {
     Boolean(aiState.result.trim()) ||
     Boolean(contextPreview) ||
     Boolean(retrievalPreview) ||
+    Boolean(pipelineDebug) ||
+    Boolean(pipelineResult) ||
     aiState.instruction.trim() !== getAIInstruction(scopedEditorUtilityContext)
 
   useEffect(() => {
@@ -632,12 +645,17 @@ export function AppShell() {
       aiMessages,
       contextPreview,
       retrievalPreview,
+      pipelineDebug,
+      pipelineResult,
+      useContinuationPipeline,
       isContextPreviewOpen,
       isContextPreviewDialogOpen,
       isRetrievalPreviewOpen,
+      isPipelineDebugOpen,
+      isPipelineResultOpen,
     }
     writeAIPanelSnapshots(aiPanelSnapshotRef.current)
-  }, [aiMessages, aiState, contextPreview, retrievalPreview, currentAIScopeKey, isContextPreviewDialogOpen, isContextPreviewOpen, isRetrievalPreviewOpen])
+  }, [aiMessages, aiState, contextPreview, retrievalPreview, pipelineDebug, pipelineResult, useContinuationPipeline, currentAIScopeKey, isContextPreviewDialogOpen, isContextPreviewOpen, isRetrievalPreviewOpen, isPipelineDebugOpen, isPipelineResultOpen])
 
   useEffect(() => {
     const previousScopeKey = previousAIScopeKeyRef.current
@@ -652,9 +670,14 @@ export function AppShell() {
           },
           contextPreview: null,
           retrievalPreview: null,
+          pipelineDebug: null,
+          pipelineResult: null,
+          useContinuationPipeline: previousSnapshot.useContinuationPipeline ?? false,
           isContextPreviewOpen: false,
           isContextPreviewDialogOpen: false,
           isRetrievalPreviewOpen: false,
+          isPipelineDebugOpen: false,
+          isPipelineResultOpen: true,
         }
         writeAIPanelSnapshots(aiPanelSnapshotRef.current)
       }
@@ -669,9 +692,14 @@ export function AppShell() {
       setAIMessages([])
       setContextPreview(null)
       setRetrievalPreview(null)
+      setPipelineDebug(null)
+      setPipelineResult(null)
+      setUseContinuationPipeline(false)
       setIsContextPreviewOpen(false)
       setIsContextPreviewDialogOpen(false)
       setIsRetrievalPreviewOpen(false)
+      setIsPipelineDebugOpen(false)
+      setIsPipelineResultOpen(true)
       previousAIScopeKeyRef.current = currentAIScopeKey
       return
     }
@@ -682,17 +710,27 @@ export function AppShell() {
       setAIMessages(nextSnapshot.aiMessages)
       setContextPreview(nextSnapshot.contextPreview)
       setRetrievalPreview(nextSnapshot.retrievalPreview ?? null)
+      setPipelineDebug(nextSnapshot.pipelineDebug ?? null)
+      setPipelineResult(nextSnapshot.pipelineResult ?? null)
+      setUseContinuationPipeline(nextSnapshot.useContinuationPipeline ?? false)
       setIsContextPreviewOpen(nextSnapshot.isContextPreviewOpen)
       setIsContextPreviewDialogOpen(nextSnapshot.isContextPreviewDialogOpen)
       setIsRetrievalPreviewOpen(nextSnapshot.isRetrievalPreviewOpen ?? false)
+      setIsPipelineDebugOpen(nextSnapshot.isPipelineDebugOpen ?? false)
+      setIsPipelineResultOpen(nextSnapshot.isPipelineResultOpen ?? true)
     } else {
       setAIState(buildDefaultAIComposerState(scopedEditorUtilityContext))
       setAIMessages([])
       setContextPreview(null)
       setRetrievalPreview(null)
+      setPipelineDebug(null)
+      setPipelineResult(null)
+      setUseContinuationPipeline(false)
       setIsContextPreviewOpen(false)
       setIsContextPreviewDialogOpen(false)
       setIsRetrievalPreviewOpen(false)
+      setIsPipelineDebugOpen(false)
+      setIsPipelineResultOpen(true)
     }
 
     previousAIScopeKeyRef.current = currentAIScopeKey
@@ -765,9 +803,14 @@ export function AppShell() {
     setAIMessages([])
     setContextPreview(null)
     setRetrievalPreview(null)
+    setPipelineDebug(null)
+    setPipelineResult(null)
+    setUseContinuationPipeline(false)
     setIsContextPreviewOpen(false)
     setIsContextPreviewDialogOpen(false)
     setIsRetrievalPreviewOpen(false)
+    setIsPipelineDebugOpen(false)
+    setIsPipelineResultOpen(true)
     writeEditorAIPreviewContext(null)
     toast.message('已清空当前章节的 AI 记录')
   }
@@ -859,39 +902,72 @@ export function AppShell() {
     }
 
     try {
-      await streamGenerate(
-        payload,
-        (chunk) => {
-          accumulatedResult += chunk
-          setAIState((prev) => {
-            if (prev.requestId !== requestId || !prev.isGenerating) {
-              return prev
-            }
-
-            return {
-              ...prev,
-              result: accumulatedResult,
-            }
-          })
-          if (projectId && chapterId) {
-            writeEditorAIPreviewContext({
-              projectId,
-              chapterId,
-              text: accumulatedResult,
-              isStreaming: true,
-              updatedAt: new Date().toISOString(),
-            })
+      if (useContinuationPipeline) {
+        const result = await generateWithContinuationPipeline(payload)
+        accumulatedResult = result.final_content
+        setPipelineResult(result)
+        setIsPipelineResultOpen(true)
+        setPipelineDebug((prev) =>
+          prev && prev.final_content === result.final_content
+            ? prev
+            : null,
+        )
+        setAIMessages((prev) =>
+          prev.map((message) =>
+            message.id === assistantMessageId
+              ? { ...message, content: accumulatedResult }
+              : message,
+          ),
+        )
+        setAIState((prev) => {
+          if (prev.requestId !== requestId) {
+            return prev
           }
-          setAIMessages((prev) =>
-            prev.map((message) =>
-              message.id === assistantMessageId
-                ? { ...message, content: accumulatedResult }
-                : message,
-            ),
-          )
-        },
-        { signal: abortController.signal, timeoutMs: 90_000, retryCount: 1 },
-      )
+          return {
+            ...prev,
+            result: accumulatedResult,
+            isGenerating: false,
+          }
+        })
+        if (result.warnings.length > 0) {
+          toast.message(`Pipeline 风险提示：${result.warnings[0]}`)
+        }
+      } else {
+        setPipelineResult(null)
+        await streamGenerate(
+          payload,
+          (chunk) => {
+            accumulatedResult += chunk
+            setAIState((prev) => {
+              if (prev.requestId !== requestId || !prev.isGenerating) {
+                return prev
+              }
+
+              return {
+                ...prev,
+                result: accumulatedResult,
+              }
+            })
+            if (projectId && chapterId) {
+              writeEditorAIPreviewContext({
+                projectId,
+                chapterId,
+                text: accumulatedResult,
+                isStreaming: true,
+                updatedAt: new Date().toISOString(),
+              })
+            }
+            setAIMessages((prev) =>
+              prev.map((message) =>
+                message.id === assistantMessageId
+                  ? { ...message, content: accumulatedResult }
+                  : message,
+              ),
+            )
+          },
+          { signal: abortController.signal, timeoutMs: 90_000, retryCount: 1 },
+        )
+      }
 
       if (projectId && chapterId) {
         writeEditorAIPreviewContext({
@@ -923,6 +999,39 @@ export function AppShell() {
       if (generationAbortRef.current === abortController) {
         generationAbortRef.current = null
       }
+    }
+  }
+
+  async function handleRunPipelineDebug() {
+    if (!projectId || !chapterId) {
+      return
+    }
+
+    const sourceText =
+      (scopedEditorUtilityContext?.action === 'expand'
+        ? scopedEditorUtilityContext.selectedText
+        : scopedEditorAIDraft?.plainText)?.trim() ?? ''
+
+    const payload: AIGeneratePayload = {
+      project_id: projectId,
+      chapter_id: chapterId,
+      text: sourceText,
+      instruction: aiState.instruction.trim() || DEFAULT_CONTINUE_INSTRUCTION,
+      model_provider: runtimeSettingsQuery.data?.provider ?? null,
+      model_id: selectedModelId || null,
+    }
+
+    setIsPipelineDebugLoading(true)
+    try {
+      const result = await debugContinuationPipeline(payload)
+      setPipelineDebug(result)
+      setIsPipelineDebugOpen(true)
+      toast.success('已生成 pipeline 调试结果')
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Pipeline 调试失败'
+      toast.error(message.includes('timeout') ? 'Pipeline 调试超时：这条链路会串行调用 Planner、Writer、Checker，当前模型响应过慢或卡住了。' : message)
+    } finally {
+      setIsPipelineDebugLoading(false)
     }
   }
 
@@ -1079,6 +1188,29 @@ export function AppShell() {
                     {isContextPreviewLoading || isRetrievalPreviewLoading ? <LoaderCircle className="size-3 animate-spin" /> : <BookCopy className="size-3.5" />}
                     上下文预览
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleRunPipelineDebug()}
+                    disabled={isPipelineDebugLoading || aiState.isGenerating}
+                    className="inline-flex h-8 items-center gap-2 rounded-full border border-[#d1d5db] bg-white px-3 text-[11px] text-[#4b5563] transition hover:border-[#9ca3af] hover:text-[#111827] disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {isPipelineDebugLoading ? <LoaderCircle className="size-3 animate-spin" /> : <Bot className="size-3.5" />}
+                    Pipeline 调试
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setUseContinuationPipeline((prev) => !prev)}
+                    disabled={aiState.isGenerating}
+                    className={clsx(
+                      'inline-flex h-8 items-center gap-2 rounded-full border px-3 text-[11px] transition disabled:cursor-not-allowed disabled:opacity-50',
+                      useContinuationPipeline
+                        ? 'border-emerald-300 bg-emerald-50 text-emerald-700'
+                        : 'border-[#d1d5db] bg-white text-[#4b5563] hover:border-[#9ca3af] hover:text-[#111827]',
+                    )}
+                  >
+                    <Bot className="size-3.5" />
+                    {useContinuationPipeline ? 'Pipeline 已启用' : '使用旧链路'}
+                  </button>
                 </div>
                 {aiState.result.trim() && !aiState.isGenerating ? (
                   <button
@@ -1110,6 +1242,64 @@ export function AppShell() {
                   {aiState.isGenerating ? '停止生成' : '发送'}
                 </button>
               </div>
+
+              {pipelineResult && useContinuationPipeline ? (
+                <div className="mt-3 rounded-[18px] border border-[#dbe3ea] bg-white">
+                  <button
+                    type="button"
+                    onClick={() => setIsPipelineResultOpen((prev) => !prev)}
+                    className="flex w-full items-center justify-between px-3 py-2 text-left"
+                  >
+                    <div>
+                      <div className="text-xs font-medium text-[#111827]">Pipeline 风险提示</div>
+                      <div className="mt-0.5 text-[11px] text-[#6b7280]">
+                        severity: {pipelineResult.continuity_report?.severity ?? 'unknown'} · warnings: {pipelineResult.warnings.length}
+                      </div>
+                    </div>
+                    <ChevronDown className={clsx('size-4 text-[#6b7280] transition', isPipelineResultOpen && 'rotate-180')} />
+                  </button>
+                  {isPipelineResultOpen ? (
+                    <div className="space-y-3 border-t border-[#eef0f3] px-3 py-3">
+                      <div
+                        className={clsx(
+                          'rounded-2xl border px-3 py-3 text-sm',
+                          pipelineResult.continuity_report?.severity === 'high'
+                            ? 'border-rose-200 bg-rose-50 text-rose-700'
+                            : pipelineResult.continuity_report?.severity === 'medium'
+                              ? 'border-amber-200 bg-amber-50 text-amber-700'
+                              : 'border-emerald-200 bg-emerald-50 text-emerald-700',
+                        )}
+                      >
+                        {pipelineResult.continuity_report?.summary || '未发现明显连续性风险。'}
+                      </div>
+                      {pipelineResult.warnings.length > 0 ? (
+                        <div className="rounded-2xl border border-[#eef0f3] bg-[#fcfcfd] px-3 py-3">
+                          <div className="mb-1 text-[11px] uppercase tracking-[0.18em] text-[#6b7280]">Warnings</div>
+                          <div className="space-y-1">
+                            {pipelineResult.warnings.map((item) => (
+                              <div key={item} className="text-xs leading-6 text-[#4b5563]">
+                                {item}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
+                      {pipelineResult.fallbacks.length > 0 ? (
+                        <div className="rounded-2xl border border-[#eef0f3] bg-[#fcfcfd] px-3 py-3">
+                          <div className="mb-1 text-[11px] uppercase tracking-[0.18em] text-[#6b7280]">Fallbacks</div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {pipelineResult.fallbacks.map((item) => (
+                              <span key={item} className="rounded-full border border-[#d1d5db] bg-white px-2 py-0.5 text-[11px] text-[#4b5563]">
+                                {item}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
 
               {contextPreview ? (
                 <div className="mt-3 rounded-[18px] border border-[#dbe3ea] bg-white">
@@ -1233,6 +1423,58 @@ export function AppShell() {
                             当前没有召回到可用正文片段。
                           </div>
                         ) : null}
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+
+              {pipelineDebug ? (
+                <div className="mt-3 rounded-[18px] border border-[#dbe3ea] bg-white">
+                  <button
+                    type="button"
+                    onClick={() => setIsPipelineDebugOpen((prev) => !prev)}
+                    className="flex w-full items-center justify-between px-3 py-2 text-left"
+                  >
+                    <div>
+                      <div className="text-xs font-medium text-[#111827]">Pipeline 调试</div>
+                      <div className="mt-0.5 text-[11px] text-[#6b7280]">
+                        severity: {pipelineDebug.continuity_report?.severity ?? 'unknown'} · fallback: {pipelineDebug.fallbacks.length}
+                      </div>
+                    </div>
+                    <ChevronDown className={clsx('size-4 text-[#6b7280] transition', isPipelineDebugOpen && 'rotate-180')} />
+                  </button>
+                  {isPipelineDebugOpen ? (
+                    <div className="space-y-3 border-t border-[#eef0f3] px-3 py-3">
+                      <div className="grid grid-cols-2 gap-2 text-[11px] text-[#6b7280]">
+                        <div>planner: {String(pipelineDebug.metadata?.planner_used ?? false)}</div>
+                        <div>retriever: {String(pipelineDebug.metadata?.retriever_used ?? false)}</div>
+                        <div>checker: {String(pipelineDebug.metadata?.checker_used ?? false)}</div>
+                        <div>warnings: {pipelineDebug.warnings.length}</div>
+                      </div>
+                      {pipelineDebug.fallbacks.length > 0 ? (
+                        <div className="rounded-2xl border border-[#eef0f3] bg-[#fcfcfd] px-3 py-3">
+                          <div className="mb-1 text-[11px] uppercase tracking-[0.18em] text-[#6b7280]">Fallbacks</div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {pipelineDebug.fallbacks.map((item) => (
+                              <span key={item} className="rounded-full border border-[#d1d5db] bg-white px-2 py-0.5 text-[11px] text-[#4b5563]">
+                                {item}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
+                      <div className="rounded-2xl border border-[#eef0f3] bg-[#fcfcfd] px-3 py-3">
+                        <div className="mb-1 text-[11px] uppercase tracking-[0.18em] text-[#6b7280]">Plan</div>
+                        <pre className="max-h-40 overflow-y-auto whitespace-pre-wrap break-words text-xs leading-6 text-[#374151]">{JSON.stringify(pipelineDebug.plan, null, 2)}</pre>
+                      </div>
+                      <div className="rounded-2xl border border-[#eef0f3] bg-[#fcfcfd] px-3 py-3">
+                        <div className="mb-1 text-[11px] uppercase tracking-[0.18em] text-[#6b7280]">Continuity Report</div>
+                        <pre className="max-h-40 overflow-y-auto whitespace-pre-wrap break-words text-xs leading-6 text-[#374151]">{JSON.stringify(pipelineDebug.continuity_report, null, 2)}</pre>
+                      </div>
+                      <div className="rounded-2xl border border-[#dbe3ea] bg-[#f8fafc] px-3 py-3">
+                        <div className="mb-1 text-[11px] uppercase tracking-[0.18em] text-[#6b7280]">Pipeline Output</div>
+                        <pre className="max-h-48 overflow-y-auto whitespace-pre-wrap break-words text-xs leading-6 text-[#111827]">{pipelineDebug.final_content}</pre>
                       </div>
                     </div>
                   ) : null}

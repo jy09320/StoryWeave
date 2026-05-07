@@ -313,6 +313,39 @@ export interface AIRetrievalPreviewResponse {
   }
 }
 
+export interface AIContinuationIssue {
+  issue: string
+  reason: string
+  evidence: string
+  suggestion: string
+}
+
+export interface AIContinuationReport {
+  severity: 'low' | 'medium' | 'high' | string
+  summary: string
+  timeline_conflicts: AIContinuationIssue[]
+  character_conflicts: AIContinuationIssue[]
+  world_rule_conflicts: AIContinuationIssue[]
+  knowledge_boundary_conflicts: AIContinuationIssue[]
+  open_loop_misalignment: AIContinuationIssue[]
+  evidence?: unknown[]
+  check_status?: 'completed' | 'skipped' | 'failed' | string
+}
+
+export interface AIContinuationGenerateResponse {
+  final_content: string
+  continuity_report: AIContinuationReport
+  warnings: string[]
+  fallbacks: string[]
+  metadata: Record<string, unknown>
+}
+
+export interface AIContinuationDebugResponse extends AIContinuationGenerateResponse {
+  plan: Record<string, unknown>
+  context_bundle: Record<string, unknown>
+  draft: Record<string, unknown>
+}
+
 // ---------------------------------------------------------------------------
 // Project Asset AI — file upload, analyze, apply
 // ---------------------------------------------------------------------------
