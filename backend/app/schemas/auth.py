@@ -1,5 +1,7 @@
 from pydantic import BaseModel, EmailStr
 
+from app.schemas.common import ORMResponseModel
+
 
 class RegisterRequest(BaseModel):
     email: EmailStr
@@ -16,9 +18,7 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
 
 
-class UserOut(BaseModel):
+class UserOut(ORMResponseModel):
     id: str
     email: str
     is_active: bool
-
-    model_config = {"from_attributes": True}

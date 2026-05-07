@@ -5,6 +5,8 @@ from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
 
+from app.schemas.common import ORMResponseModel
+
 PROJECT_TYPE_VALUES = {"original", "fanfiction", "acg", "tv_movie"}
 PROJECT_STATUS_VALUES = {"draft", "active", "paused", "completed"}
 PROJECT_CHANNEL_VALUES = {"male", "female", "general"}
@@ -526,7 +528,7 @@ class ProjectImportRequest(BaseModel):
         return normalize_optional_text(value)
 
 
-class ChapterResponse(BaseModel):
+class ChapterResponse(ORMResponseModel):
     id: str
     project_id: str
     title: str
@@ -540,10 +542,8 @@ class ChapterResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    model_config = {"from_attributes": True}
 
-
-class ChapterVersionResponse(BaseModel):
+class ChapterVersionResponse(ORMResponseModel):
     id: str
     chapter_id: str
     content: str
@@ -552,10 +552,8 @@ class ChapterVersionResponse(BaseModel):
     change_note: str | None
     created_at: datetime
 
-    model_config = {"from_attributes": True}
 
-
-class CharacterResponse(BaseModel):
+class CharacterResponse(ORMResponseModel):
     id: str
     name: str
     alias: str | None
@@ -568,10 +566,8 @@ class CharacterResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    model_config = {"from_attributes": True}
 
-
-class ProjectCharacterResponse(BaseModel):
+class ProjectCharacterResponse(ORMResponseModel):
     id: str
     project_id: str
     character_id: str
@@ -582,10 +578,8 @@ class ProjectCharacterResponse(BaseModel):
     updated_at: datetime
     character: CharacterResponse
 
-    model_config = {"from_attributes": True}
 
-
-class WorldSettingResponse(BaseModel):
+class WorldSettingResponse(ORMResponseModel):
     id: str
     project_id: str
     title: str
@@ -597,8 +591,6 @@ class WorldSettingResponse(BaseModel):
     extra_notes: str | None
     created_at: datetime
     updated_at: datetime
-
-    model_config = {"from_attributes": True}
 
 
 class ProjectImportResponse(BaseModel):
@@ -619,7 +611,7 @@ class ProjectWorldAutoCompleteResponse(BaseModel):
     world_setting_updated: bool = False
 
 
-class ProjectResponse(BaseModel):
+class ProjectResponse(ORMResponseModel):
     id: str
     title: str
     description: str | None
@@ -634,9 +626,6 @@ class ProjectResponse(BaseModel):
     default_model_id: str | None
     created_at: datetime
     updated_at: datetime
-
-    model_config = {"from_attributes": True}
-
 
 class ProjectDetailResponse(ProjectResponse):
     chapters: list[ChapterResponse]
@@ -672,7 +661,7 @@ class AIRuntimeSettingUpdate(BaseModel):
         return normalize_optional_text(value)
 
 
-class AIRuntimeSettingResponse(BaseModel):
+class AIRuntimeSettingResponse(ORMResponseModel):
     provider: str
     model_id: str
     base_url: str | None
@@ -708,7 +697,7 @@ class AIRuntimeCapabilityItemResponse(BaseModel):
     detail: str | None = None
 
 
-class AIRuntimeCapabilityCheckResponse(BaseModel):
+class AIRuntimeCapabilityCheckResponse(ORMResponseModel):
     provider: str
     model_id: str
     checked_at: datetime
@@ -761,3 +750,17 @@ class AIRetrievalPreviewResponse(BaseModel):
     query_terms: list[str] = Field(default_factory=list)
     chunks: list[AIRetrievalPreviewChunkResponse] = Field(default_factory=list)
     metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class AIContinuationGenerateResponse(BaseModel):
+    final_content: str
+    continuity_report: dict[str, Any] = Field(default_factory=dict)
+    warnings: list[str] = Field(default_factory=list)
+    fallbacks: list[str] = Field(default_factory=list)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class AIContinuationDebugResponse(AIContinuationGenerateResponse):
+    plan: dict[str, Any] = Field(default_factory=dict)
+    context_bundle: dict[str, Any] = Field(default_factory=dict)
+    draft: dict[str, Any] = Field(default_factory=dict)
