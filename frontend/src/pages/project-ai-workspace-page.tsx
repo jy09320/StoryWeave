@@ -22,7 +22,7 @@ import { EmptyState } from '@/components/empty-state'
 import { LoadingState } from '@/components/loading-state'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { getCapabilityStatusMeta, matchAIRuntimeCapabilitySnapshot } from '@/lib/ai-runtime-capabilities'
 import {
   type ProjectAIWorkspaceDetailTab,
@@ -58,7 +58,20 @@ const tabOptions: Array<{ key: ProjectAIWorkspaceDetailTab; label: string }> = [
 ]
 
 function displaySessionTitle(session: ProjectAIWorkspaceSession) {
-  return session.title.replace(/^角色助手\s*\/\s*/, '').replace(/^世界观助手\s*\/\s*/, '')
+  const title = session.title.replace(/^角色助手\s*\/\s*/, '').replace(/^世界观助手\s*\/\s*/, '').trim()
+
+  if (!title || title === '默认会话') {
+    return session.assetType === 'project_character' ? '角色助手' : '世界观助手'
+  }
+
+  if (
+    session.assetType === 'world_setting' &&
+    ['世界规则', '势力', '地点', '时间线'].every((keyword) => title.includes(keyword))
+  ) {
+    return '世界观助手'
+  }
+
+  return title
 }
 
 function stripToolMessages(messages: ProjectAssetAIMessage[]) {
@@ -105,6 +118,7 @@ function buildCharacterResultMessage(params: {
       action.role_label?.trim() ? `角色定位：${action.role_label.trim()}` : '',
       action.summary?.trim() ? `摘要：${action.summary.trim()}` : '',
       action.description?.trim() ? `描述：${action.description.trim()}` : '',
+      action.profile?.trim() ? `人物档案：${action.profile.trim()}` : '',
       action.personality?.trim() ? `性格：${action.personality.trim()}` : '',
       action.background?.trim() ? `背景：${action.background.trim()}` : '',
       action.relationship_notes?.trim() ? `关系备注：${action.relationship_notes.trim()}` : '',
@@ -428,7 +442,6 @@ export function ProjectAIWorkspacePage() {
                 <Bot className="size-4 text-primary" />
                 会话树
               </CardTitle>
-              <CardDescription>按功能分组管理 AI 会话。</CardDescription>
             </CardHeader>
             <CardContent className="min-h-0 flex-1 space-y-4 overflow-y-auto">
               <SessionGroup
@@ -469,32 +482,19 @@ export function ProjectAIWorkspacePage() {
             return (
               <div key={session.id} className={visible ? 'flex h-full min-h-0 flex-col' : 'hidden'}>
                 <Card className="flex h-full min-h-0 flex-col rounded-none border-0 bg-transparent shadow-none">
-                  <CardHeader className="border-b border-border">
+                  <CardHeader className="border-b border-border py-4">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div>
-                        <CardTitle className="text-xl text-foreground">{session.title}</CardTitle>
-                        <CardDescription className="mt-1">
-                          {session.assetType === 'project_character'
-                            ? '角色建议、角色扩展与关系整理'
-                            : '世界规则、势力、地点与时间线补全'}
-                        </CardDescription>
+                        <CardTitle className="text-xl text-foreground">{displaySessionTitle(session)}</CardTitle>
                       </div>
                       <div className="flex flex-wrap gap-2">
                         {capabilitySnapshot ? (
-                          <>
-                            <Badge
-                              variant="outline"
-                              className={getCapabilityStatusMeta(capabilitySnapshot.text_generation.status).className}
-                            >
-                              文本生成：{capabilitySnapshot.text_generation.summary}
-                            </Badge>
-                            <Badge
-                              variant="outline"
-                              className={getCapabilityStatusMeta(capabilitySnapshot.structured_output.status).className}
-                            >
-                              结构化：{capabilitySnapshot.structured_output.summary}
-                            </Badge>
-                          </>
+                          <Badge
+                            variant="outline"
+                            className={getCapabilityStatusMeta(capabilitySnapshot.structured_output.status).className}
+                          >
+                            {capabilitySnapshot.structured_output.summary}
+                          </Badge>
                         ) : (
                           <Badge variant="outline" className="border-border bg-background text-muted-foreground">
                             能力未检测
@@ -684,12 +684,7 @@ function ResultTab({
 
   return (
     <div className="space-y-4">
-      <div>
-        <div className="text-sm font-medium text-foreground">当前结果</div>
-        <div className="mt-1 text-xs leading-5 text-muted-foreground">
-          结构化结果会在这里集中展示并支持写回项目。
-        </div>
-      </div>
+      <div className="text-sm font-medium text-foreground">当前结果</div>
 
       {hasWorldResult ? (
         <div className="space-y-2">
@@ -712,7 +707,7 @@ function ResultTab({
                 {index + 1}. {action.name}
               </div>
               <div className="mt-1 text-xs text-muted-foreground">
-                {action.role_label || action.summary || action.description || '暂无附加说明'}
+                {action.role_label || action.summary || action.profile || action.description || '暂无附加说明'}
               </div>
             </div>
           ))}

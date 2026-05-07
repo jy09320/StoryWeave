@@ -390,7 +390,7 @@ export function RuntimeSettingsPanel() {
           </CardHeader>
           <CardContent className="space-y-3 text-sm leading-6 text-foreground/85">
             <div className="rounded-2xl border border-border bg-muted/35 p-4">
-              AI 写作工作台和 AI 工具箱只负责选模型与执行任务，提供商、Key、Base URL 统一在这里维护。
+              AI 写作工作台和模板广场只负责选模型与执行任务，提供商、Key、Base URL 统一在这里维护。
             </div>
             <div className="rounded-2xl border border-border bg-muted/35 p-4">
               <div className="flex items-center gap-2 text-foreground">
