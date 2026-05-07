@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from collections.abc import AsyncIterator
 import logging
 from typing import Any
@@ -10,6 +12,7 @@ from sqlalchemy.orm import selectinload
 
 from app.core.config import settings
 from app.models.project import Chapter, ChapterMemory, Project, ProjectCharacter, ProjectStoryMemory
+from app.services.context_retrieval_service import context_retrieval_service
 from app.services.runtime_ai_config import runtime_ai_config_service
 
 logger = logging.getLogger(__name__)
@@ -39,14 +42,11 @@ class AIService:
     def _clip_text(self, value: str | None, limit: int = 400) -> str | None:
         if value is None:
             return None
-
         normalized = " ".join(value.split())
         if not normalized:
             return None
-
         if len(normalized) <= limit:
             return normalized
-
         return f"{normalized[:limit].rstrip()}..."
 
     def _detect_generation_intent(self, instruction: str, text: str) -> str:
@@ -158,7 +158,12 @@ class AIService:
             lines.append("角色状态变化：")
             for item in character_arcs:
                 summary = self._clip_text(
-                    item.get("after") or item.get("summary") or item.get("character_id_or_name") or item.get("name"),
+                    item.get("latest_state")
+                    or item.get("after")
+                    or item.get("summary")
+                    or item.get("character")
+                    or item.get("character_id_or_name")
+                    or item.get("name"),
                     120,
                 )
                 if summary:
@@ -184,6 +189,25 @@ class AIService:
 
         excerpt = tail[-1500:]
         return f"上一章结尾原文（{previous_chapter.title}）：\n{excerpt}"
+
+    def _build_retrieved_chunks_section(self, retrieval: dict[str, Any] | None) -> str | None:
+        if not retrieval:
+            return None
+        chunks = retrieval.get("chunks") or []
+        if not chunks:
+            return None
+
+        lines = ["相关历史正文片段"]
+        for index, item in enumerate(chunks[:4], start=1):
+            scene_label = self._clip_text(item.get("scene_label"), 80) or f"chunk-{index}"
+            lines.append(f"{index}. {scene_label}")
+            content = self._clip_text(item.get("content_short") or item.get("content"), 220)
+            if content:
+                lines.append(f"   片段：{content}")
+            reasons = item.get("match_reasons") or []
+            if reasons:
+                lines.append(f"   命中原因：{' | '.join(reasons[:2])}")
+        return "\n".join(lines)
 
     def _build_character_context_section(self, project: Project, *, detail_level: str) -> str | None:
         if not project.project_characters:
@@ -306,6 +330,21 @@ class AIService:
             "story_memory": project.story_memory,
         }
 
+    async def load_generation_context(
+        self,
+        db: AsyncSession,
+        *,
+        project_id: str,
+        chapter_id: str | None,
+        owner_id: str | None = None,
+    ) -> dict[str, Any] | None:
+        return await self._load_generation_context(
+            db,
+            project_id=project_id,
+            chapter_id=chapter_id,
+            owner_id=owner_id,
+        )
+
     async def build_generation_context_preview(
         self,
         db: AsyncSession,
@@ -336,6 +375,16 @@ class AIService:
         previous_chapter = loaded["previous_chapter"]
         recent_memories = loaded["recent_memories"]
         story_memory = loaded["story_memory"]
+        retrieval = await context_retrieval_service.retrieve_for_generation(
+            db,
+            project_id=project_id,
+            chapter=chapter,
+            text=text,
+            instruction=instruction,
+            recent_memories=recent_memories,
+            story_memory=story_memory,
+            limit=6,
+        )
 
         sections: list[dict[str, str]] = []
 
@@ -354,6 +403,7 @@ class AIService:
                 f"近期剧情记忆 {index}",
                 self._build_chapter_memory_section(memory, label=f"近期剧情记忆 {index}"),
             )
+        add_section("相关历史正文片段", self._build_retrieved_chunks_section(retrieval))
         add_section("上一章结尾原文", self._build_previous_chapter_tail_section(previous_chapter))
         add_section(
             "角色上下文",
@@ -369,7 +419,7 @@ class AIService:
             final_instruction = (
                 f"{instruction}\n\n"
                 f"{self._build_intent_guide(intent)}\n"
-                "如果生成内容与上下文冲突，优先保持角色设定、世界观规则、章节记忆和长期主线一致。\n\n"
+                "如果生成内容与上下文冲突，优先保持角色设定、世界观规则、章节记忆、检索片段与长期主线一致。\n\n"
                 f"{context_block}"
             )
         else:
@@ -383,6 +433,8 @@ class AIService:
                 "project_found": True,
                 "chapter_found": chapter is not None,
                 "recent_memory_count": len(recent_memories),
+                "retrieved_chunk_count": len(retrieval.get("chunks", [])),
+                "retrieval_query_terms": retrieval.get("query_terms", []),
                 "has_previous_chapter_tail": previous_chapter is not None and bool(previous_chapter.plain_text),
                 "has_story_memory": story_memory is not None,
             },

@@ -6,8 +6,9 @@ from sse_starlette.sse import EventSourceResponse
 from app.api.deps import get_current_user
 from app.core.database import get_db
 from app.models.user import User
-from app.schemas.project import AIGenerateRequest, AIContextPreviewResponse
+from app.schemas.project import AIGenerateRequest, AIContextPreviewResponse, AIRetrievalPreviewResponse
 from app.services.ai_service import ai_service
+from app.services.context_retrieval_service import context_retrieval_service
 
 router = APIRouter()
 
@@ -76,3 +77,36 @@ async def generate_context_preview(
         owner_id=current_user.id,
     )
     return AIContextPreviewResponse(**preview)
+
+
+@router.post("/retrieval-preview", response_model=AIRetrievalPreviewResponse)
+async def generate_retrieval_preview(
+    req: AIGenerateRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    loaded = await ai_service.load_generation_context(
+        db,
+        project_id=req.project_id,
+        chapter_id=req.chapter_id,
+        owner_id=current_user.id,
+    )
+    if not loaded:
+        return AIRetrievalPreviewResponse(query_terms=[], chunks=[], metadata={"project_found": False})
+
+    retrieval = await context_retrieval_service.retrieve_for_generation(
+        db,
+        project_id=req.project_id,
+        chapter=loaded["chapter"],
+        text=req.text,
+        instruction=req.instruction,
+        recent_memories=loaded["recent_memories"],
+        story_memory=loaded["story_memory"],
+        limit=8,
+    )
+    retrieval["metadata"] = {
+        **retrieval.get("metadata", {}),
+        "project_found": True,
+        "chapter_found": loaded["chapter"] is not None,
+    }
+    return AIRetrievalPreviewResponse(**retrieval)

@@ -38,9 +38,9 @@ import {
   type EditorUtilityContext,
 } from '@/lib/editor-utility-context'
 import { formatDate } from '@/lib/format'
-import { getAIContextPreview, getAIRuntimeSettings, isAbortError, listAIRuntimeModels, normalizeAIError, streamGenerate, type AIModelOption } from '@/services/ai'
+import { getAIContextPreview, getAIRetrievalPreview, getAIRuntimeSettings, isAbortError, listAIRuntimeModels, normalizeAIError, streamGenerate, type AIModelOption } from '@/services/ai'
 import { getProject } from '@/services/projects'
-import type { AIGeneratePayload, AIContextPreviewResponse, ProjectDetail } from '@/types/api'
+import type { AIGeneratePayload, AIContextPreviewResponse, AIRetrievalPreviewResponse, ProjectDetail } from '@/types/api'
 import { useAuth } from '@/contexts/auth-context'
 
 const primaryNavItems = [
@@ -71,8 +71,10 @@ interface AIPanelSnapshot {
   aiState: AIComposerState
   aiMessages: AIChatMessage[]
   contextPreview: AIContextPreviewResponse | null
+  retrievalPreview: AIRetrievalPreviewResponse | null
   isContextPreviewOpen: boolean
   isContextPreviewDialogOpen: boolean
+  isRetrievalPreviewOpen: boolean
 }
 
 const utilityTabs: Array<{ key: UtilityTabKey; label: string }> = [
@@ -198,9 +200,12 @@ export function AppShell() {
   const [aiState, setAIState] = useState<AIComposerState>(DEFAULT_AI_COMPOSER_STATE)
   const [aiMessages, setAIMessages] = useState<AIChatMessage[]>([])
   const [contextPreview, setContextPreview] = useState<AIContextPreviewResponse | null>(null)
+  const [retrievalPreview, setRetrievalPreview] = useState<AIRetrievalPreviewResponse | null>(null)
   const [isContextPreviewLoading, setIsContextPreviewLoading] = useState(false)
+  const [isRetrievalPreviewLoading, setIsRetrievalPreviewLoading] = useState(false)
   const [isContextPreviewOpen, setIsContextPreviewOpen] = useState(false)
   const [isContextPreviewDialogOpen, setIsContextPreviewDialogOpen] = useState(false)
+  const [isRetrievalPreviewOpen, setIsRetrievalPreviewOpen] = useState(false)
   const generationAbortRef = useRef<AbortController | null>(null)
   const aiPanelSnapshotRef = useRef<Record<string, AIPanelSnapshot>>(readAIPanelSnapshots())
   const previousAIScopeKeyRef = useRef<string | null>(null)
@@ -614,6 +619,7 @@ export function AppShell() {
     aiMessages.length > 0 ||
     Boolean(aiState.result.trim()) ||
     Boolean(contextPreview) ||
+    Boolean(retrievalPreview) ||
     aiState.instruction.trim() !== getAIInstruction(scopedEditorUtilityContext)
 
   useEffect(() => {
@@ -625,11 +631,13 @@ export function AppShell() {
       aiState: { ...aiState, isGenerating: false },
       aiMessages,
       contextPreview,
+      retrievalPreview,
       isContextPreviewOpen,
       isContextPreviewDialogOpen,
+      isRetrievalPreviewOpen,
     }
     writeAIPanelSnapshots(aiPanelSnapshotRef.current)
-  }, [aiMessages, aiState, contextPreview, currentAIScopeKey, isContextPreviewDialogOpen, isContextPreviewOpen])
+  }, [aiMessages, aiState, contextPreview, retrievalPreview, currentAIScopeKey, isContextPreviewDialogOpen, isContextPreviewOpen, isRetrievalPreviewOpen])
 
   useEffect(() => {
     const previousScopeKey = previousAIScopeKeyRef.current
@@ -643,8 +651,10 @@ export function AppShell() {
             isGenerating: false,
           },
           contextPreview: null,
+          retrievalPreview: null,
           isContextPreviewOpen: false,
           isContextPreviewDialogOpen: false,
+          isRetrievalPreviewOpen: false,
         }
         writeAIPanelSnapshots(aiPanelSnapshotRef.current)
       }
@@ -658,8 +668,10 @@ export function AppShell() {
       setAIState(buildDefaultAIComposerState(null))
       setAIMessages([])
       setContextPreview(null)
+      setRetrievalPreview(null)
       setIsContextPreviewOpen(false)
       setIsContextPreviewDialogOpen(false)
+      setIsRetrievalPreviewOpen(false)
       previousAIScopeKeyRef.current = currentAIScopeKey
       return
     }
@@ -669,14 +681,18 @@ export function AppShell() {
       setAIState(nextSnapshot.aiState)
       setAIMessages(nextSnapshot.aiMessages)
       setContextPreview(nextSnapshot.contextPreview)
+      setRetrievalPreview(nextSnapshot.retrievalPreview ?? null)
       setIsContextPreviewOpen(nextSnapshot.isContextPreviewOpen)
       setIsContextPreviewDialogOpen(nextSnapshot.isContextPreviewDialogOpen)
+      setIsRetrievalPreviewOpen(nextSnapshot.isRetrievalPreviewOpen ?? false)
     } else {
       setAIState(buildDefaultAIComposerState(scopedEditorUtilityContext))
       setAIMessages([])
       setContextPreview(null)
+      setRetrievalPreview(null)
       setIsContextPreviewOpen(false)
       setIsContextPreviewDialogOpen(false)
+      setIsRetrievalPreviewOpen(false)
     }
 
     previousAIScopeKeyRef.current = currentAIScopeKey
@@ -691,8 +707,10 @@ export function AppShell() {
       instruction: getAIInstruction(scopedEditorUtilityContext),
     }))
     setContextPreview(null)
+    setRetrievalPreview(null)
     setIsContextPreviewOpen(false)
     setIsContextPreviewDialogOpen(false)
+    setIsRetrievalPreviewOpen(false)
     generationAbortRef.current?.abort()
     generationAbortRef.current = null
     writeEditorAIPreviewContext(null)
@@ -746,8 +764,10 @@ export function AppShell() {
     setAIState(buildDefaultAIComposerState(scopedEditorUtilityContext))
     setAIMessages([])
     setContextPreview(null)
+    setRetrievalPreview(null)
     setIsContextPreviewOpen(false)
     setIsContextPreviewDialogOpen(false)
+    setIsRetrievalPreviewOpen(false)
     writeEditorAIPreviewContext(null)
     toast.message('已清空当前章节的 AI 记录')
   }
@@ -772,15 +792,22 @@ export function AppShell() {
     }
 
     setIsContextPreviewLoading(true)
+    setIsRetrievalPreviewLoading(true)
     try {
-      const preview = await getAIContextPreview(payload)
+      const [preview, retrieval] = await Promise.all([
+        getAIContextPreview(payload),
+        getAIRetrievalPreview(payload),
+      ])
       setContextPreview(preview)
+      setRetrievalPreview(retrieval)
       setIsContextPreviewOpen(true)
       setIsContextPreviewDialogOpen(false)
+      setIsRetrievalPreviewOpen(true)
     } catch (error) {
       toast.error(error instanceof Error ? error.message : '上下文预览加载失败')
     } finally {
       setIsContextPreviewLoading(false)
+      setIsRetrievalPreviewLoading(false)
     }
   }
 
@@ -1046,10 +1073,10 @@ export function AppShell() {
                   <button
                     type="button"
                     onClick={() => void handleLoadContextPreview()}
-                    disabled={isContextPreviewLoading || aiState.isGenerating}
+                    disabled={isContextPreviewLoading || isRetrievalPreviewLoading || aiState.isGenerating}
                     className="inline-flex h-8 items-center gap-2 rounded-full border border-[#d1d5db] bg-white px-3 text-[11px] text-[#4b5563] transition hover:border-[#9ca3af] hover:text-[#111827] disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    {isContextPreviewLoading ? <LoaderCircle className="size-3 animate-spin" /> : <BookCopy className="size-3.5" />}
+                    {isContextPreviewLoading || isRetrievalPreviewLoading ? <LoaderCircle className="size-3 animate-spin" /> : <BookCopy className="size-3.5" />}
                     上下文预览
                   </button>
                 </div>
@@ -1091,12 +1118,12 @@ export function AppShell() {
                     onClick={() => setIsContextPreviewOpen((prev) => !prev)}
                     className="flex w-full items-center justify-between px-3 py-2 text-left"
                   >
-                    <div>
-                      <div className="text-xs font-medium text-[#111827]">上下文预览</div>
-                      <div className="mt-0.5 text-[11px] text-[#6b7280]">
-                        intent: {contextPreview.intent} ? sections: {contextPreview.sections.length}
+                      <div>
+                        <div className="text-xs font-medium text-[#111827]">上下文预览</div>
+                        <div className="mt-0.5 text-[11px] text-[#6b7280]">
+                          intent: {contextPreview.intent} · sections: {contextPreview.sections.length}
+                        </div>
                       </div>
-                    </div>
                     <ChevronDown className={clsx('size-4 text-[#6b7280] transition', isContextPreviewOpen && 'rotate-180')} />
                   </button>
                   {isContextPreviewOpen ? (
@@ -1106,6 +1133,8 @@ export function AppShell() {
                         <div>story memory: {contextPreview.metadata.has_story_memory ? 'yes' : 'no'}</div>
                         <div>chapter found: {contextPreview.metadata.chapter_found ? 'yes' : 'no'}</div>
                         <div>prev tail: {contextPreview.metadata.has_previous_chapter_tail ? 'yes' : 'no'}</div>
+                        <div>retrieved chunks: {contextPreview.metadata.retrieved_chunk_count ?? 0}</div>
+                        <div>query terms: {contextPreview.metadata.retrieval_query_terms?.length ?? 0}</div>
                       </div>
                       <div className="flex items-center justify-between gap-2">
                         <div className="text-[11px] text-[#6b7280]">侧栏仅展示摘要，完整内容可在弹窗中查看。</div>
@@ -1128,6 +1157,82 @@ export function AppShell() {
                       <div className="rounded-2xl border border-[#dbe3ea] bg-[#f8fafc] px-3 py-3">
                         <div className="mb-1 text-[11px] uppercase tracking-[0.18em] text-[#6b7280]">Final Instruction</div>
                         <pre className="max-h-56 overflow-y-auto whitespace-pre-wrap break-words text-xs leading-6 text-[#111827]">{contextPreview.final_instruction}</pre>
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+
+              {retrievalPreview ? (
+                <div className="mt-3 rounded-[18px] border border-[#dbe3ea] bg-white">
+                  <button
+                    type="button"
+                    onClick={() => setIsRetrievalPreviewOpen((prev) => !prev)}
+                    className="flex w-full items-center justify-between px-3 py-2 text-left"
+                  >
+                    <div>
+                      <div className="text-xs font-medium text-[#111827]">检索预览</div>
+                      <div className="mt-0.5 text-[11px] text-[#6b7280]">
+                        chunks: {retrievalPreview.chunks.length} · terms: {retrievalPreview.query_terms.length}
+                      </div>
+                    </div>
+                    <ChevronDown className={clsx('size-4 text-[#6b7280] transition', isRetrievalPreviewOpen && 'rotate-180')} />
+                  </button>
+                  {isRetrievalPreviewOpen ? (
+                    <div className="space-y-3 border-t border-[#eef0f3] px-3 py-3">
+                      <div className="grid grid-cols-2 gap-2 text-[11px] text-[#6b7280]">
+                        <div>candidate: {retrievalPreview.metadata.candidate_count ?? 0}</div>
+                        <div>matched: {retrievalPreview.metadata.matched_count ?? 0}</div>
+                        <div>returned: {retrievalPreview.metadata.returned_count ?? 0}</div>
+                        <div>chapter found: {retrievalPreview.metadata.chapter_found ? 'yes' : 'no'}</div>
+                      </div>
+                      <div className="rounded-2xl border border-[#eef0f3] bg-[#fcfcfd] px-3 py-3">
+                        <div className="mb-1 text-[11px] uppercase tracking-[0.18em] text-[#6b7280]">Query Terms</div>
+                        <div className="flex max-h-24 flex-wrap gap-1.5 overflow-y-auto pr-1">
+                          {retrievalPreview.query_terms.length > 0 ? (
+                            retrievalPreview.query_terms.map((term) => (
+                              <span key={term} className="rounded-full border border-[#d1d5db] bg-white px-2 py-0.5 text-[11px] text-[#4b5563]">
+                                {term}
+                              </span>
+                            ))
+                          ) : (
+                            <span className="text-xs text-[#6b7280]">暂无 query terms</span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
+                        {retrievalPreview.chunks.map((chunk) => (
+                          <div key={chunk.chunk_id} className="rounded-2xl border border-[#eef0f3] bg-[#fcfcfd] px-3 py-3">
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <div className="text-[11px] uppercase tracking-[0.18em] text-[#6b7280]">
+                                  Chapter {chunk.chapter_order} · Chunk {chunk.chunk_index + 1}
+                                </div>
+                                <div className="mt-1 text-xs font-medium text-[#111827]">{chunk.scene_label || '未命名片段'}</div>
+                              </div>
+                              <div className="rounded-full border border-[#d1d5db] bg-white px-2 py-0.5 text-[11px] text-[#4b5563]">
+                                {chunk.score.toFixed(2)}
+                              </div>
+                            </div>
+                            <pre className="mt-2 max-h-28 overflow-y-auto whitespace-pre-wrap break-words text-xs leading-6 text-[#374151]">
+                              {chunk.content_short || chunk.content}
+                            </pre>
+                            {chunk.match_reasons.length > 0 ? (
+                              <div className="mt-2 space-y-1">
+                                {chunk.match_reasons.map((reason) => (
+                                  <div key={`${chunk.chunk_id}-${reason}`} className="text-[11px] text-[#6b7280]">
+                                    {reason}
+                                  </div>
+                                ))}
+                              </div>
+                            ) : null}
+                          </div>
+                        ))}
+                        {retrievalPreview.chunks.length === 0 ? (
+                          <div className="rounded-2xl border border-dashed border-[#d1d5db] px-3 py-4 text-xs text-[#6b7280]">
+                            当前没有召回到可用正文片段。
+                          </div>
+                        ) : null}
                       </div>
                     </div>
                   ) : null}

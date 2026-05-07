@@ -738,3 +738,26 @@ class AIContextPreviewResponse(BaseModel):
     sections: list[AIContextPreviewSectionResponse] = Field(default_factory=list)
     final_instruction: str
     metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class AIRetrievalPreviewChunkResponse(BaseModel):
+    chunk_id: str
+    chapter_id: str
+    chapter_order: int
+    chunk_index: int
+    scene_label: str | None = None
+    content: str
+    content_short: str | None = None
+    characters: list[str] = Field(default_factory=list)
+    tags: list[str] = Field(default_factory=list)
+    start_offset: int | None = None
+    end_offset: int | None = None
+    score: float
+    matched_terms: list[str] = Field(default_factory=list)
+    match_reasons: list[str] = Field(default_factory=list)
+
+
+class AIRetrievalPreviewResponse(BaseModel):
+    query_terms: list[str] = Field(default_factory=list)
+    chunks: list[AIRetrievalPreviewChunkResponse] = Field(default_factory=list)
+    metadata: dict[str, Any] = Field(default_factory=dict)

@@ -1,4 +1,4 @@
-import type { AIGeneratePayload, AIContextPreviewResponse } from '@/types/api'
+import type { AIGeneratePayload, AIContextPreviewResponse, AIRetrievalPreviewResponse } from '@/types/api'
 import { apiClient } from '@/lib/api-client'
 
 export interface AIRuntimeSettings {
@@ -49,6 +49,11 @@ interface AIGenerateOnceResponse {
 
 export async function getAIContextPreview(payload: AIGeneratePayload) {
   const { data } = await apiClient.post<AIContextPreviewResponse>('/ai/context-preview', payload)
+  return data
+}
+
+export async function getAIRetrievalPreview(payload: AIGeneratePayload) {
+  const { data } = await apiClient.post<AIRetrievalPreviewResponse>('/ai/retrieval-preview', payload)
   return data
 }
 

@@ -279,6 +279,37 @@ export interface AIContextPreviewResponse {
     recent_memory_count?: number
     has_previous_chapter_tail?: boolean
     has_story_memory?: boolean
+    retrieved_chunk_count?: number
+    retrieval_query_terms?: string[]
+  }
+}
+
+export interface AIRetrievalPreviewChunk {
+  chunk_id: string
+  chapter_id: string
+  chapter_order: number
+  chunk_index: number
+  scene_label: string | null
+  content: string
+  content_short: string | null
+  characters: string[]
+  tags: string[]
+  start_offset: number | null
+  end_offset: number | null
+  score: number
+  matched_terms: string[]
+  match_reasons: string[]
+}
+
+export interface AIRetrievalPreviewResponse {
+  query_terms: string[]
+  chunks: AIRetrievalPreviewChunk[]
+  metadata: {
+    project_found?: boolean
+    chapter_found?: boolean
+    candidate_count?: number
+    matched_count?: number
+    returned_count?: number
   }
 }
 
