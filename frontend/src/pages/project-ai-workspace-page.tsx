@@ -1,8 +1,7 @@
 import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Link, useParams } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import {
-  ArrowLeft,
   Bot,
   CheckCircle2,
   Clock3,
@@ -381,6 +380,14 @@ export function ProjectAIWorkspacePage() {
         ...prev,
         latestWorldPatch: activeSession.assetType === 'world_setting' ? null : prev.latestWorldPatch,
         latestCharacterActions: activeSession.assetType === 'project_character' ? null : prev.latestCharacterActions,
+        notes:
+          activeSession.assetType === 'world_setting' || activeSession.assetType === 'project_character'
+            ? []
+            : prev.notes,
+        appliedSources:
+          activeSession.assetType === 'world_setting' || activeSession.assetType === 'project_character'
+            ? []
+            : prev.appliedSources,
         isApplying: false,
       }))
     } catch (error) {
@@ -413,36 +420,9 @@ export function ProjectAIWorkspacePage() {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="mb-3 flex shrink-0 justify-end">
-        <div className="hidden">
-          <div className="text-sm uppercase tracking-[0.18em] text-primary/80">{project.title}</div>
-          <h1 className="text-3xl font-semibold text-foreground">AI 工作区</h1>
-          <p className="text-sm text-muted-foreground">
-            以项目为单位统一管理角色助手和世界观助手的多会话任务。
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Link
-            to={`/projects/${project.id}`}
-            className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-border bg-background px-3 text-sm text-foreground transition hover:bg-muted"
-          >
-            <ArrowLeft className="size-4" />
-            返回项目
-          </Link>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => activeSession && handleCreateSession(activeSession.assetType)}
-          >
-            <Plus className="size-4" />
-            新建会话
-          </Button>
-        </div>
-      </div>
-
       <section className="grid min-h-0 flex-1 overflow-hidden rounded-2xl border border-border bg-card/95 shadow-[0_16px_36px_rgba(148,163,184,0.12)] xl:grid-cols-[300px_minmax(0,1fr)_360px]">
         <aside className="min-h-0 border-b border-border bg-muted/15 xl:border-b-0 xl:border-r">
-          <Card className="h-full rounded-none border-0 bg-transparent shadow-none">
+          <Card className="flex h-full min-h-0 flex-col rounded-none border-0 bg-transparent shadow-none">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
                 <Bot className="size-4 text-primary" />
@@ -450,7 +430,7 @@ export function ProjectAIWorkspacePage() {
               </CardTitle>
               <CardDescription>按功能分组管理 AI 会话。</CardDescription>
             </CardHeader>
-            <CardContent className="max-h-[calc(100vh-18rem)] space-y-4 overflow-y-auto">
+            <CardContent className="min-h-0 flex-1 space-y-4 overflow-y-auto">
               <SessionGroup
                 title="角色助手"
                 icon={Users2}
@@ -548,8 +528,6 @@ export function ProjectAIWorkspacePage() {
                         onSendMessage={async () => await handleSendSession(session)}
                         latestWorldPatch={state.latestWorldPatch}
                         latestCharacterActions={state.latestCharacterActions}
-                        onApplyWorldPatch={() => void handleApplyCurrentResult()}
-                        onApplyCharacterActions={() => void handleApplyCurrentResult()}
                         isApplying={state.isApplying}
                         onFileUpload={async (file) => await handleUploadFile(session, file)}
                         isUploadingFile={state.isUploadingFile}
@@ -564,8 +542,8 @@ export function ProjectAIWorkspacePage() {
           })}
         </div>
 
-        <aside className="min-h-0 bg-muted/10">
-          <Card className="rounded-none border-0 bg-transparent shadow-none">
+        <aside className="min-h-0 overflow-hidden bg-muted/10">
+          <Card className="flex h-full min-h-0 flex-col rounded-none border-0 bg-transparent shadow-none">
             <CardHeader>
               <div className="grid grid-cols-3 rounded-xl bg-muted/70 p-1">
                 {tabOptions.map((tab) => (
@@ -585,7 +563,7 @@ export function ProjectAIWorkspacePage() {
                 ))}
               </div>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="min-h-0 flex-1 space-y-4 overflow-y-auto">
               {detailTab === 'result' ? (
                 <ResultTab
                   session={activeSession}
@@ -747,7 +725,7 @@ function ResultTab({
         </div>
       ) : null}
 
-      {state.notes.length > 0 ? (
+      {state.notes.length > 0 && (hasWorldResult || hasCharacterResult) ? (
         <div className="rounded-xl border border-border bg-background p-3">
           <div className="text-sm font-medium text-foreground">说明</div>
           <ul className="mt-2 space-y-1 text-xs leading-5 text-muted-foreground">
@@ -758,7 +736,11 @@ function ResultTab({
         </div>
       ) : null}
 
-      <Button className="w-full" onClick={onApply} disabled={state.isApplying || (!hasWorldResult && !hasCharacterResult)}>
+      <Button
+        className="w-full disabled:bg-muted disabled:text-muted-foreground"
+        onClick={onApply}
+        disabled={state.isApplying || (!hasWorldResult && !hasCharacterResult)}
+      >
         {state.isApplying ? '写入中...' : '应用写入'}
       </Button>
     </div>

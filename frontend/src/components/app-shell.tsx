@@ -587,7 +587,7 @@ export function AppShell() {
   )
   const runningAITaskCount = aiWorkspaceTasks.filter((item) => item.state.taskStatus === 'running').length
   const failedAITaskCount = aiWorkspaceTasks.filter((item) => item.state.taskStatus === 'failed').length
-  const showProjectAITaskDock = isProjectScoped && aiWorkspaceTasks.length > 0
+  const showProjectAITaskDock = isProjectScoped && !isAIWorkspaceRoute && aiWorkspaceTasks.length > 0
   const scopedEditorAIDraft =
     editorAIDraftContext?.projectId === projectId && editorAIDraftContext?.chapterId === chapterId
       ? editorAIDraftContext
