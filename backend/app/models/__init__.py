@@ -9,6 +9,10 @@ from app.models.project import (
     Project,
     ProjectCharacter,
     ProjectStoryMemory,
+    StoryEntity,
+    StoryEvent,
+    StoryOpenLoop,
+    StoryRelation,
     WorldSetting,
 )
 from app.models.user import User
@@ -23,6 +27,10 @@ __all__ = [
     "MemoryEvidenceLink",
     "ProjectCharacter",
     "ProjectStoryMemory",
+    "StoryEntity",
+    "StoryEvent",
+    "StoryOpenLoop",
+    "StoryRelation",
     "WorldSetting",
     "AIRuntimeSetting",
     "User",

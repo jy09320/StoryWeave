@@ -50,6 +50,22 @@ class Project(Base):
         cascade="all, delete-orphan",
         order_by="DocumentChunk.chapter_order, DocumentChunk.chunk_index",
     )
+    story_entities: Mapped[list["StoryEntity"]] = relationship(
+        back_populates="project",
+        cascade="all, delete-orphan",
+    )
+    story_events: Mapped[list["StoryEvent"]] = relationship(
+        back_populates="project",
+        cascade="all, delete-orphan",
+    )
+    story_relations: Mapped[list["StoryRelation"]] = relationship(
+        back_populates="project",
+        cascade="all, delete-orphan",
+    )
+    story_open_loops: Mapped[list["StoryOpenLoop"]] = relationship(
+        back_populates="project",
+        cascade="all, delete-orphan",
+    )
 
 
 class Chapter(Base):
@@ -258,3 +274,81 @@ class DocumentChunk(Base):
 
     project: Mapped["Project"] = relationship(back_populates="document_chunks")
     chapter: Mapped["Chapter"] = relationship(back_populates="document_chunks")
+
+
+class StoryEntity(Base):
+    __tablename__ = "story_entities"
+
+    id: Mapped[str] = mapped_column(String(26), primary_key=True, default=generate_ulid)
+    project_id: Mapped[str] = mapped_column(String(26), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
+    entity_type: Mapped[str] = mapped_column(String(50), nullable=False, default="concept")
+    canonical_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    aliases: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    description: Mapped[str | None] = mapped_column(Text)
+    tags: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    first_seen_chapter_id: Mapped[str | None] = mapped_column(String(26), ForeignKey("chapters.id", ondelete="SET NULL"), nullable=True)
+    last_seen_chapter_id: Mapped[str | None] = mapped_column(String(26), ForeignKey("chapters.id", ondelete="SET NULL"), nullable=True)
+    first_seen_chapter_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    last_seen_chapter_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    mention_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+
+    project: Mapped["Project"] = relationship(back_populates="story_entities")
+
+
+class StoryEvent(Base):
+    __tablename__ = "story_events"
+
+    id: Mapped[str] = mapped_column(String(26), primary_key=True, default=generate_ulid)
+    project_id: Mapped[str] = mapped_column(String(26), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
+    chapter_id: Mapped[str | None] = mapped_column(String(26), ForeignKey("chapters.id", ondelete="SET NULL"), nullable=True, index=True)
+    chapter_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0, index=True)
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    summary: Mapped[str | None] = mapped_column(Text)
+    event_type: Mapped[str] = mapped_column(String(50), nullable=False, default="scene")
+    location: Mapped[str | None] = mapped_column(String(200))
+    participants: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    tags: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+
+    project: Mapped["Project"] = relationship(back_populates="story_events")
+
+
+class StoryRelation(Base):
+    __tablename__ = "story_relations"
+
+    id: Mapped[str] = mapped_column(String(26), primary_key=True, default=generate_ulid)
+    project_id: Mapped[str] = mapped_column(String(26), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
+    source_entity_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    target_entity_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    relation_type: Mapped[str] = mapped_column(String(100), nullable=False)
+    status_after: Mapped[str | None] = mapped_column(Text)
+    chapter_id: Mapped[str | None] = mapped_column(String(26), ForeignKey("chapters.id", ondelete="SET NULL"), nullable=True, index=True)
+    chapter_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+
+    project: Mapped["Project"] = relationship(back_populates="story_relations")
+
+
+class StoryOpenLoop(Base):
+    __tablename__ = "story_open_loops"
+
+    id: Mapped[str] = mapped_column(String(26), primary_key=True, default=generate_ulid)
+    project_id: Mapped[str] = mapped_column(String(26), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
+    label: Mapped[str] = mapped_column(String(200), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text)
+    priority: Mapped[str] = mapped_column(String(20), nullable=False, default="medium")
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="open")
+    related_entities: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    first_seen_chapter_id: Mapped[str | None] = mapped_column(String(26), ForeignKey("chapters.id", ondelete="SET NULL"), nullable=True)
+    last_seen_chapter_id: Mapped[str | None] = mapped_column(String(26), ForeignKey("chapters.id", ondelete="SET NULL"), nullable=True)
+    first_seen_chapter_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    last_seen_chapter_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    mention_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+
+    project: Mapped["Project"] = relationship(back_populates="story_open_loops")

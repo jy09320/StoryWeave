@@ -17,6 +17,7 @@ from app.schemas.project import (
 )
 from app.services.chapter_chunk_service import chapter_chunk_service
 from app.services.chapter_memory_service import chapter_memory_service
+from app.services.story_graph_service import story_graph_service
 from app.services.story_memory_service import story_memory_service
 
 router = APIRouter()
@@ -54,6 +55,7 @@ async def _refresh_story_memory_for_chapter(db: AsyncSession, chapter: Chapter) 
             project_id=chapter.project_id,
             updated_from_chapter_id=chapter.id if memory is not None else None,
         )
+        await story_graph_service.refresh_for_project(db, project_id=chapter.project_id)
     except Exception:
         # Context refresh is best-effort in Phase 2 and should not block chapter writes.
         logger.exception("Context refresh failed for chapter=%s", chapter.id)
@@ -122,8 +124,8 @@ async def update_chapter(
     chapter = await _require_chapter(chapter_id, current_user.id, db)
 
     update_data = data.model_dump(exclude_unset=True)
-    if "plain_text" in update_data and update_data["plain_text"]:
-        update_data["word_count"] = len(update_data["plain_text"])
+    if "plain_text" in update_data:
+        update_data["word_count"] = len(update_data["plain_text"] or "")
 
     if chapter.content and "content" in update_data and update_data["content"] != chapter.content:
         version = ChapterVersion(
@@ -214,5 +216,11 @@ async def delete_chapter(
     for index, item in enumerate(chapters, start=1):
         item.order_index = index
     await db.commit()
+
+    try:
+        await story_memory_service.refresh_for_project(db, project_id=project_id, updated_from_chapter_id=None)
+        await story_graph_service.refresh_for_project(db, project_id=project_id)
+    except Exception:
+        logger.exception("Story memory refresh failed after deleting chapter=%s", chapter_id)
 
     return {"detail": "Deleted"}
