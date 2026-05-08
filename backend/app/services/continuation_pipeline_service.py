@@ -16,10 +16,11 @@ logger = logging.getLogger(__name__)
 _WRITER_SYSTEM_PROMPT = """你是长篇小说续写写作者。请基于给定的续写计划和上下文包生成单个候选正文。
 
 要求：
-1. 优先承接自然
-2. 优先保持角色一致性和世界设定一致性
-3. 不要输出解释、提纲或说明
-4. 只输出最终正文"""
+1. 优先承接当前章节已写内容
+2. 优先承接自然
+3. 优先保持角色一致性和世界设定一致性
+4. 不要输出解释、提纲或说明
+5. 只输出最终正文"""
 
 
 class ContinuationPipelineService:
@@ -92,7 +93,7 @@ class ContinuationPipelineService:
         if continuity_report.get("check_status") != "completed":
             fallbacks.append("checker:skipped")
 
-        result = {
+        return {
             "plan": plan if debug else {"metadata": plan.get("metadata", {})},
             "context_bundle": context_bundle if debug else {"token_budget_report": context_bundle.get("token_budget_report", {})},
             "draft": draft if debug else {"used_sections": draft.get("used_sections", []), "generation_notes": draft.get("generation_notes", [])},
@@ -107,7 +108,6 @@ class ContinuationPipelineService:
                 "debug": debug,
             },
         }
-        return result
 
     async def _build_context_bundle(
         self,
@@ -156,10 +156,12 @@ class ContinuationPipelineService:
                 "metadata": {"source": "empty_fallback", "returned_chunk_count": 0},
             }
 
+        current_chapter_tail = self._build_current_chapter_tail(chapter)
         bundle = {
             "project_summary": self._build_project_summary(project),
             "story_memory_summary": self._safe_text(story_memory.global_plot_summary) if story_memory else None,
             "current_chapter_summary": self._build_current_chapter_summary(chapter),
+            "current_chapter_tail": current_chapter_tail,
             "previous_chapter_tail": self._clip_text(previous_chapter.plain_text[-1500:], limit=1500)
             if previous_chapter and previous_chapter.plain_text
             else None,
@@ -173,6 +175,7 @@ class ContinuationPipelineService:
                 project_summary=self._build_project_summary(project),
                 story_memory_summary=self._safe_text(story_memory.global_plot_summary) if story_memory else None,
                 current_chapter_summary=self._build_current_chapter_summary(chapter),
+                current_chapter_tail=current_chapter_tail,
                 previous_chapter_tail=previous_chapter.plain_text[-1500:] if previous_chapter and previous_chapter.plain_text else None,
                 recent_memories=recent_memories,
                 retrieved_chunks=retrieval.get("chunks", []),
@@ -216,6 +219,7 @@ class ContinuationPipelineService:
                 "project_summary",
                 "story_memory_summary",
                 "current_chapter_summary",
+                "current_chapter_tail",
                 "recent_memories",
                 "retrieved_chunks",
                 "character_context",
@@ -252,6 +256,7 @@ class ContinuationPipelineService:
             ("项目摘要", context_bundle.get("project_summary")),
             ("长期主线记忆", context_bundle.get("story_memory_summary")),
             ("当前章节摘要", context_bundle.get("current_chapter_summary")),
+            ("当前章节已写尾部", context_bundle.get("current_chapter_tail")),
             ("上一章结尾", context_bundle.get("previous_chapter_tail")),
         ):
             if isinstance(value, str) and value.strip():
@@ -334,9 +339,21 @@ class ContinuationPipelineService:
     def _build_current_chapter_summary(self, chapter: Any) -> str | None:
         if chapter is None:
             return None
-        parts = [self._safe_text(chapter.title), self._clip_text(chapter.summary, limit=200), self._clip_text(chapter.notes, limit=160)]
+        parts = [
+            self._safe_text(chapter.title),
+            self._clip_text(chapter.summary, limit=200),
+            self._clip_text(chapter.notes, limit=160),
+        ]
         clean = [item for item in parts if item]
         return " / ".join(clean) if clean else None
+
+    def _build_current_chapter_tail(self, chapter: Any) -> str | None:
+        if chapter is None:
+            return None
+        source = self._safe_text(getattr(chapter, "plain_text", None)) or self._safe_text(getattr(chapter, "content", None))
+        if not source:
+            return None
+        return self._clip_text(source[-1200:], limit=800)
 
     def _build_token_budget_report(
         self,
@@ -344,6 +361,7 @@ class ContinuationPipelineService:
         project_summary: str | None,
         story_memory_summary: str | None,
         current_chapter_summary: str | None,
+        current_chapter_tail: str | None,
         previous_chapter_tail: str | None,
         recent_memories: list[ChapterMemory],
         retrieved_chunks: list[dict[str, Any]],
@@ -352,6 +370,7 @@ class ContinuationPipelineService:
             "project_summary": len(project_summary or ""),
             "story_memory_summary": len(story_memory_summary or ""),
             "current_chapter_summary": len(current_chapter_summary or ""),
+            "current_chapter_tail": len(current_chapter_tail or ""),
             "previous_chapter_tail": len(previous_chapter_tail or ""),
             "recent_memories": sum(len(memory.summary_short or memory.summary_long or "") for memory in recent_memories[:3]),
             "retrieved_chunks": sum(len(str(item.get("content_short") or item.get("content") or "")) for item in retrieved_chunks[:4]),

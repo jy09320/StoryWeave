@@ -91,9 +91,11 @@ class ContinuationPlannerService:
 
         user_instruction = self._clip_text(request.get("user_instruction"), limit=240) or "继续写下去"
         user_text = self._clip_text(request.get("user_text"), limit=240)
+        current_chapter_tail = self._extract_chapter_tail(chapter, source_limit=600, clip_limit=300)
 
         continuation_point = self._clip_text(
             self._pick_text(
+                current_chapter_tail,
                 user_text,
                 previous_chapter.plain_text[-400:] if previous_chapter and previous_chapter.plain_text else None,
                 chapter.summary if chapter else None,
@@ -168,7 +170,11 @@ class ContinuationPlannerService:
         if chapter is not None:
             must_avoid.append("脱离当前章节叙事焦点")
 
-        style_notes = ["保持与现有正文风格一致", "优先自然承接上一段"]
+        style_notes = [
+            "优先承接当前章节已写内容",
+            "保持与现有正文风格一致",
+            "优先自然承接上一段",
+        ]
         if user_instruction:
             style_notes.append(f"遵循用户任务：{user_instruction}")
 
@@ -188,6 +194,7 @@ class ContinuationPlannerService:
                 "source": "default",
                 "project_title": project.title if project else None,
                 "chapter_title": chapter.title if chapter else None,
+                "used_current_chapter_tail": bool(current_chapter_tail),
             },
         }
 
@@ -209,6 +216,9 @@ class ContinuationPlannerService:
             f"用户指令：{request.get('user_instruction') or ''}",
             f"用户输入：{self._clip_text(request.get('user_text'), limit=1600) or ''}",
         ]
+        chapter_tail = self._extract_chapter_tail(chapter, source_limit=1200, clip_limit=500)
+        if chapter_tail:
+            parts.append(f"当前章节已写尾部：{chapter_tail}")
         if chapter and chapter.summary:
             parts.append(f"章节摘要：{self._clip_text(chapter.summary, limit=400)}")
         if story_memory and story_memory.global_plot_summary:
@@ -278,6 +288,14 @@ class ContinuationPlannerService:
             if isinstance(value, str) and value.strip():
                 return value.strip()
         return None
+
+    def _extract_chapter_tail(self, chapter: Chapter | None, *, source_limit: int, clip_limit: int) -> str | None:
+        if chapter is None:
+            return None
+        source = self._safe_text(chapter.plain_text) or self._safe_text(chapter.content)
+        if not source:
+            return None
+        return self._clip_text(source[-source_limit:], limit=clip_limit)
 
     def _safe_text(self, value: object) -> str | None:
         if not isinstance(value, str):
