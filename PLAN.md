@@ -9,20 +9,16 @@
 ## 当前阶段状态
 
 ### 已完成归档
-当前项目已经完成 Phase 1 与 Phase 1.5 的开发与验收，可直接参考：
-- [`plans/phase1-completed-summary.md`](plans/phase1-completed-summary.md)
-- [`plans/phase1-manual-acceptance-checklist.md`](plans/phase1-manual-acceptance-checklist.md)
-- [`plans/phase1-current-status-conclusion.md`](plans/phase1-current-status-conclusion.md)
+- Phase 1：MVP 基础链路（项目/章节/编辑器/AI 流式续写/版本历史）
+- Phase 1.5：信息架构升级（Dashboard、工作台、AI 工具箱）
+- Phase 2：角色库、世界观、AI 上下文注入
+- Phase 3（部分）：多阶段续写流水线（Planner → Retriever → Writer → Checker）
+
+详细历史参考：[`plans/phase1-completed-summary.md`](plans/phase1-completed-summary.md)
 
 ### 当前主执行文档
-下一轮开发以以下文档为准：
-- [`plans/phase2-detailed-plan.md`](plans/phase2-detailed-plan.md)
-
-### 历史规划文档
-以下文档保留作为历史阶段记录：
-- [`plans/mvp-phase1-next-step.md`](plans/mvp-phase1-next-step.md)
-- [`plans/mvp-phase1-acceptance-checklist.md`](plans/mvp-phase1-acceptance-checklist.md)
-- [`plans/storyweave-product-layout-upgrade.md`](plans/storyweave-product-layout-upgrade.md)
+- [`plans/phase3-context-engineering-plan.md`](plans/phase3-context-engineering-plan.md) — Phase 3 总体规划
+- [`plans/phase3-progress.md`](plans/phase3-progress.md) — Phase 3 当前实施状态
 
 ---
 
@@ -30,26 +26,26 @@
 
 ### 前端
 
-| 层 | 选型 | 理由 |
-|---|---|---|
-| **框架** | React 19 + Vite | 主流成熟，生态丰富，构建快 |
-| **语言** | TypeScript | 类型安全，适合复杂创作数据结构 |
-| **路由** | React Router v7 | 适合当前前端结构 |
-| **UI 组件库** | shadcn/ui + Radix UI | 与当前 Tailwind 架构匹配 |
-| **状态管理** | TanStack Query + React 局部状态 | 贴合当前服务端拉取模式 |
-| **HTTP 请求** | Axios | 保持统一 API 客户端能力 |
-| **样式** | Tailwind CSS v4 | 便于快速迭代写作型界面 |
+| 层 | 选型 |
+|---|---|
+| 框架 | React 19 + Vite |
+| 语言 | TypeScript |
+| 路由 | React Router v7 |
+| UI 组件库 | shadcn/ui + Radix UI |
+| 状态管理 | TanStack Query + React 局部状态 |
+| HTTP 请求 | Axios |
+| 样式 | Tailwind CSS v4 |
 
 ### 后端
 
-| 层 | 选型 | 理由 |
-|---|---|---|
-| **框架** | Python FastAPI | 异步能力好，适合 AI API 集成 |
-| **ORM** | SQLAlchemy 2.0 + Alembic | 主流 Python 数据层方案 |
-| **数据库** | PostgreSQL 16 | 适合结构化与半结构化创作数据 |
-| **AI 集成** | openai SDK + anthropic SDK | 保持原生调用能力 |
-| **流式输出** | SSE | 当前链路已验证可用 |
-| **验证** | Pydantic v2 | 与 FastAPI 配套 |
+| 层 | 选型 |
+|---|---|
+| 框架 | Python FastAPI |
+| ORM | SQLAlchemy 2.0 + Alembic |
+| 数据库 | PostgreSQL 16 |
+| AI 集成 | openai SDK + anthropic SDK |
+| 流式输出 | SSE |
+| 验证 | Pydantic v2 |
 
 ---
 
@@ -59,164 +55,97 @@
 flowchart TD
   A[Dashboard 首页] --> B[项目工作台]
   B --> C[章节编辑器]
-  C --> D[AI 写作面板]
-  A --> E[AI 工具箱]
-  B --> F[项目章节管理]
-  B --> G[项目概览]
+  C --> D[AI 面板 · Pipeline 链路]
+  B --> E[角色管理]
+  B --> F[世界观设定]
+  A --> G[AI 工具箱]
 ```
 
-当前已经具备：
-- 项目管理
-- 章节管理
-- 写作编辑器
-- AI 续写
-- 版本历史最小闭环
-- 创作型首页与 AI 工具箱入口
-
-当前仍待补齐的关键资产层：
-- 角色库
-- 项目内角色关联
+当前已具备：
+- 项目 / 章节管理
+- Tiptap 富文本编辑器 + 自动保存
+- AI 续写（旧链路 SSE 流式 + 新 Pipeline 链路）
+- 版本历史查看与恢复
+- 角色库 + 项目角色关联
 - 世界观设定
-- 可复用的结构化创作上下文
+- 章节级结构化记忆（ChapterMemory）+ 项目级长期记忆（ProjectStoryMemory）
+- 正文 chunk 切分与向量检索
+- 多阶段续写流水线：Planner → Retriever → Writer → Checker
+- Pipeline 调试接口（`/api/ai/continuation/debug`）
+- 多用户 JWT 认证与数据隔离
 
 ---
 
 ## 分阶段规划
 
-### Phase 1: MVP 基础
+### Phase 1：MVP 基础
+状态：**已完成**
+
+### Phase 1.5：体验与布局升级
+状态：**已完成**
+
+### Phase 2：角色与世界观系统
 状态：**已完成**
 
 已完成内容：
-- 项目 CRUD
-- 章节 CRUD 与排序
-- 基础编辑器
-- 自动保存与手动保存
-- AI 流式续写
-- 版本历史查看与恢复
-- 未保存离开提醒
+- 角色库 CRUD
+- 项目角色关联
+- 世界观设定页
+- AI 上下文注入最小闭环
 
-详细结论参考：
-- [`plans/phase1-completed-summary.md`](plans/phase1-completed-summary.md)
+详细参考：[`plans/phase2-detailed-plan.md`](plans/phase2-detailed-plan.md)
 
-### Phase 1.5: 体验与布局升级
-状态：**已完成**
+### Phase 3：上下文工程与续写流水线
+状态：**进行中**
 
 已完成内容：
-- 创作型 Dashboard
-- 最近项目与最近章节回流
-- 结构化项目工作台
-- 多工具 AI 表达
-- 独立 AI 工具箱入口
+- 章节记忆抽取（`chapter_memory_service`）
+- 项目长期记忆聚合（`story_memory_service`）
+- 正文 chunk 切分与检索（`context_retrieval_service`）
+- 多阶段续写流水线（`continuation_pipeline_service`）
+- Planner（`continuation_planner_service`）：规则 + LLM 结构化规划
+- Continuity Checker（`continuity_checker_service`）：规则 + LLM 双层校验
+- 多用户认证体系
 
-详细结论参考：
-- [`plans/phase1-completed-summary.md`](plans/phase1-completed-summary.md)
+待完成内容：
+- 剧情图谱系统（`graph_evidence` 当前为空）
+- Benchmark 体系落地（数据集与回放脚本）
+- 生成后记忆回写钩子（chunk / memory / story memory 异步刷新）
+- Checker 自动重写闭环（当前仅报警）
 
-### Phase 2: 角色与世界观系统
-状态：**当前主阶段**
+详细参考：
+- [`plans/phase3-context-engineering-plan.md`](plans/phase3-context-engineering-plan.md)
+- [`plans/phase3-progress.md`](plans/phase3-progress.md)
+- [`plans/continuation-pipeline-design.md`](plans/continuation-pipeline-design.md)
+- [`plans/memory-schema-design.md`](plans/memory-schema-design.md)
+- [`plans/benchmark-design.md`](plans/benchmark-design.md)
 
-目标：
-- 建立角色库
-- 建立项目世界观设定
-- 将结构化上下文接入编辑器与 AI 工具箱
-
-详细规划参考：
-- [`plans/phase2-detailed-plan.md`](plans/phase2-detailed-plan.md)
-
-### Phase 3: 写作流水线与大纲
+### Phase 4：风格系统
 状态：**后续阶段**
 
-规划方向：
-- 大纲编辑器
-- AI 大纲生成与章节拆分
-- 章节状态工作流
-- 长篇上下文摘要管理
+规划方向：风格档案、风格分析、风格注入生成、风格一致性检查
 
-### Phase 4: 风格系统
+### Phase 5：Prompt 模板与高级 AI
 状态：**后续阶段**
 
-规划方向：
-- 风格档案
-- 风格分析
-- 风格注入生成
-- 风格一致性检查
+规划方向：Prompt 模板库、模板变量系统、按模板路由模型
 
-### Phase 5: Prompt 模板与高级 AI
+### Phase 6：一键生成与协作模式
 状态：**后续阶段**
 
-规划方向：
-- Prompt 模板库
-- 模板变量系统
-- 按模板路由模型
-- 生成日志
+规划方向：一键生成流水线、行内 AI 协作、选中文本改写
 
-### Phase 6: 协作模式与一键生成
+### Phase 7：打磨与导出
 状态：**后续阶段**
 
-规划方向：
-- 一键生成流水线
-- 行内 AI 协作
-- 人机交替模式
-- 选中文本改写接受机制
-
-### Phase 7: 打磨与导出
-状态：**后续阶段**
-
-规划方向：
-- 导出能力
-- 高级版本历史体验
-- 全文搜索
-- 快捷键系统
-- 备份恢复
-
----
-
-## 当前优先建设对象
-
-当前最优先建设的是 Phase 2 的上下文资产层：
-1. 角色库
-2. 项目角色关联
-3. 世界观设定
-4. AI 上下文注入
-
-原因：
-- 这些能力最直接增强现有写作主链路
-- 能提升 AI 输出稳定性与一致性
-- 能为 Prompt 模板、大纲与长篇管理打基础
-
----
-
-## 关键页面演进方向
-
-1. **首页** `/`
-   - 保持创作型入口
-   - 增加角色库与设定相关入口预留位
-
-2. **项目工作台** `/projects/[id]`
-   - 承担章节结构、项目概览、角色与设定入口
-
-3. **写作编辑器** `/projects/[id]/editor/[chapterId]`
-   - 持续作为正文创作与 AI 协同主场景
-
-4. **角色库** `/characters`
-   - 作为全局角色资产中心
-
-5. **世界观编辑** `/projects/[id]/world`
-   - 作为项目级设定维护页
-
-6. **AI 工具箱** `/ai-toolbox`
-   - 逐步消费角色与世界观上下文
+规划方向：导出能力、全文搜索、备份恢复、高级版本历史
 
 ---
 
 ## 当前文档使用建议
 
-如果进入实施，请按以下顺序使用文档：
-1. 先看 [`plans/phase1-completed-summary.md`](plans/phase1-completed-summary.md)
-2. 再看 [`plans/phase2-detailed-plan.md`](plans/phase2-detailed-plan.md)
-3. 如需历史背景，再回看 [`plans/storyweave-product-layout-upgrade.md`](plans/storyweave-product-layout-upgrade.md)
-
----
-
-## 当前结论
-
-StoryWeave 已完成第一阶段闭环，当前不再以补 Phase 1 为目标，而是正式进入以角色库与世界观为核心的 Phase 2 规划与实施阶段。
+1. 了解已完成功能 → [`plans/phase1-completed-summary.md`](plans/phase1-completed-summary.md)
+2. 了解当前阶段进度 → [`plans/phase3-progress.md`](plans/phase3-progress.md)
+3. 了解 Pipeline 设计细节 → [`plans/continuation-pipeline-design.md`](plans/continuation-pipeline-design.md)
+4. 了解 Memory 数据结构 → [`plans/memory-schema-design.md`](plans/memory-schema-design.md)
+5. 了解 Benchmark 体系 → [`plans/benchmark-design.md`](plans/benchmark-design.md)
