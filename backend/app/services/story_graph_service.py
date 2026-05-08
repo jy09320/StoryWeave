@@ -61,7 +61,12 @@ class StoryGraphService:
         entities = self._build_entities(rows, character_profiles=character_profiles)
         entity_names = [item.canonical_name for item in entities]
         events = self._build_events(project_id, rows, known_entity_names=entity_names)
-        relations = self._build_relations(project_id, rows, known_entity_names=entity_names)
+        relations = self._build_relations(
+            project_id,
+            rows,
+            known_entity_names=entity_names,
+            character_profiles=character_profiles,
+        )
         open_loops = self._build_open_loops(project_id, rows, known_entity_names=entity_names)
 
         for item in entities:
@@ -272,9 +277,22 @@ class StoryGraphService:
         rows: list[tuple[ChapterMemory, Chapter]],
         *,
         known_entity_names: list[str],
+        character_profiles: list[dict],
     ) -> list[StoryRelation]:
         relations: list[StoryRelation] = []
         seen: set[tuple[str, str, str, int]] = set()
+
+        for item in self._build_profile_relations(
+            project_id=project_id,
+            character_profiles=character_profiles,
+            known_entity_names=known_entity_names,
+        ):
+            marker = (item.source_entity_name, item.target_entity_name, item.relation_type, item.chapter_order)
+            if marker in seen:
+                continue
+            seen.add(marker)
+            relations.append(item)
+
         for memory, chapter in rows:
             for item in memory.relationship_changes:
                 status_after = self._safe_text(item.get("status_after"))
@@ -304,6 +322,44 @@ class StoryGraphService:
                     )
                 )
         return relations
+
+    def _build_profile_relations(
+        self,
+        *,
+        project_id: str,
+        character_profiles: list[dict],
+        known_entity_names: list[str],
+    ) -> list[StoryRelation]:
+        relations: list[StoryRelation] = []
+        for profile in character_profiles:
+            source = self._safe_text(profile.get("name"))
+            notes = self._safe_text(profile.get("relationship_notes"))
+            if not source or not notes:
+                continue
+            for sentence in self._split_relation_notes(notes):
+                targets = [name for name in self._find_known_entities(sentence, known_entity_names=known_entity_names) if name != source]
+                relation_type = self._normalize_relation_type(None, context=sentence)
+                if not relation_type:
+                    relation_type = self._infer_profile_relation_type(sentence)
+                if not relation_type or not targets:
+                    continue
+                for target in targets[:2]:
+                    relations.append(
+                        StoryRelation(
+                            project_id=project_id,
+                            source_entity_name=source,
+                            target_entity_name=target,
+                            relation_type=relation_type,
+                            status_after=self._clip_text(sentence, limit=180),
+                            chapter_id=None,
+                            chapter_order=0,
+                        )
+                    )
+        return relations
+
+    def _split_relation_notes(self, value: str) -> list[str]:
+        parts = [item.strip() for item in re.split(r"[；;。]", value) if item.strip()]
+        return parts[:6]
 
     def _build_open_loops(
         self,
@@ -460,6 +516,17 @@ class StoryGraphService:
                     return canonical
         return None
 
+    def _infer_profile_relation_type(self, text: str) -> str | None:
+        if any(token in text for token in ("欢喜冤家", "误会", "无奈纠缠")):
+            return "冲突"
+        if any(token in text for token in ("包容", "安抚", "照顾", "收拾烂摊子", "打动")):
+            return "信任提升"
+        if any(token in text for token in ("赏识", "欣赏", "敬重", "敬畏")):
+            return "敬重"
+        if any(token in text for token in ("交易", "博弈", "幕后黑手", "冲突")):
+            return "敌对"
+        return None
+
     def _normalize_open_loop_label(self, label: str, *, description: str) -> str:
         cleaned = self._safe_text(label) or description
         if cleaned.endswith(("。", "！", "？", ".", "!", "?")):
@@ -549,6 +616,14 @@ class StoryGraphService:
         left_clean = self._safe_text(left) or ""
         right_clean = self._safe_text(right) or ""
         return right_clean if len(right_clean) > len(left_clean) else left_clean
+
+    def _clip_text(self, value: str | None, *, limit: int) -> str | None:
+        cleaned = self._safe_text(value)
+        if not cleaned:
+            return None
+        if len(cleaned) <= limit:
+            return cleaned
+        return cleaned[:limit].rstrip()
 
     def _normalize_label(self, value: object) -> str:
         if not isinstance(value, str):

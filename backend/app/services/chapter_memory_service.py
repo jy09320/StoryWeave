@@ -122,6 +122,15 @@ _RELATION_HINTS = ("和解", "联手", "合作", "决裂", "争执", "怀疑", "
 _KNOWLEDGE_HINTS = ("得知", "发现", "意识到", "明白", "知道", "确认", "听说", "看到", "察觉", "想起")
 _OBJECT_HINTS = ("剑", "刀", "枪", "钥匙", "戒指", "玉佩", "地图", "信", "手札", "盒子", "令牌", "药", "卷轴", "项链")
 _LOCATION_HINTS = ("在", "来到", "返回", "赶到", "进入", "抵达", "停在", "身处")
+_RELATION_KEYWORD_MAP = {
+    "协作": ("联手", "合作", "并肩", "相助", "帮她", "帮他", "提醒", "照应", "搭救", "救下"),
+    "怀疑": ("怀疑", "试探", "提防", "警惕", "狐疑", "不信", "盘问", "质问"),
+    "冲突": ("争执", "顶嘴", "瞪", "拦住", "对峙", "吵", "动手", "交手", "逼问"),
+    "信任提升": ("信任", "托付", "坦白", "包容", "安抚", "依赖", "放心"),
+    "保护": ("护住", "护在", "护着", "挡在", "照顾", "收拾烂摊子"),
+    "敬重": ("敬重", "赏识", "欣赏", "佩服", "敬畏", "前辈", "上司"),
+    "敌对": ("敌视", "盯上", "算计", "利用", "背叛", "幕后黑手"),
+}
 
 
 class ChapterMemoryService:
@@ -408,22 +417,48 @@ class ChapterMemoryService:
 
     def _build_relationship_changes(self, *, sentences: list[str], character_names: list[str]) -> list[dict]:
         changes: list[dict] = []
-        for text in sentences:
+        candidate_texts: list[str] = []
+        for index, text in enumerate(sentences):
+            candidate_texts.append(text)
+            if index + 1 < len(sentences):
+                candidate_texts.append(f"{text} {sentences[index + 1]}")
+
+        for text in candidate_texts:
             mentions = self._find_character_mentions(text, character_names)
             if len(mentions) < 2:
                 continue
-            keyword = self._extract_first_keyword(text, _RELATION_HINTS)
-            if not keyword:
+            relation_type = self._infer_relationship_type(text)
+            if not relation_type:
                 continue
-            changes.append(
-                {
-                    "entity_a": mentions[0],
-                    "entity_b": mentions[1],
-                    "change": keyword,
-                    "status_after": self._clip_text(text, limit=90) or keyword,
-                }
-            )
+            for source, target in self._build_character_pairs(mentions)[:2]:
+                changes.append(
+                    {
+                        "entity_a": source,
+                        "entity_b": target,
+                        "change": relation_type,
+                        "status_after": self._clip_text(text, limit=90) or relation_type,
+                    }
+                )
         return self._dedupe_dicts(changes, keys=("entity_a", "entity_b", "change"), limit=6)
+
+    def _infer_relationship_type(self, text: str) -> str | None:
+        keyword = self._extract_first_keyword(text, _RELATION_HINTS)
+        if keyword:
+            return keyword
+        for relation_type, keywords in _RELATION_KEYWORD_MAP.items():
+            if any(keyword in text for keyword in keywords):
+                return relation_type
+        if "师父" in text:
+            return "敬重"
+        return None
+
+    def _build_character_pairs(self, mentions: list[str]) -> list[tuple[str, str]]:
+        pairs: list[tuple[str, str]] = []
+        for index, source in enumerate(mentions):
+            for target in mentions[index + 1 :]:
+                if source != target:
+                    pairs.append((source, target))
+        return pairs
 
     def _build_open_loops(self, *, paragraphs: list[str], sentences: list[str]) -> list[dict]:
         sources = list(paragraphs[-3:]) + list(sentences[-3:])
