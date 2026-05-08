@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { ChevronDown, ChevronLeft, History, LoaderCircle, Save, SendHorizontal, Sparkles } from 'lucide-react'
+import { BookCheck, ChevronDown, ChevronLeft, ChevronRight, History, LoaderCircle, RefreshCw, Save, SendHorizontal, Sparkles } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { RichTextEditor, type RichTextEditorHandle } from '@/components/editor/rich-text-editor'
@@ -33,8 +33,8 @@ import { queryClient } from '@/lib/query-client'
 import { cn } from '@/lib/utils'
 import { getAIRuntimeSettings, streamGenerate } from '@/services/ai'
 import { writeToolboxInputDraft } from '@/lib/ai-toolbox-context'
-import { getProject, listChapterVersions, updateChapter } from '@/services/projects'
-import type { AIGeneratePayload, Chapter, ChapterStatus, ChapterVersion, ProjectDetail } from '@/types/api'
+import { getChapterMemory, getProject, listChapterVersions, refreshChapterMemory, updateChapter, updateChapterMemory } from '@/services/projects'
+import type { AIGeneratePayload, Chapter, ChapterMemory, ChapterStatus, ChapterVersion, ProjectDetail } from '@/types/api'
 
 const CHAPTER_STATUS_OPTIONS: Array<{ label: string; value: ChapterStatus }> = [
   { label: '草稿', value: 'draft' },
@@ -335,6 +335,11 @@ export function ProjectEditorPage() {
   const [dirtyChapterIds, setDirtyChapterIds] = useState<Record<string, boolean>>({})
   const [isVersionDialogOpen, setIsVersionDialogOpen] = useState(false)
   const [isStatusMenuOpen, setIsStatusMenuOpen] = useState(false)
+  const [isMemoryPanelOpen, setIsMemoryPanelOpen] = useState(false)
+  const [chapterMemory, setChapterMemory] = useState<ChapterMemory | null>(null)
+  const [isMemoryLoading, setIsMemoryLoading] = useState(false)
+  const [memorySummaryDraft, setMemorySummaryDraft] = useState('')
+  const [isCompletingChapter, setIsCompletingChapter] = useState(false)
   const [bubbleDialog, setBubbleDialog] = useState<BubbleDialogState | null>(null)
   const [aiPreview, setAIPreview] = useState<EditorAIPreviewContext | null>(() =>
     typeof window === 'undefined' ? null : readEditorAIPreviewContext(),
@@ -549,6 +554,81 @@ export function ProjectEditorPage() {
     updateFormField('status', value as ChapterStatus)
   }
 
+  async function handleOpenMemoryPanel() {
+    if (!chapterId) return
+    setIsMemoryPanelOpen(true)
+    if (!chapterMemory) {
+      setIsMemoryLoading(true)
+      try {
+        const memory = await getChapterMemory(chapterId)
+        setChapterMemory(memory)
+        setMemorySummaryDraft(memory?.summary_short ?? '')
+      } catch {
+        toast.error('加载章节记忆失败')
+      } finally {
+        setIsMemoryLoading(false)
+      }
+    }
+  }
+
+  async function handleRefreshMemory() {
+    if (!chapterId) return
+    setIsMemoryLoading(true)
+    try {
+      const memory = await refreshChapterMemory(chapterId)
+      setChapterMemory(memory)
+      setMemorySummaryDraft(memory.summary_short ?? '')
+      toast.success('章节记忆已重新生成')
+    } catch {
+      toast.error('记忆生成失败')
+    } finally {
+      setIsMemoryLoading(false)
+    }
+  }
+
+  async function handleSaveMemory() {
+    if (!chapterId || !chapterMemory) return
+    try {
+      const updated = await updateChapterMemory(chapterId, { summary_short: memorySummaryDraft || null })
+      setChapterMemory(updated)
+      toast.success('章节记忆已保存')
+    } catch {
+      toast.error('保存失败')
+    }
+  }
+
+  async function handleDeleteMemoryItem(field: keyof ChapterMemory, index: number) {
+    if (!chapterId || !chapterMemory) return
+    const list = chapterMemory[field] as Record<string, unknown>[]
+    const updated = list.filter((_, i) => i !== index)
+    try {
+      const result = await updateChapterMemory(chapterId, { [field]: updated })
+      setChapterMemory(result)
+    } catch {
+      toast.error('删除失败')
+    }
+  }
+
+  async function handleCompleteChapter() {
+    if (!chapterId || !chapter) return
+    setIsCompletingChapter(true)
+    try {
+      let updatedChapter = await updateChapter(chapterId, { status: 'done' })
+      if (!updatedChapter.summary) {
+        const memory = chapterMemory ?? (await getChapterMemory(chapterId))
+        if (memory?.summary_short) {
+          updatedChapter = await updateChapter(chapterId, { summary: memory.summary_short })
+        }
+      }
+      await queryClient.invalidateQueries({ queryKey: ['project', projectId] })
+      updateFormField('status', 'done')
+      toast.success('本章已标记为已定稿')
+    } catch {
+      toast.error('操作失败')
+    } finally {
+      setIsCompletingChapter(false)
+    }
+  }
 
   function handleBubbleAction(action: SelectionAction, selectedText: string) {
     if (!projectId || !chapter?.id) {
@@ -1022,6 +1102,18 @@ ${nextText}` : nextText
                         ) : null}
                       </div>
                       <span className="text-sm text-muted-foreground/90">{'最近更新 '}{formatDate(chapter.updated_at)}</span>
+                      {activeForm.status !== 'done' ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-10 shrink-0 rounded-xl border-border bg-background px-4 text-foreground/85"
+                          onClick={handleCompleteChapter}
+                          disabled={isCompletingChapter}
+                        >
+                          {isCompletingChapter ? <LoaderCircle className="size-4 animate-spin" /> : <BookCheck className="size-4" />}
+                          {'完成本章'}
+                        </Button>
+                      ) : null}
                       <Button
                         variant="outline"
                         size="sm"
@@ -1082,6 +1174,128 @@ ${nextText}` : nextText
                 className="min-h-[132px] rounded-2xl border-border bg-background text-foreground placeholder:text-muted-foreground"
                 placeholder="记录当前章节目标、伏笔提醒或 AI 指令草稿。"
               />
+            </section>
+
+            <section className="border-t border-border px-6 py-4">
+              <button
+                type="button"
+                className="flex w-full items-center justify-between text-sm font-medium text-foreground/85 hover:text-foreground"
+                onClick={handleOpenMemoryPanel}
+              >
+                <span className="flex items-center gap-2">章节记忆</span>
+                <ChevronRight className={cn('size-4 transition-transform', isMemoryPanelOpen && 'rotate-90')} />
+              </button>
+
+              {isMemoryPanelOpen ? (
+                <div className="mt-4 space-y-4">
+                  {isMemoryLoading ? (
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <LoaderCircle className="size-3.5 animate-spin" />
+                      正在加载...
+                    </div>
+                  ) : !chapterMemory ? (
+                    <div className="space-y-3">
+                      <p className="text-xs text-muted-foreground">暂无章节记忆。保存有内容的章节后，系统会自动提取记忆。</p>
+                      <Button variant="outline" size="sm" className="h-8 rounded-lg px-3 text-xs" onClick={handleRefreshMemory}>
+                        <RefreshCw className="size-3.5" />
+                        立即生成
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-muted-foreground">
+                          上次更新：{formatDate(chapterMemory.updated_at)}
+                        </span>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 rounded-lg px-2 text-xs text-muted-foreground hover:text-foreground"
+                          onClick={handleRefreshMemory}
+                          disabled={isMemoryLoading}
+                        >
+                          <RefreshCw className="size-3" />
+                          重新生成
+                        </Button>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-medium text-foreground/75">摘要</label>
+                        <Textarea
+                          value={memorySummaryDraft}
+                          onChange={(e) => setMemorySummaryDraft(e.target.value)}
+                          rows={3}
+                          className="min-h-18 rounded-xl border-border bg-background text-sm text-foreground placeholder:text-muted-foreground"
+                          placeholder="章节摘要（可编辑）"
+                        />
+                      </div>
+
+                      {chapterMemory.key_events.length > 0 ? (
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-medium text-foreground/75">关键事件</label>
+                          <ul className="space-y-1">
+                            {chapterMemory.key_events.map((item, index) => {
+                              const label = String((item as Record<string, unknown>).title ?? (item as Record<string, unknown>).summary ?? '')
+                              return (
+                                <li key={index} className="flex items-start justify-between gap-2 rounded-lg px-2 py-1.5 text-xs text-foreground/80 hover:bg-accent">
+                                  <span className="min-w-0 flex-1 truncate">{label}</span>
+                                  <button type="button" className="shrink-0 text-muted-foreground hover:text-destructive" onClick={() => handleDeleteMemoryItem('key_events', index)}>×</button>
+                                </li>
+                              )
+                            })}
+                          </ul>
+                        </div>
+                      ) : null}
+
+                      {chapterMemory.open_loops.length > 0 ? (
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-medium text-foreground/75">未解悬念</label>
+                          <ul className="space-y-1">
+                            {chapterMemory.open_loops.map((item, index) => {
+                              const label = String((item as Record<string, unknown>).label ?? (item as Record<string, unknown>).description ?? '')
+                              return (
+                                <li key={index} className="flex items-start justify-between gap-2 rounded-lg px-2 py-1.5 text-xs text-foreground/80 hover:bg-accent">
+                                  <span className="min-w-0 flex-1">{label}</span>
+                                  <button type="button" className="shrink-0 text-muted-foreground hover:text-destructive" onClick={() => handleDeleteMemoryItem('open_loops', index)}>×</button>
+                                </li>
+                              )
+                            })}
+                          </ul>
+                        </div>
+                      ) : null}
+
+                      {chapterMemory.character_state_changes.length > 0 ? (
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-medium text-foreground/75">角色变化</label>
+                          <ul className="space-y-1">
+                            {chapterMemory.character_state_changes.map((item, index) => {
+                              const name = String((item as Record<string, unknown>).character_id_or_name ?? '')
+                              const after = String((item as Record<string, unknown>).after ?? '')
+                              const label = name && after ? `${name}：${after}` : name || after
+                              return (
+                                <li key={index} className="flex items-start justify-between gap-2 rounded-lg px-2 py-1.5 text-xs text-foreground/80 hover:bg-accent">
+                                  <span className="min-w-0 flex-1">{label}</span>
+                                  <button type="button" className="shrink-0 text-muted-foreground hover:text-destructive" onClick={() => handleDeleteMemoryItem('character_state_changes', index)}>×</button>
+                                </li>
+                              )
+                            })}
+                          </ul>
+                        </div>
+                      ) : null}
+
+                      <div className="flex justify-end">
+                        <Button
+                          size="sm"
+                          className="h-8 rounded-lg px-3 text-xs"
+                          onClick={handleSaveMemory}
+                        >
+                          保存记忆
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : null}
             </section>
           </CardContent>
           <CardFooter className="flex flex-wrap items-center justify-between gap-3 border-t border-border bg-background/88 px-6 py-4">

@@ -98,14 +98,22 @@ function buildPayload(form: ProjectFormState): ProjectPayload {
   }
 }
 
-function buildCreatePayload(form: ProjectCreateFormState, draft: ProjectDraftResult | null): ProjectPayload {
+function buildCreatePayload(
+  form: ProjectCreateFormState,
+  draft: ProjectDraftResult | null,
+  selectedChapters?: string[],
+): ProjectPayload {
+  const resolvedDraft =
+    draft && selectedChapters !== undefined
+      ? { ...draft, outline_chapters: selectedChapters }
+      : draft
   return {
     ...buildPayload(form),
     channel: form.channel,
     genres: form.genres,
     tropes: form.tropes,
     premise: form.premise.trim() || null,
-    ai_draft: form.creation_mode === 'ai' ? draft : null,
+    ai_draft: form.creation_mode === 'ai' ? resolvedDraft : null,
   }
 }
 
@@ -206,6 +214,7 @@ export function DashboardPage() {
   const [createForm, setCreateForm] = useState<ProjectCreateFormState>(defaultCreateFormState)
   const [editForm, setEditForm] = useState<ProjectFormState>(defaultFormState)
   const [projectDraft, setProjectDraft] = useState<ProjectDraftResult | null>(null)
+  const [selectedOutlineChapters, setSelectedOutlineChapters] = useState<string[]>([])
 
   const projectsQuery = useQuery<Project[], Error>({
     queryKey: ['projects'],
@@ -219,6 +228,7 @@ export function DashboardPage() {
       setIsCreateOpen(false)
       setCreateForm(defaultCreateFormState)
       setProjectDraft(null)
+      setSelectedOutlineChapters([])
       toast.success('项目已创建，已生成 AI 起步草案')
       navigate(`/projects/${project.id}`)
     },
@@ -231,6 +241,7 @@ export function DashboardPage() {
     mutationFn: generateProjectDraft,
     onSuccess: (draft) => {
       setProjectDraft(draft)
+      setSelectedOutlineChapters(draft.outline_chapters)
       toast.success('AI 草案已生成')
     },
     onError: (error: Error) => {
@@ -294,7 +305,7 @@ export function DashboardPage() {
 
   function handleCreateSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    const payload = buildCreatePayload(createForm, projectDraft)
+    const payload = buildCreatePayload(createForm, projectDraft, selectedOutlineChapters)
     if (!payload.title) {
       toast.error('请输入项目标题')
       return
@@ -538,6 +549,7 @@ export function DashboardPage() {
           if (!open) {
             setCreateForm(defaultCreateFormState)
             setProjectDraft(null)
+            setSelectedOutlineChapters([])
           }
         }}
         title="创建项目"
@@ -551,7 +563,9 @@ export function DashboardPage() {
         projectDraft={projectDraft}
         generatingDraft={generateDraftMutation.isPending}
         onGenerateDraft={handleGenerateDraft}
-        onResetDraft={() => setProjectDraft(null)}
+        onResetDraft={() => { setProjectDraft(null); setSelectedOutlineChapters([]) }}
+        selectedOutlineChapters={selectedOutlineChapters}
+        onOutlineChaptersChange={setSelectedOutlineChapters}
       />
     </div>
   )
@@ -676,6 +690,8 @@ interface ProjectDialogProps<T extends ProjectFormState> {
   generatingDraft?: boolean
   onGenerateDraft?: () => void
   onResetDraft?: () => void
+  selectedOutlineChapters?: string[]
+  onOutlineChaptersChange?: (chapters: string[]) => void
 }
 
 function ProjectDialog<T extends ProjectFormState>({
@@ -694,6 +710,8 @@ function ProjectDialog<T extends ProjectFormState>({
   generatingDraft = false,
   onGenerateDraft,
   onResetDraft,
+  selectedOutlineChapters = [],
+  onOutlineChaptersChange,
 }: ProjectDialogProps<T>) {
   const isCreateFlow = isCreateProjectFormState(form)
   const createForm = isCreateFlow ? (form as ProjectCreateFormState) : null
@@ -978,13 +996,68 @@ function ProjectDialog<T extends ProjectFormState>({
 
                         <div className="space-y-4">
                           <section className="rounded-lg border border-border/70 bg-background px-4 py-3">
-                            <div className="text-sm font-medium text-foreground">开篇章节建议</div>
-                            <div className="mt-3 space-y-2">
-                              {projectDraft.opening_chapters.map((chapter, index) => (
-                                <div key={`${chapter}-${index}`} className="rounded-md border border-border/60 px-3 py-2 text-sm text-muted-foreground">
-                                  {index + 1}. {chapter}
-                                </div>
-                              ))}
+                            <div className="flex items-center justify-between">
+                              <div className="text-sm font-medium text-foreground">
+                                大纲章节
+                                <span className="ml-2 text-xs font-normal text-muted-foreground">
+                                  已选 {selectedOutlineChapters.length} / {projectDraft.outline_chapters.length} 章
+                                </span>
+                              </div>
+                              <div className="flex gap-2">
+                                <button
+                                  type="button"
+                                  className="text-xs text-primary underline-offset-2 hover:underline"
+                                  onClick={() => onOutlineChaptersChange?.(projectDraft.outline_chapters)}
+                                >
+                                  全选
+                                </button>
+                                <button
+                                  type="button"
+                                  className="text-xs text-muted-foreground underline-offset-2 hover:underline"
+                                  onClick={() => onOutlineChaptersChange?.([])}
+                                >
+                                  取消全选
+                                </button>
+                              </div>
+                            </div>
+                            <div className="mt-3 space-y-1.5">
+                              {projectDraft.outline_chapters.map((chapter, index) => {
+                                const checked = selectedOutlineChapters.includes(chapter)
+                                return (
+                                  <div
+                                    key={`${chapter}-${index}`}
+                                    className={`flex items-center gap-2 rounded-md border px-3 py-2 text-sm transition-colors ${
+                                      checked
+                                        ? 'border-border/60 bg-background text-foreground'
+                                        : 'border-border/30 bg-muted/30 text-muted-foreground line-through'
+                                    }`}
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={checked}
+                                      onChange={(e) => {
+                                        if (e.target.checked) {
+                                          onOutlineChaptersChange?.([...selectedOutlineChapters, chapter])
+                                        } else {
+                                          onOutlineChaptersChange?.(selectedOutlineChapters.filter((c) => c !== chapter))
+                                        }
+                                      }}
+                                      className="h-3.5 w-3.5 shrink-0 accent-primary"
+                                    />
+                                    <span className="flex-1">{chapter}</span>
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        onOutlineChaptersChange?.(selectedOutlineChapters.filter((c) => c !== chapter))
+                                      }
+                                      className="shrink-0 text-muted-foreground/50 hover:text-destructive"
+                                      aria-label="移除章节"
+                                    >
+                                      ×
+                                    </button>
+                                  </div>
+                                )
+                              })}
                             </div>
                           </section>
                           <section className="rounded-lg border border-border/70 bg-background px-4 py-3">

@@ -1,6 +1,8 @@
 import { apiClient } from '@/lib/api-client'
 import type {
   Chapter,
+  ChapterMemory,
+  ChapterMemoryUpdatePayload,
   ChapterPayload,
   ChapterReorderItem,
   ChapterUpdatePayload,
@@ -73,6 +75,29 @@ export async function reorderChapters(projectId: string, payload: ChapterReorder
 
 export async function listChapterVersions(chapterId: string) {
   const { data } = await apiClient.get<ChapterVersion[]>(`/chapters/${chapterId}/versions`)
+  return data
+}
+
+export async function getChapterMemory(chapterId: string): Promise<ChapterMemory | null> {
+  try {
+    const { data } = await apiClient.get<ChapterMemory>(`/chapters/${chapterId}/memory`)
+    return data
+  } catch (error: unknown) {
+    if (error && typeof error === 'object' && 'response' in error) {
+      const axiosError = error as { response?: { status?: number } }
+      if (axiosError.response?.status === 404) return null
+    }
+    throw error
+  }
+}
+
+export async function updateChapterMemory(chapterId: string, payload: ChapterMemoryUpdatePayload) {
+  const { data } = await apiClient.put<ChapterMemory>(`/chapters/${chapterId}/memory`, payload)
+  return data
+}
+
+export async function refreshChapterMemory(chapterId: string) {
+  const { data } = await apiClient.post<ChapterMemory>(`/chapters/${chapterId}/memory/refresh`)
   return data
 }
 

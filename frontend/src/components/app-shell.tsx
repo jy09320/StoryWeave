@@ -41,7 +41,7 @@ import {
   type EditorUtilityContext,
 } from '@/lib/editor-utility-context'
 import { formatDate } from '@/lib/format'
-import { debugContinuationPipeline, generateWithContinuationPipeline, getAIContextPreview, getAIRetrievalPreview, getAIRuntimeSettings, isAbortError, listAIRuntimeModels, normalizeAIError, streamGenerate, type AIModelOption } from '@/services/ai'
+import { debugContinuationPipeline, getAIContextPreview, getAIRetrievalPreview, getAIRuntimeSettings, isAbortError, listAIRuntimeModels, normalizeAIError, streamContinuationPipeline, streamGenerate, type AIModelOption } from '@/services/ai'
 import { getProject } from '@/services/projects'
 import type { AIGeneratePayload, AIContextPreviewResponse, AIContinuationDebugResponse, AIContinuationGenerateResponse, AIContinuationTraceStep, AIRetrievalPreviewResponse, ProjectDetail } from '@/types/api'
 import { useAuth } from '@/contexts/auth-context'
@@ -61,6 +61,9 @@ interface AIChatMessage {
   id: string
   role: AIChatMessageRole
   content: string
+  pipelineTrace?: AIContinuationTraceStep[]
+  pipelineCompleted?: boolean
+  pipelineMeta?: { warnings: number; fallbacks: number; durationMs: number }
 }
 
 interface AIComposerState {
@@ -95,7 +98,7 @@ const actionLabelMap = {
   consistency: '一致性检查',
 } as const
 
-const DEFAULT_CONTINUE_INSTRUCTION = '请基于当前正文继续写下去，保持风格一致，并自然衔接上一段。'
+const DEFAULT_CONTINUE_INSTRUCTION = '请紧接当前已写内容继续推进，保持人物语气、情绪和节奏一致，不要重复上一段。'
 const AI_MODEL_USAGE_STORAGE_KEY = 'storyweave-ai-model-usage'
 const DEFAULT_AI_PANEL_WIDTH = 420
 const MIN_AI_PANEL_WIDTH = 320
@@ -103,16 +106,8 @@ const MAX_AI_PANEL_WIDTH = 640
 const EDITOR_SHORTCUT_HINT_STORAGE_KEY = 'storyweave-editor-shortcut-hint-dismissed'
 const EDITOR_AI_PANEL_SNAPSHOTS_STORAGE_KEY = 'storyweave-editor-ai-panel-snapshots'
 const PIPELINE_TRACE_STEP_ORDER = ['planner', 'retriever', 'context_bundle', 'writer', 'checker', 'final_output'] as const
-const PIPELINE_TRACE_STEP_META = [
-  { step_key: 'planner', label: '分析承接点' },
-  { step_key: 'retriever', label: '检索相关剧情' },
-  { step_key: 'context_bundle', label: '整理角色与伏笔' },
-  { step_key: 'writer', label: '生成正文' },
-  { step_key: 'checker', label: '检查连续性' },
-  { step_key: 'final_output', label: '完成' },
-] as const
 const DEFAULT_AI_COMPOSER_STATE: AIComposerState = {
-  instruction: DEFAULT_CONTINUE_INSTRUCTION,
+  instruction: '',
   modelId: '',
   result: '',
   isGenerating: false,
@@ -121,22 +116,18 @@ const DEFAULT_AI_COMPOSER_STATE: AIComposerState = {
 
 function getAIInstruction(context: EditorUtilityContext | null) {
   if (!context || context.action !== 'expand') {
-    return DEFAULT_CONTINUE_INSTRUCTION
+    return ''
   }
 
   return `请围绕这段文字继续扩写，补足细节、情绪和动作，但保持与当前章节一致：“${context.selectedText}”`
 }
 
-function buildLivePipelineTrace(elapsedMs: number): AIContinuationTraceStep[] {
-  const liveIndex = Math.min(Math.floor(elapsedMs / 1800), PIPELINE_TRACE_STEP_META.length - 1)
-  return PIPELINE_TRACE_STEP_META.map((item, index) => ({
-    step_key: item.step_key,
-    label: item.label,
-    status: index < liveIndex ? 'completed' : index === liveIndex ? 'running' : 'pending',
-    warnings: [],
-    fallbacks: [],
-    duration_ms: index < liveIndex ? 1800 : undefined,
-  }))
+function getAIInstructionPlaceholder(context: EditorUtilityContext | null) {
+  if (!context || context.action !== 'expand') {
+    return '比如：让这一段继续推进冲突，语气克制一点，不要重复上一段信息。'
+  }
+
+  return '比如：补足这段里的动作、环境和情绪变化，让衔接更自然。'
 }
 
 function getUserVisibleTraceSteps(trace: AIContinuationTraceStep[] | null | undefined): AIContinuationTraceStep[] {
@@ -221,6 +212,118 @@ function summarizeTraceStep(step: AIContinuationTraceStep) {
     return '结果已返回到编辑器'
   }
   return ''
+}
+
+function renderStepDetail(step: AIContinuationTraceStep): React.ReactNode {
+  const s = step.output_summary ?? {}
+
+  if (step.step_key === 'planner') {
+    const goal = typeof s.writing_goal === 'string' ? s.writing_goal : null
+    const mustCount = typeof s.must_include_count === 'number' ? s.must_include_count : null
+    const loopCount = typeof s.open_loop_count === 'number' ? s.open_loop_count : null
+    if (!goal && mustCount === null && loopCount === null) return null
+    return (
+      <div className="mt-2 space-y-2">
+        {goal ? <p className="text-sm leading-6 text-foreground">{goal}</p> : null}
+        <div className="flex flex-wrap gap-2">
+          {mustCount !== null ? (
+            <span className="rounded-full border border-border bg-muted/30 px-2.5 py-0.5 text-xs text-muted-foreground">
+              必含要素 {mustCount} 项
+            </span>
+          ) : null}
+          {loopCount !== null ? (
+            <span className="rounded-full border border-border bg-muted/30 px-2.5 py-0.5 text-xs text-muted-foreground">
+              跟踪悬念 {loopCount} 条
+            </span>
+          ) : null}
+        </div>
+      </div>
+    )
+  }
+
+  if (step.step_key === 'retriever') {
+    const terms = Array.isArray(s.query_terms) ? (s.query_terms as unknown[]).filter((t): t is string => typeof t === 'string') : []
+    if (terms.length === 0) return null
+    return (
+      <div className="mt-2 flex flex-wrap gap-1.5">
+        {terms.map((t) => (
+          <span key={t} className="rounded-full border border-sky-200 bg-sky-50 px-2.5 py-0.5 text-xs text-sky-700">
+            {t}
+          </span>
+        ))}
+      </div>
+    )
+  }
+
+  if (step.step_key === 'context_bundle') {
+    const hasTail = s.has_current_chapter_tail === true
+    const hasMemory = s.has_story_memory === true
+    const chunkCount = typeof s.retrieved_chunk_count === 'number' ? s.retrieved_chunk_count : null
+    return (
+      <div className="mt-2 flex flex-wrap gap-2">
+        {chunkCount !== null ? (
+          <span className="rounded-full border border-border bg-muted/30 px-2.5 py-0.5 text-xs text-muted-foreground">
+            正文片段 {chunkCount} 段
+          </span>
+        ) : null}
+        <span className={clsx('rounded-full border px-2.5 py-0.5 text-xs', hasTail ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-border bg-muted/30 text-muted-foreground')}>
+          {hasTail ? '含章节尾部' : '无章节尾部'}
+        </span>
+        <span className={clsx('rounded-full border px-2.5 py-0.5 text-xs', hasMemory ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-border bg-muted/30 text-muted-foreground')}>
+          {hasMemory ? '含故事记忆' : '无故事记忆'}
+        </span>
+      </div>
+    )
+  }
+
+  if (step.step_key === 'writer') {
+    const modelId = typeof s.model_id === 'string' ? s.model_id : null
+    const notes = Array.isArray(s.generation_notes) ? (s.generation_notes as unknown[]).filter((n): n is string => typeof n === 'string') : []
+    if (!modelId && notes.length === 0) return null
+    return (
+      <div className="mt-2 space-y-1.5">
+        {modelId ? (
+          <span className="rounded-full border border-border bg-muted/30 px-2.5 py-0.5 text-xs text-muted-foreground">
+            {modelId}
+          </span>
+        ) : null}
+        {notes.length > 0 ? (
+          <ul className="ml-1 space-y-0.5">
+            {notes.map((n) => (
+              <li key={n} className="text-xs leading-5 text-muted-foreground before:mr-1.5 before:content-['·']">{n}</li>
+            ))}
+          </ul>
+        ) : null}
+      </div>
+    )
+  }
+
+  if (step.step_key === 'checker') {
+    const tlCount = typeof s.timeline_conflicts === 'number' ? s.timeline_conflicts : 0
+    const charCount = typeof s.character_conflicts === 'number' ? s.character_conflicts : 0
+    const worldCount = typeof s.world_rule_conflicts === 'number' ? s.world_rule_conflicts : 0
+    const kbCount = typeof s.knowledge_boundary_conflicts === 'number' ? s.knowledge_boundary_conflicts : 0
+    const loopCount = typeof s.open_loop_misalignment === 'number' ? s.open_loop_misalignment : 0
+    const items = [
+      { label: '时间线冲突', count: tlCount },
+      { label: '角色冲突', count: charCount },
+      { label: '世界规则冲突', count: worldCount },
+      { label: '知识边界冲突', count: kbCount },
+      { label: '悬念错位', count: loopCount },
+    ].filter((i) => i.count > 0)
+    if (items.length === 0) return null
+    return (
+      <div className="mt-2 flex flex-wrap gap-2">
+        {items.map((i) => (
+          <span key={i.label} className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-xs text-amber-700">
+            {i.label} {i.count} 处
+          </span>
+        ))}
+      </div>
+    )
+  }
+
+  return null
 }
 
 const worldSectionMeta = [
@@ -362,8 +465,6 @@ export function AppShell() {
   const [retrievalPreview, setRetrievalPreview] = useState<AIRetrievalPreviewResponse | null>(null)
   const [pipelineDebug, setPipelineDebug] = useState<AIContinuationDebugResponse | null>(null)
   const [pipelineResult, setPipelineResult] = useState<AIContinuationGenerateResponse | null>(null)
-  const [pipelineRunStartedAt, setPipelineRunStartedAt] = useState<number | null>(null)
-  const [pipelineTraceTick, setPipelineTraceTick] = useState(0)
   const [useContinuationPipeline, setUseContinuationPipeline] = useState(false)
   const [isContextPreviewLoading, setIsContextPreviewLoading] = useState(false)
   const [isRetrievalPreviewLoading, setIsRetrievalPreviewLoading] = useState(false)
@@ -380,32 +481,6 @@ export function AppShell() {
     () => (pipelineDebug?.trace?.length ? pipelineDebug.trace : pipelineResult?.trace ?? []),
     [pipelineDebug, pipelineResult],
   )
-  const pipelineStepTrace = useMemo(() => {
-    if (aiState.isGenerating && useContinuationPipeline && pipelineRunStartedAt) {
-      const elapsedMs = Math.max(0, (pipelineTraceTick || Date.now()) - pipelineRunStartedAt)
-      return buildLivePipelineTrace(elapsedMs)
-    }
-    return getUserVisibleTraceSteps(diagnosticsTrace)
-  }, [aiState.isGenerating, useContinuationPipeline, pipelineRunStartedAt, pipelineTraceTick, diagnosticsTrace])
-  const pipelineTraceTotalDurationMs = useMemo(
-    () => diagnosticsTrace.reduce((total, step) => total + (typeof step.duration_ms === 'number' ? step.duration_ms : 0), 0),
-    [diagnosticsTrace],
-  )
-  const activePipelineStep = useMemo(
-    () => pipelineStepTrace.find((step) => step.status === 'running') ?? pipelineStepTrace.find((step) => step.status === 'pending') ?? null,
-    [pipelineStepTrace],
-  )
-
-  useEffect(() => {
-    if (!(aiState.isGenerating && useContinuationPipeline && pipelineRunStartedAt)) {
-      return
-    }
-
-    const timer = window.setInterval(() => {
-      setPipelineTraceTick(Date.now())
-    }, 900)
-    return () => window.clearInterval(timer)
-  }, [aiState.isGenerating, useContinuationPipeline, pipelineRunStartedAt])
 
   const isProjectScoped = Boolean(projectId) && location.pathname.startsWith(`/projects/${projectId}`)
   const isEditorRoute = isProjectScoped && location.pathname.includes('/editor/')
@@ -957,7 +1032,6 @@ export function AppShell() {
   function handleStopGeneration() {
     generationAbortRef.current?.abort()
     generationAbortRef.current = null
-    setPipelineRunStartedAt(null)
     setAIState((prev) => ({ ...prev, isGenerating: false, requestId: prev.requestId + 1 }))
     if (projectId && chapterId) {
       writeEditorAIPreviewContext({
@@ -986,8 +1060,6 @@ export function AppShell() {
     setRetrievalPreview(null)
     setPipelineDebug(null)
     setPipelineResult(null)
-    setPipelineRunStartedAt(null)
-    setPipelineTraceTick(0)
     setUseContinuationPipeline(false)
     setIsDiagnosticsDialogOpen(false)
     setActiveDiagnosticsTab('risk')
@@ -1064,6 +1136,7 @@ export function AppShell() {
     const submittedInstruction = aiState.instruction.trim() || DEFAULT_CONTINUE_INSTRUCTION
     const requestId = aiState.requestId + 1
     const assistantMessageId = `assistant-${requestId}`
+    const pipelineTraceMessageId = `pipeline-trace-${requestId}`
     let accumulatedResult = ''
 
     setAIMessages((prev) => [
@@ -1078,12 +1151,21 @@ export function AppShell() {
         role: 'assistant',
         content: '',
       },
+      ...(useContinuationPipeline
+        ? [
+            {
+              id: pipelineTraceMessageId,
+              role: 'assistant' as const,
+              content: '',
+              pipelineTrace: [],
+              pipelineCompleted: false,
+            },
+          ]
+        : []),
     ])
     setPipelineResult(null)
     setPipelineDebug(null)
-    setPipelineRunStartedAt(useContinuationPipeline ? Date.now() : null)
-    setPipelineTraceTick(Date.now())
-    setAIState((prev) => ({ ...prev, result: '', isGenerating: true, requestId }))
+    setAIState((prev) => ({ ...prev, instruction: '', result: '', isGenerating: true, requestId }))
     writeEditorAIPreviewContext({
       projectId,
       chapterId,
@@ -1103,35 +1185,82 @@ export function AppShell() {
 
     try {
       if (useContinuationPipeline) {
-        const result = await generateWithContinuationPipeline(payload)
-        accumulatedResult = result.final_content
-        setPipelineResult(result)
-        setPipelineDebug((prev) =>
-          prev && prev.final_content === result.final_content
-            ? prev
-            : null,
+        await streamContinuationPipeline(
+          payload,
+          {
+            onProgress: (trace) => {
+              setAIMessages((prev) =>
+                prev.map((message) =>
+                  message.id === pipelineTraceMessageId
+                    ? { ...message, pipelineTrace: trace }
+                    : message,
+                ),
+              )
+            },
+            onContentChunk: (chunk) => {
+              accumulatedResult += chunk
+              setAIState((prev) => {
+                if (prev.requestId !== requestId || !prev.isGenerating) {
+                  return prev
+                }
+                return { ...prev, result: accumulatedResult }
+              })
+              setAIMessages((prev) =>
+                prev.map((message) =>
+                  message.id === assistantMessageId
+                    ? { ...message, content: accumulatedResult }
+                    : message,
+                ),
+              )
+              if (projectId && chapterId) {
+                writeEditorAIPreviewContext({
+                  projectId,
+                  chapterId,
+                  text: accumulatedResult,
+                  isStreaming: true,
+                  updatedAt: new Date().toISOString(),
+                })
+              }
+            },
+            onComplete: (result) => {
+              accumulatedResult = result.final_content
+              setPipelineResult(result)
+              setPipelineDebug((prev) =>
+                prev && prev.final_content === result.final_content
+                  ? prev
+                  : null,
+              )
+              const durationMs = result.trace.reduce(
+                (total, step) => total + (typeof step.duration_ms === 'number' ? step.duration_ms : 0),
+                0,
+              )
+              setAIMessages((prev) =>
+                prev.map((message) => {
+                  if (message.id === pipelineTraceMessageId) {
+                    return {
+                      ...message,
+                      pipelineTrace: result.trace,
+                      pipelineCompleted: true,
+                      pipelineMeta: {
+                        warnings: result.warnings.length,
+                        fallbacks: result.fallbacks.length,
+                        durationMs,
+                      },
+                    }
+                  }
+                  if (message.id === assistantMessageId) {
+                    return { ...message, content: accumulatedResult }
+                  }
+                  return message
+                }),
+              )
+              if (result.warnings.length > 0) {
+                toast.message(`Pipeline 风险提示：${result.warnings[0]}`)
+              }
+            },
+          },
+          { signal: abortController.signal, timeoutMs: 300_000 },
         )
-        setAIMessages((prev) =>
-          prev.map((message) =>
-            message.id === assistantMessageId
-              ? { ...message, content: accumulatedResult }
-              : message,
-          ),
-        )
-        setAIState((prev) => {
-          if (prev.requestId !== requestId) {
-            return prev
-          }
-          return {
-            ...prev,
-            result: accumulatedResult,
-            isGenerating: false,
-          }
-        })
-        setPipelineRunStartedAt(null)
-        if (result.warnings.length > 0) {
-          toast.message(`Pipeline 风险提示：${result.warnings[0]}`)
-        }
       } else {
         setPipelineResult(null)
         await streamGenerate(
@@ -1178,12 +1307,10 @@ export function AppShell() {
           updatedAt: new Date().toISOString(),
         })
       }
-      setAIState((prev) => (prev.requestId === requestId ? { ...prev, isGenerating: false } : prev))
-      setPipelineRunStartedAt(null)
+      setAIState((prev) => (prev.requestId === requestId ? { ...prev, result: accumulatedResult, isGenerating: false } : prev))
     } catch (error) {
       const normalizedError = normalizeAIError(error)
       setAIState((prev) => (prev.requestId === requestId ? { ...prev, isGenerating: false } : prev))
-      setPipelineRunStartedAt(null)
       if (isAbortError(normalizedError)) {
         setAIMessages((prev) => prev.filter((message) => message.id !== assistantMessageId || message.content.trim()))
         toast.message('已停止本次 AI 续写')
@@ -1253,7 +1380,21 @@ export function AppShell() {
     })
     writeEditorAIPreviewContext(null)
     setAIState((prev) => ({ ...prev, result: '', isGenerating: false }))
-    setPipelineRunStartedAt(null)
+  }
+
+  function handleDiscardGeneratedText() {
+    if (!projectId || !chapterId || !aiState.result.trim()) {
+      return
+    }
+
+    dispatchEditorAICommand({
+      projectId,
+      chapterId,
+      type: 'discard-generated-text',
+    })
+    writeEditorAIPreviewContext(null)
+    setAIState((prev) => ({ ...prev, result: '', isGenerating: false }))
+    toast.message('已丢弃本次生成结果')
   }
 
   function openDiagnosticsDialog(tab: AIDiagnosticsTab) {
@@ -1347,68 +1488,6 @@ export function AppShell() {
                 </div>
               </div>
             </div>
-            {useContinuationPipeline && (aiState.isGenerating || pipelineStepTrace.length > 0) ? (
-              <div className="mt-4 rounded-2xl border border-[#e5e7eb] bg-white px-3 py-3">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="text-[11px] uppercase tracking-[0.18em] text-[#9ca3af]">Pipeline 进度</div>
-                  {diagnosticsTrace.length > 0 ? (
-                    <button
-                      type="button"
-                      onClick={() => openDiagnosticsDialog('pipeline')}
-                      className="inline-flex h-7 items-center rounded-full border border-[#d1d5db] bg-white px-3 text-[11px] text-[#4b5563] transition hover:border-[#9ca3af] hover:text-[#111827]"
-                    >
-                      查看链路
-                    </button>
-                  ) : null}
-                </div>
-                <div className="mt-2 flex items-center justify-between gap-3">
-                  <div className="text-sm font-medium text-[#111827]">
-                    {aiState.isGenerating
-                      ? activePipelineStep
-                        ? `${activePipelineStep.label}中`
-                        : '正在准备 Pipeline'
-                      : pipelineStepTrace[pipelineStepTrace.length - 1]?.status === 'completed'
-                        ? 'Pipeline 已完成'
-                        : 'Pipeline 已结束'}
-                  </div>
-                  {diagnosticsTrace.length > 0 ? (
-                    <div className="text-xs text-[#9ca3af]">总耗时 {formatTraceDuration(pipelineTraceTotalDurationMs)}</div>
-                  ) : null}
-                </div>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {pipelineStepTrace.map((step, index) => (
-                    <div
-                      key={step.step_key}
-                      className={clsx(
-                        'inline-flex min-h-[34px] items-center gap-2 rounded-full border px-3 py-1.5 text-xs transition',
-                        getTraceStatusTone(step.status),
-                      )}
-                    >
-                      <span className="inline-flex size-4 items-center justify-center rounded-full bg-black/5 text-[10px] font-medium">
-                        {step.status === 'completed' ? <Check className="size-3" /> : step.status === 'running' ? <LoaderCircle className="size-3 animate-spin" /> : index + 1}
-                      </span>
-                      <span>{step.label}</span>
-                    </div>
-                  ))}
-                </div>
-                {diagnosticsTrace.length > 0 ? (
-                  <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
-                    <div className="rounded-xl bg-[#f8fafc] px-3 py-2 text-[#4b5563]">
-                      <div className="text-[10px] uppercase tracking-[0.16em] text-[#9ca3af]">告警</div>
-                      <div className="mt-1 text-sm font-medium text-[#111827]">{pipelineResult?.warnings.length ?? pipelineDebug?.warnings.length ?? 0}</div>
-                    </div>
-                    <div className="rounded-xl bg-[#f8fafc] px-3 py-2 text-[#4b5563]">
-                      <div className="text-[10px] uppercase tracking-[0.16em] text-[#9ca3af]">Fallback</div>
-                      <div className="mt-1 text-sm font-medium text-[#111827]">{pipelineResult?.fallbacks.length ?? pipelineDebug?.fallbacks.length ?? 0}</div>
-                    </div>
-                    <div className="rounded-xl bg-[#f8fafc] px-3 py-2 text-[#4b5563]">
-                      <div className="text-[10px] uppercase tracking-[0.16em] text-[#9ca3af]">步骤</div>
-                      <div className="mt-1 text-sm font-medium text-[#111827]">{diagnosticsTrace.length}</div>
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
           </div>
 
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4">
@@ -1424,133 +1503,211 @@ export function AppShell() {
                 ) : null}
 
                 {aiMessages.length === 0 ? (
-                  <div className="rounded-2xl border border-dashed border-[#d1d5db] bg-white/80 px-4 py-5 text-sm leading-6 text-[#6b7280]">
-                    暂无对话。直接输入这次续写的目标、情绪推进、禁用内容或文风限制，消息区会优先保留给生成结果。
+                  <div className="flex flex-col items-center justify-center py-10 text-center">
+                    <div className="mb-4 flex size-12 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
+                      <Bot className="size-6" />
+                    </div>
+                    <div className="text-sm font-medium text-[#111827]">AI 助手已就绪</div>
+                    <div className="mt-2 max-w-[240px] text-xs leading-5 text-[#6b7280]">
+                      直接输入这次续写的目标、情绪推进、禁用内容或文风限制。
+                    </div>
+                    <div className="mt-6 flex flex-col gap-2 w-full max-w-[240px]">
+                      {useContinuationPipeline ? (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => setAIState(prev => ({ ...prev, instruction: '续写完本章，推进到本章的自然收束点。' }))}
+                            className="rounded-xl border border-[#e5e7eb] bg-white px-3 py-2 text-left text-xs text-[#4b5563] transition hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700"
+                          >
+                            续写完本章
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setAIState(prev => ({ ...prev, instruction: '继续写下去，保持当前节奏和视角，自然承接上一段。' }))}
+                            className="rounded-xl border border-[#e5e7eb] bg-white px-3 py-2 text-left text-xs text-[#4b5563] transition hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700"
+                          >
+                            继续写下去
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => setAIState(prev => ({ ...prev, instruction: '让这一段继续推进冲突，语气克制一点，不要重复上一段信息。' }))}
+                            className="rounded-xl border border-[#e5e7eb] bg-white px-3 py-2 text-left text-xs text-[#4b5563] transition hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700"
+                          >
+                            推进冲突，语气克制
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setAIState(prev => ({ ...prev, instruction: '详细描写一下周围的环境和氛围，烘托出紧张感。' }))}
+                            className="rounded-xl border border-[#e5e7eb] bg-white px-3 py-2 text-left text-xs text-[#4b5563] transition hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700"
+                          >
+                            描写环境，烘托紧张感
+                          </button>
+                        </>
+                      )}
+                    </div>
                   </div>
                 ) : null}
 
-                {aiMessages.map((message) => (
-                  <div key={message.id} className={clsx('flex', message.role === 'user' ? 'justify-end' : 'justify-start')}>
-                    <div
-                      className={clsx(
-                        'max-w-[92%] rounded-2xl px-4 py-3 text-sm leading-6',
-                        message.role === 'user'
-                          ? 'bg-[#111827] text-white'
-                          : 'border border-[#e5e7eb] bg-white text-[#374151]',
-                      )}
-                    >
-                      {message.content.trim() || (message.role === 'assistant' && aiState.isGenerating ? '正在生成...' : '')}
+                {aiMessages.map((message) => {
+                  if (message.pipelineTrace !== undefined) {
+                    const steps = getUserVisibleTraceSteps(message.pipelineTrace)
+                    if (message.pipelineCompleted && message.pipelineMeta) {
+                      const { warnings, fallbacks, durationMs } = message.pipelineMeta
+                      return (
+                        <div key={message.id} className="flex justify-start">
+                          <div className="inline-flex max-w-[92%] items-center gap-2 rounded-2xl border border-[#e5e7eb] bg-white px-4 py-2 text-xs text-[#9ca3af]">
+                            <Check className="size-3 shrink-0 text-emerald-500" />
+                            <span>Pipeline 已完成 · {steps.length} 步 · {formatTraceDuration(durationMs)}{warnings > 0 ? ` · ⚠ ${warnings}` : ''}{fallbacks > 0 ? ` · fallback ${fallbacks}` : ''}</span>
+                            {diagnosticsTrace.length > 0 ? (
+                              <button
+                                type="button"
+                                onClick={() => openDiagnosticsDialog('pipeline')}
+                                className="ml-1 shrink-0 text-[#6b7280] underline underline-offset-2 hover:text-[#111827]"
+                              >
+                                查看链路
+                              </button>
+                            ) : null}
+                          </div>
+                        </div>
+                      )
+                    }
+                    return (
+                      <div key={message.id} className="flex justify-start">
+                        <div className="inline-flex max-w-[92%] flex-wrap items-center gap-x-3 gap-y-1.5 rounded-2xl border border-[#e5e7eb] bg-white px-4 py-2.5">
+                          {steps.length === 0 ? (
+                            <span className="text-xs text-[#9ca3af]">正在准备 Pipeline…</span>
+                          ) : (
+                            steps.map((step) => (
+                              <span key={step.step_key} className={clsx('inline-flex items-center gap-1 text-xs', step.status === 'completed' ? 'text-emerald-600' : step.status === 'running' ? 'text-[#374151]' : 'text-[#9ca3af]')}>
+                                {step.status === 'completed' ? (
+                                  <Check className="size-3" />
+                                ) : step.status === 'running' ? (
+                                  <LoaderCircle className="size-3 animate-spin" />
+                                ) : (
+                                  <span className="size-3" />
+                                )}
+                                {step.label}
+                              </span>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                    )
+                  }
+                  return (
+                    <div key={message.id} className={clsx('flex', message.role === 'user' ? 'justify-end' : 'justify-start')}>
+                      <div
+                        className={clsx(
+                          'max-w-[92%] rounded-2xl px-4 py-3 text-sm leading-6',
+                          message.role === 'user'
+                            ? 'bg-[#111827] text-white'
+                            : 'border border-[#e5e7eb] bg-white text-[#374151]',
+                        )}
+                      >
+                        {message.content.trim() || (message.role === 'assistant' && aiState.isGenerating ? '正在生成...' : '')}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             </div>
           </div>
 
           <div className="border-t border-[#eef0f3] bg-white px-4 py-3">
-            <div className="rounded-[18px] border border-[#d1d5db] bg-[#fcfcfd] p-3">
-              <textarea
-                value={aiState.instruction}
-                onChange={(event) => setAIState((prev) => ({ ...prev, result: '', instruction: event.target.value }))}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter' && !event.shiftKey) {
-                    event.preventDefault()
-                    if (!aiState.isGenerating) {
-                      void handleGenerate()
-                    }
-                  }
-                }}
-                rows={3}
-                className="min-h-[72px] w-full resize-none border-none bg-transparent text-sm leading-6 text-[#111827] outline-none placeholder:text-[#9ca3af]"
-                placeholder="描述续写目标、情绪、节奏或限制条件。按 Enter 发送，Shift+Enter 换行。"
-              />
-
-              <div className="mt-3 border-t border-[#eef0f3] pt-3">
-                <div className="flex flex-wrap items-center gap-2">
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
+            <div className="flex flex-col gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      type="button"
+                      disabled={!hasSavedRuntimeKey || runtimeSettingsQuery.isLoading}
+                      className="inline-flex h-7 max-w-[120px] items-center justify-between rounded-md bg-[#f3f4f6] px-2 text-[11px] text-[#4b5563] transition hover:bg-[#e5e7eb] hover:text-[#111827] disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <span className="truncate">{isLoadingModels && !selectedModelId ? '加载中...' : selectedModelId || '选择模型'}</span>
+                      <ChevronDown className="ml-1 size-3 shrink-0 transition" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent side="top" align="start" className="w-[280px] p-2">
+                    <div className="flex items-center justify-between px-1 pb-1.5">
+                      <DropdownMenuLabel className="px-0 py-0">可用模型</DropdownMenuLabel>
                       <button
                         type="button"
-                        disabled={!hasSavedRuntimeKey || runtimeSettingsQuery.isLoading}
-                        className="inline-flex h-8 w-[140px] items-center justify-between rounded-full border border-[#d1d5db] bg-white px-3 text-[11px] text-[#4b5563] transition hover:border-[#9ca3af] hover:text-[#111827] disabled:cursor-not-allowed disabled:opacity-50"
+                        onClick={(e) => { e.preventDefault(); void handleLoadModels() }}
+                        disabled={isLoadingModels || !hasSavedRuntimeKey}
+                        className="inline-flex size-6 items-center justify-center rounded-lg text-[#9ca3af] transition hover:bg-[#f3f4f6] hover:text-[#374151] disabled:cursor-not-allowed disabled:opacity-40"
                       >
-                        <span className="truncate">{isLoadingModels && !selectedModelId ? '加载模型中...' : selectedModelId || '选择模型'}</span>
-                        <ChevronDown className="size-3.5 shrink-0 transition" />
+                        {isLoadingModels ? <LoaderCircle className="size-3 animate-spin" /> : <RefreshCw className="size-3" />}
                       </button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent side="top" align="start" className="w-[280px] p-2">
-                      <div className="flex items-center justify-between px-1 pb-1.5">
-                        <DropdownMenuLabel className="px-0 py-0">可用模型</DropdownMenuLabel>
-                        <button
-                          type="button"
-                          onClick={(e) => { e.preventDefault(); void handleLoadModels() }}
-                          disabled={isLoadingModels || !hasSavedRuntimeKey}
-                          className="inline-flex size-6 items-center justify-center rounded-lg text-[#9ca3af] transition hover:bg-[#f3f4f6] hover:text-[#374151] disabled:cursor-not-allowed disabled:opacity-40"
-                        >
-                          {isLoadingModels ? <LoaderCircle className="size-3 animate-spin" /> : <RefreshCw className="size-3" />}
-                        </button>
-                      </div>
-                      <DropdownMenuSeparator />
-                      <div className="max-h-[320px] overflow-y-auto">
-                        {availableModels.length === 0 ? (
-                          <div className="px-2 py-3 text-xs leading-5 text-[#9ca3af]">
-                            {hasSavedRuntimeKey ? '暂无模型，点击右上角刷新按钮加载' : '请先在设置中心配置 API Key'}
-                          </div>
-                        ) : (
-                          <div className="space-y-0.5">
-                            {availableModels.map((model) => {
-                              const isSelected = model.id === selectedModelId
-                              return (
-                                <DropdownMenuItem
-                                  key={model.id}
-                                  onSelect={() => handleSelectModel(model.id)}
-                                  className={isSelected ? 'bg-emerald-50 text-emerald-700 focus:bg-emerald-50 focus:text-emerald-700' : ''}
-                                >
-                                  <span className="truncate">{model.id}</span>
-                                  {isSelected && <Check className="ml-auto size-3.5 shrink-0" />}
-                                </DropdownMenuItem>
-                              )
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                  <button
-                    type="button"
-                    onClick={() => void handleOpenDiagnosticsCenter()}
-                    disabled={isContextPreviewLoading || isRetrievalPreviewLoading || aiState.isGenerating}
-                    className="inline-flex h-8 items-center gap-2 rounded-full border border-[#d1d5db] bg-white px-3 text-[11px] text-[#4b5563] transition hover:border-[#9ca3af] hover:text-[#111827] disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {isContextPreviewLoading || isRetrievalPreviewLoading ? <LoaderCircle className="size-3 animate-spin" /> : <BookCopy className="size-3.5" />}
-                    诊断中心
-                  </button>
-                  <Select
-                    value={useContinuationPipeline ? 'pipeline' : 'legacy'}
-                    onValueChange={(value) => handleSelectContinuationChain(value === 'pipeline')}
-                    disabled={aiState.isGenerating}
-                  >
-                    <SelectTrigger className="h-8 w-[120px] rounded-full border-[#d1d5db] bg-white px-3 text-[11px] text-[#4b5563] shadow-none hover:border-[#9ca3af] hover:text-[#111827]">
-                      <SelectValue placeholder="选择链路" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="legacy">旧链路</SelectItem>
-                      <SelectItem value="pipeline">Pipeline</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                {aiState.result.trim() && !aiState.isGenerating ? (
-                  <button
-                    type="button"
-                    onClick={handleApplyGeneratedText}
-                    className="mt-3 inline-flex h-10 w-full items-center justify-center rounded-xl bg-[#111827] px-4 text-sm font-medium text-white transition hover:bg-[#1f2937]"
-                  >
-                    {resultApplyLabel}
-                  </button>
-                ) : null}
+                    </div>
+                    <DropdownMenuSeparator />
+                    <div className="max-h-[320px] overflow-y-auto">
+                      {availableModels.length === 0 ? (
+                        <div className="px-2 py-3 text-xs leading-5 text-[#9ca3af]">
+                          {hasSavedRuntimeKey ? '暂无模型，点击右上角刷新按钮加载' : '请先在设置中心配置 API Key'}
+                        </div>
+                      ) : (
+                        <div className="space-y-0.5">
+                          {availableModels.map((model) => {
+                            const isSelected = model.id === selectedModelId
+                            return (
+                              <DropdownMenuItem
+                                key={model.id}
+                                onSelect={() => handleSelectModel(model.id)}
+                                className={isSelected ? 'bg-emerald-50 text-emerald-700 focus:bg-emerald-50 focus:text-emerald-700' : ''}
+                              >
+                                <span className="truncate">{model.id}</span>
+                                {isSelected && <Check className="ml-auto size-3.5 shrink-0" />}
+                              </DropdownMenuItem>
+                            )
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                <Select
+                  value={useContinuationPipeline ? 'pipeline' : 'legacy'}
+                  onValueChange={(value) => handleSelectContinuationChain(value === 'pipeline')}
+                  disabled={aiState.isGenerating}
+                >
+                  <SelectTrigger className="h-7 w-[90px] rounded-md border-none bg-[#f3f4f6] px-2 text-[11px] text-[#4b5563] shadow-none hover:bg-[#e5e7eb] hover:text-[#111827]">
+                    <SelectValue placeholder="选择链路" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="legacy">旧链路</SelectItem>
+                    <SelectItem value="pipeline">Pipeline</SelectItem>
+                  </SelectContent>
+                </Select>
+                <button
+                  type="button"
+                  onClick={() => void handleOpenDiagnosticsCenter()}
+                  disabled={isContextPreviewLoading || isRetrievalPreviewLoading || aiState.isGenerating}
+                  className="inline-flex h-7 items-center gap-1.5 rounded-md bg-[#f3f4f6] px-2 text-[11px] text-[#4b5563] transition hover:bg-[#e5e7eb] hover:text-[#111827] disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {isContextPreviewLoading || isRetrievalPreviewLoading ? <LoaderCircle className="size-3 animate-spin" /> : <BookCopy className="size-3" />}
+                  诊断中心
+                </button>
               </div>
 
-              <div className="mt-3">
+              <div className="relative rounded-xl border border-[#e5e7eb] bg-[#f9fafb] focus-within:border-emerald-500 focus-within:bg-white focus-within:ring-1 focus-within:ring-emerald-500 transition-all">
+                <textarea
+                  value={aiState.instruction}
+                  onChange={(event) => setAIState((prev) => ({ ...prev, result: '', instruction: event.target.value }))}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' && !event.shiftKey) {
+                      event.preventDefault()
+                      if (!aiState.isGenerating) {
+                        void handleGenerate()
+                      }
+                    }
+                  }}
+                  rows={2}
+                  className="min-h-[60px] w-full resize-none border-none bg-transparent px-3 py-2.5 pr-10 text-sm leading-6 text-[#111827] outline-none placeholder:text-[#9ca3af]"
+                  placeholder={getAIInstructionPlaceholder(scopedEditorUtilityContext)}
+                />
                 <button
                   type="button"
                   onClick={() => {
@@ -1561,17 +1718,33 @@ export function AppShell() {
                     void handleGenerate()
                   }}
                   className={clsx(
-                    'inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl px-3 text-sm font-medium text-white transition',
+                    'absolute bottom-2 right-2 inline-flex size-7 items-center justify-center rounded-lg text-white transition',
                     aiState.isGenerating ? 'bg-[#f59e0b] hover:bg-[#d97706]' : 'bg-emerald-500 hover:bg-emerald-600',
                   )}
                 >
                   {aiState.isGenerating ? <LoaderCircle className="size-3.5 animate-spin" /> : <SendHorizontal className="size-3.5" />}
-                  {aiState.isGenerating ? '停止生成' : '发送'}
                 </button>
               </div>
 
+              {aiState.result.trim() && !aiState.isGenerating ? (
+                <div className="mt-1 grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={handleDiscardGeneratedText}
+                    className="inline-flex h-8 w-full items-center justify-center rounded-lg border border-[#d1d5db] bg-white px-3 text-xs font-medium text-[#4b5563] transition hover:border-[#9ca3af] hover:text-[#111827]"
+                  >
+                    丢弃结果
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleApplyGeneratedText}
+                    className="inline-flex h-8 w-full items-center justify-center rounded-lg bg-[#111827] px-3 text-xs font-medium text-white transition hover:bg-[#1f2937]"
+                  >
+                    {resultApplyLabel}
+                  </button>
+                </div>
+              ) : null}
             </div>
-
           </div>
         </div>
       </div>
@@ -1777,7 +1950,7 @@ export function AppShell() {
                 </div>
                 <div className="rounded-2xl border border-border bg-background px-4 py-3">
                   <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">总耗时</div>
-                  <div className="mt-1 text-lg font-semibold text-foreground">{formatTraceDuration(pipelineTraceTotalDurationMs)}</div>
+                  <div className="mt-1 text-lg font-semibold text-foreground">{formatTraceDuration(diagnosticsTrace.reduce((t, s) => t + (typeof s.duration_ms === 'number' ? s.duration_ms : 0), 0))}</div>
                 </div>
                 <div className="rounded-2xl border border-border bg-background px-4 py-3">
                   <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Fallback</div>
@@ -1793,34 +1966,20 @@ export function AppShell() {
                   {diagnosticsTrace.map((step) => (
                     <div key={step.step_key} className="rounded-2xl border border-border bg-background px-4 py-4">
                       <div className="flex flex-wrap items-center justify-between gap-3">
-                        <div>
-                          <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">{step.step_key}</div>
+                        <div className="flex-1 min-w-0">
                           <div className="mt-1 text-sm font-medium text-foreground">{step.label}</div>
                           {summarizeTraceStep(step) ? (
                             <div className="mt-1 text-xs leading-5 text-muted-foreground">{summarizeTraceStep(step)}</div>
                           ) : null}
+                          {renderStepDetail(step)}
                         </div>
-                        <div className={clsx('rounded-full border px-3 py-1 text-xs', getTraceStatusTone(step.status))}>
-                          {getTraceStatusLabel(step.status)}
+                        <div className="flex flex-col items-end gap-1.5 shrink-0">
+                          <div className={clsx('rounded-full border px-3 py-1 text-xs', getTraceStatusTone(step.status))}>
+                            {getTraceStatusLabel(step.status)}
+                          </div>
+                          <div className="text-[11px] text-muted-foreground/60">{step.step_key} · {formatTraceDuration(step.duration_ms)}</div>
                         </div>
                       </div>
-                      <div className="mt-3 grid gap-2 text-xs text-muted-foreground sm:grid-cols-3">
-                        <div>耗时: {formatTraceDuration(step.duration_ms)}</div>
-                        <div>warnings: {step.warnings.length}</div>
-                        <div>fallbacks: {step.fallbacks.length}</div>
-                      </div>
-                      {step.input_summary && Object.keys(step.input_summary).length > 0 ? (
-                        <div className="mt-3 rounded-xl bg-muted/25 px-3 py-3">
-                          <div className="mb-2 text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Input Summary</div>
-                          <pre className="whitespace-pre-wrap break-words text-xs leading-6 text-foreground">{JSON.stringify(step.input_summary, null, 2)}</pre>
-                        </div>
-                      ) : null}
-                      {step.output_summary && Object.keys(step.output_summary).length > 0 ? (
-                        <div className="mt-3 rounded-xl bg-muted/25 px-3 py-3">
-                          <div className="mb-2 text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Output Summary</div>
-                          <pre className="whitespace-pre-wrap break-words text-xs leading-6 text-foreground">{JSON.stringify(step.output_summary, null, 2)}</pre>
-                        </div>
-                      ) : null}
                       {step.warnings.length > 0 ? (
                         <div className="mt-3 flex flex-wrap gap-2">
                           {step.warnings.map((item) => (
@@ -1838,6 +1997,27 @@ export function AppShell() {
                             </span>
                           ))}
                         </div>
+                      ) : null}
+                      {((step.input_summary && Object.keys(step.input_summary).length > 0) || (step.output_summary && Object.keys(step.output_summary).length > 0)) ? (
+                        <details className="mt-3">
+                          <summary className="cursor-pointer text-[11px] uppercase tracking-[0.16em] text-muted-foreground/60 hover:text-muted-foreground select-none">
+                            详细数据
+                          </summary>
+                          <div className="mt-2 space-y-2">
+                            {step.input_summary && Object.keys(step.input_summary).length > 0 ? (
+                              <div className="rounded-xl bg-muted/25 px-3 py-3">
+                                <div className="mb-1 text-[11px] uppercase tracking-[0.16em] text-muted-foreground/60">Input</div>
+                                <pre className="whitespace-pre-wrap break-words text-xs leading-6 text-foreground">{JSON.stringify(step.input_summary, null, 2)}</pre>
+                              </div>
+                            ) : null}
+                            {step.output_summary && Object.keys(step.output_summary).length > 0 ? (
+                              <div className="rounded-xl bg-muted/25 px-3 py-3">
+                                <div className="mb-1 text-[11px] uppercase tracking-[0.16em] text-muted-foreground/60">Output</div>
+                                <pre className="whitespace-pre-wrap break-words text-xs leading-6 text-foreground">{JSON.stringify(step.output_summary, null, 2)}</pre>
+                              </div>
+                            ) : null}
+                          </div>
+                        </details>
                       ) : null}
                     </div>
                   ))}

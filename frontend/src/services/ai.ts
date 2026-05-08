@@ -3,6 +3,7 @@ import type {
   AIContextPreviewResponse,
   AIContinuationDebugResponse,
   AIContinuationGenerateResponse,
+  AIContinuationTraceStep,
   AIRetrievalPreviewResponse,
 } from '@/types/api'
 import { apiClient } from '@/lib/api-client'
@@ -68,6 +69,81 @@ export async function generateWithContinuationPipeline(payload: AIGeneratePayloa
     timeout: 300_000,
   })
   return data
+}
+
+export async function streamContinuationPipeline(
+  payload: AIGeneratePayload,
+  handlers: {
+    onProgress?: (trace: AIContinuationTraceStep[]) => void
+    onContentChunk?: (chunk: string) => void
+    onComplete: (result: AIContinuationGenerateResponse) => void
+  },
+  options?: { signal?: AbortSignal; timeoutMs?: number },
+) {
+  const timeoutMs = options?.timeoutMs ?? 300_000
+  const timeoutController = createTimeoutController(timeoutMs, options?.signal)
+
+  try {
+    const response = await fetch(`${apiClient.defaults.baseURL}/ai/continuation/stream`, {
+      method: 'POST',
+      headers: buildAuthHeaders(),
+      body: JSON.stringify(payload),
+      signal: timeoutController.signal,
+    })
+
+    if (!response.ok || !response.body) {
+      const text = await response.text()
+      throw new Error(text || 'Pipeline 请求失败')
+    }
+
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder('utf-8')
+    let buffer = ''
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) {
+        break
+      }
+
+      buffer += decoder.decode(value, { stream: true })
+      const normalizedBuffer = buffer.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
+      const events = normalizedBuffer.split('\n\n')
+      buffer = events.pop() ?? ''
+
+      for (const rawEvent of events) {
+        const lines = rawEvent.split('\n')
+        const eventLine = lines.find((line) => line.startsWith('event:'))
+        const dataLine = lines.find((line) => line.startsWith('data:'))
+        const eventName = eventLine?.replace('event:', '').trim()
+        const dataValue = dataLine?.replace('data:', '').trim()
+
+        if (!dataValue) {
+          continue
+        }
+
+        if (eventName === 'error') {
+          const parsed = JSON.parse(dataValue) as { error?: string }
+          throw new Error(parsed.error ?? 'Pipeline 请求失败')
+        }
+
+        if (eventName === 'progress') {
+          const parsed = JSON.parse(dataValue) as { type?: string; trace?: AIContinuationTraceStep[]; chunk?: string }
+          if (parsed.type === 'content_chunk' && parsed.chunk !== undefined) {
+            handlers.onContentChunk?.(parsed.chunk)
+          } else {
+            handlers.onProgress?.(parsed.trace ?? [])
+          }
+        }
+
+        if (eventName === 'complete') {
+          handlers.onComplete(JSON.parse(dataValue) as AIContinuationGenerateResponse)
+        }
+      }
+    }
+  } finally {
+    timeoutController.dispose()
+  }
 }
 
 export async function debugContinuationPipeline(payload: AIGeneratePayload) {

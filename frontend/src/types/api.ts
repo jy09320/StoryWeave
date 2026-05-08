@@ -146,6 +146,7 @@ export interface ProjectDraftResult {
   world_setting_locations: string | null
   world_setting_timeline: string | null
   opening_chapters: string[]
+  outline_chapters: string[]
   notes: string[]
 }
 
@@ -251,6 +252,35 @@ export interface ChapterVersion {
   word_count: number | null
   change_note: string | null
   created_at: string
+}
+
+export interface ChapterMemory {
+  id: string
+  chapter_id: string
+  summary_short: string | null
+  summary_long: string | null
+  key_events: Record<string, unknown>[]
+  character_state_changes: Record<string, unknown>[]
+  relationship_changes: Record<string, unknown>[]
+  open_loops: Record<string, unknown>[]
+  resolved_loops: Record<string, unknown>[]
+  timeline_markers: Record<string, unknown>[]
+  important_objects: Record<string, unknown>[]
+  knowledge_state_changes: Record<string, unknown>[]
+  updated_at: string
+}
+
+export interface ChapterMemoryUpdatePayload {
+  summary_short?: string | null
+  summary_long?: string | null
+  key_events?: Record<string, unknown>[]
+  character_state_changes?: Record<string, unknown>[]
+  relationship_changes?: Record<string, unknown>[]
+  open_loops?: Record<string, unknown>[]
+  resolved_loops?: Record<string, unknown>[]
+  timeline_markers?: Record<string, unknown>[]
+  important_objects?: Record<string, unknown>[]
+  knowledge_state_changes?: Record<string, unknown>[]
 }
 
 export interface AIGeneratePayload {
