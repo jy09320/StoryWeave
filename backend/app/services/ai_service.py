@@ -190,6 +190,17 @@ class AIService:
         excerpt = tail[-1500:]
         return f"上一章结尾原文（{previous_chapter.title}）：\n{excerpt}"
 
+    def _build_current_chapter_tail_section(self, chapter: Chapter | None) -> str | None:
+        if not chapter or not chapter.plain_text:
+            return None
+
+        tail = chapter.plain_text.strip()
+        if not tail:
+            return None
+
+        excerpt = tail[-1800:]
+        return f"当前章节已写尾部（{chapter.title}）：\n{excerpt}"
+
     def _build_retrieved_chunks_section(self, retrieval: dict[str, Any] | None) -> str | None:
         if not retrieval:
             return None
@@ -398,6 +409,7 @@ class AIService:
             "当前章节",
             self._build_chapter_context_section(chapter, include_notes=intent in {"continue", "consistency"}),
         )
+        add_section("当前章节已写尾部", self._build_current_chapter_tail_section(chapter))
         for index, memory in enumerate(recent_memories, start=1):
             add_section(
                 f"近期剧情记忆 {index}",
@@ -418,6 +430,7 @@ class AIService:
         if context_block:
             final_instruction = (
                 f"{instruction}\n\n"
+                "如果当前章节已经存在未写完的正文，请优先紧接当前章节已写尾部继续写；只有在当前章节尾部信息不足时，才把上一章结尾当作补充参考。\n"
                 f"{self._build_intent_guide(intent)}\n"
                 "如果生成内容与上下文冲突，优先保持角色设定、世界观规则、章节记忆、检索片段与长期主线一致。\n\n"
                 f"{context_block}"
@@ -435,6 +448,7 @@ class AIService:
                 "recent_memory_count": len(recent_memories),
                 "retrieved_chunk_count": len(retrieval.get("chunks", [])),
                 "retrieval_query_terms": retrieval.get("query_terms", []),
+                "has_current_chapter_tail": chapter is not None and bool(chapter.plain_text and chapter.plain_text.strip()),
                 "has_previous_chapter_tail": previous_chapter is not None and bool(previous_chapter.plain_text),
                 "has_story_memory": story_memory is not None,
             },
