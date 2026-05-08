@@ -95,17 +95,19 @@ def _build_world_setting_payload(data: ProjectCreate) -> dict[str, str | None]:
 
 
 def _build_starter_chapters(data: ProjectCreate) -> list[dict[str, str | int | None]]:
-    if data.ai_draft and data.ai_draft.opening_chapters:
-        chapters: list[dict[str, str | int | None]] = []
-        for index, title in enumerate(data.ai_draft.opening_chapters[:3], start=1):
-            chapters.append(
-                {
-                    "title": title,
-                    "order_index": index,
-                    "notes": f"来自 AI 项目草案的开篇建议，第 {index} 章。",
-                }
-            )
-        return chapters
+    if data.ai_draft:
+        source_chapters = data.ai_draft.outline_chapters or data.ai_draft.opening_chapters
+        if source_chapters:
+            chapters: list[dict[str, str | int | None]] = []
+            for index, title in enumerate(source_chapters, start=1):
+                chapters.append(
+                    {
+                        "title": title,
+                        "order_index": index,
+                        "notes": f"来自 AI 项目草案的大纲建议，第 {index} 章。",
+                    }
+                )
+            return chapters
 
     primary_genre = _pick_primary_genre(data.genres)
     premise = data.premise or "待补充故事核心设定"
@@ -146,19 +148,30 @@ def _build_project_draft_instruction(data: ProjectDraftRequest) -> str:
     source_text = data.source_work or "原创"
     premise = data.premise or "未提供一句话故事，请基于标签生成一个可执行的创作方向。"
 
+    # 根据项目类型确定大纲章节数
+    is_short_form = data.type in {"fanfiction", "acg", "tv_movie"}
+    outline_count = "5-8" if is_short_form else "10"
+    outline_note = (
+        "完整故事骨架，覆盖起承转合，适合短篇/同人一次性规划"
+        if is_short_form
+        else "第一幕大纲，覆盖开局建立处境到第一个阶段高潮，适合长篇循序渐进创作"
+    )
+
     return (
         "你是网文项目创建助手。请根据用户提供的项目标题、频道、题材、套路和一句话故事，"
         "生成一版适合直接进入创作的项目草案。"
         "你必须只输出 JSON，不要输出解释、标题或 Markdown。\n"
-        'JSON 结构必须为：{"summary":"","world_setting_title":"","world_setting_overview":"","world_setting_rules":"","world_setting_factions":"","world_setting_locations":"","world_setting_timeline":"","opening_chapters":["","",""],"notes":[""]}\n'
+        'JSON 结构必须为：{"summary":"","world_setting_title":"","world_setting_overview":"","world_setting_rules":"","world_setting_factions":"","world_setting_locations":"","world_setting_timeline":"","opening_chapters":["","",""],"outline_chapters":["",...],"notes":[""]}\n'
         "要求：\n"
         "1. summary 用 80-140 字概括项目方向、卖点和主线冲突；\n"
         "2. world_setting_title 要像真实设定页标题；\n"
         "3. world_setting_overview 用 120-220 字输出开局可用的世界观/故事背景；\n"
         "4. world_setting_rules / factions / locations / timeline 分别输出 40-120 字，尽量结构化、可直接落库；\n"
         "5. opening_chapters 固定输出 3 条，每条是一个起始章节标题，适合直接建章；\n"
-        "6. notes 输出 2-4 条创建建议，聚焦还需要补哪些设定；\n"
-        "7. 内容要与用户标签一致，不要泛泛而谈。\n\n"
+        f"6. outline_chapters 输出 {outline_count} 条，{outline_note}；\n"
+        "   每条格式为「第N章 主线事件一句话说明」，例如「第3章 地下城初遭遇，主角与黑市势力第一次正面冲突」；\n"
+        "7. notes 输出 2-4 条创建建议，聚焦还需要补哪些设定；\n"
+        "8. 内容要与用户标签一致，不要泛泛而谈。\n\n"
         f"项目标题：{data.title}\n"
         f"项目类型：{data.type}\n"
         f"来源作品：{source_text}\n"
@@ -183,13 +196,14 @@ async def generate_project_draft(
         model_provider=data.model_provider,
         model_id=data.model_id,
         temperature=0.6,
-        max_tokens=1800,
+        max_tokens=2800,
         owner_id=current_user.id,
     )
 
     try:
         payload = _extract_json_object(ai_raw)
         payload["opening_chapters"] = [item.strip() for item in payload.get("opening_chapters", []) if isinstance(item, str) and item.strip()]
+        payload["outline_chapters"] = [item.strip() for item in payload.get("outline_chapters", []) if isinstance(item, str) and item.strip()]
         payload["notes"] = [item.strip() for item in payload.get("notes", []) if isinstance(item, str) and item.strip()]
         return ProjectDraftResponse.model_validate(payload)
     except Exception as exc:

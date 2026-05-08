@@ -207,6 +207,7 @@ class ProjectDraftResponse(BaseModel):
     world_setting_locations: str | None = None
     world_setting_timeline: str | None = None
     opening_chapters: list[str] = Field(default_factory=list)
+    outline_chapters: list[str] = Field(default_factory=list)
     notes: list[str] = Field(default_factory=list)
 
 
@@ -219,6 +220,7 @@ class ProjectDraftSnapshot(BaseModel):
     world_setting_locations: str | None = Field(default=None, max_length=4000)
     world_setting_timeline: str | None = Field(default=None, max_length=4000)
     opening_chapters: list[str] = Field(default_factory=list, max_length=10)
+    outline_chapters: list[str] = Field(default_factory=list, max_length=20)
     notes: list[str] = Field(default_factory=list, max_length=10)
 
     @field_validator("summary", "world_setting_title", "world_setting_overview")
@@ -229,7 +231,7 @@ class ProjectDraftSnapshot(BaseModel):
             raise ValueError("Draft field cannot be empty")
         return stripped
 
-    @field_validator("opening_chapters", "notes", mode="before")
+    @field_validator("opening_chapters", "outline_chapters", "notes", mode="before")
     @classmethod
     def normalize_snapshot_list_fields(cls, value: list[str] | None) -> list[str]:
         return normalize_string_list(value)
@@ -551,6 +553,35 @@ class ChapterVersionResponse(ORMResponseModel):
     word_count: int | None
     change_note: str | None
     created_at: datetime
+
+
+class ChapterMemoryResponse(ORMResponseModel):
+    id: str
+    chapter_id: str
+    summary_short: str | None
+    summary_long: str | None
+    key_events: list[dict]
+    character_state_changes: list[dict]
+    relationship_changes: list[dict]
+    open_loops: list[dict]
+    resolved_loops: list[dict]
+    timeline_markers: list[dict]
+    important_objects: list[dict]
+    knowledge_state_changes: list[dict]
+    updated_at: datetime
+
+
+class ChapterMemoryUpdate(BaseModel):
+    summary_short: str | None = None
+    summary_long: str | None = None
+    key_events: list[dict] | None = None
+    character_state_changes: list[dict] | None = None
+    relationship_changes: list[dict] | None = None
+    open_loops: list[dict] | None = None
+    resolved_loops: list[dict] | None = None
+    timeline_markers: list[dict] | None = None
+    important_objects: list[dict] | None = None
+    knowledge_state_changes: list[dict] | None = None
 
 
 class CharacterResponse(ORMResponseModel):
