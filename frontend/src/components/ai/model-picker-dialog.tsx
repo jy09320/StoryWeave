@@ -1,8 +1,8 @@
-import { LoaderCircle } from 'lucide-react'
+import { useEffect } from 'react'
+import { LoaderCircle, X } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
 import { Button } from '@/components/ui/button'
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import type { AIModelOption } from '@/services/ai'
 
@@ -27,18 +27,59 @@ export function ModelPickerDialog({
   onRefresh,
   onSelect,
 }: ModelPickerDialogProps) {
+  useEffect(() => {
+    if (!open) {
+      return
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        onOpenChange(false)
+      }
+    }
+
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    window.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.body.style.overflow = previousOverflow
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [onOpenChange, open])
+
+  if (!open) {
+    return null
+  }
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl gap-0 overflow-hidden p-0">
-        <DialogHeader className="border-b border-border px-6 py-5">
-          <DialogTitle>选择模型</DialogTitle>
-          <DialogDescription>这里切换当前任务使用的模型，运行时配置仍在设置中心维护。</DialogDescription>
-        </DialogHeader>
+    <div className="fixed inset-0 z-[80]">
+      <button
+        type="button"
+        aria-label="关闭模型选择"
+        className="absolute inset-0 bg-black/55 backdrop-blur-sm"
+        onClick={() => onOpenChange(false)}
+      />
+      <div className="absolute left-1/2 top-1/2 z-[81] grid w-[min(720px,calc(100vw-32px))] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-3xl border border-border bg-popover shadow-2xl shadow-slate-300/40">
+        <div className="flex items-start justify-between gap-4 border-b border-border px-6 py-5">
+          <div>
+            <div className="text-lg font-semibold text-foreground">选择模型</div>
+            <div className="mt-1 text-sm leading-6 text-muted-foreground">
+              这里切换当前任务使用的模型，运行时配置仍在设置中心维护。
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => onOpenChange(false)}
+            className="inline-flex size-8 items-center justify-center rounded-full text-muted-foreground transition hover:bg-muted hover:text-foreground"
+          >
+            <X className="size-4" />
+          </button>
+        </div>
 
         <div className="space-y-4 px-6 py-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="rounded-xl border border-border bg-muted/40 px-3 py-2 text-sm text-foreground">
-              当前模型：{selectedModelId}
+              当前模型：{selectedModelId || '未选择'}
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <Button variant="outline" onClick={onRefresh} disabled={isLoadingModels || !hasSavedRuntimeKey}>
@@ -98,7 +139,7 @@ export function ModelPickerDialog({
             </div>
           </ScrollArea>
         </div>
-      </DialogContent>
-    </Dialog>
+      </div>
+    </div>
   )
 }

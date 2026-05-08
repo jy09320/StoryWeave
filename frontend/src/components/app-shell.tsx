@@ -5,6 +5,7 @@ import {
   ArrowLeft,
   Bot,
   BookCopy,
+  Check,
   ChevronDown,
   ChevronRight,
   Home,
@@ -15,6 +16,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   PanelRightClose,
+  RefreshCw,
   SendHorizontal,
   Settings2,
   Sparkles,
@@ -23,8 +25,9 @@ import {
 import { Link, NavLink, Outlet, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { toast } from 'sonner'
 
-import { ModelPickerDialog } from '@/components/ai/model-picker-dialog'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
   EDITOR_AI_DRAFT_EVENT,
   writeEditorAIPreviewContext,
@@ -52,6 +55,7 @@ const primaryNavItems = [
 
 type UtilityTabKey = 'characters' | 'world'
 type AIChatMessageRole = 'assistant' | 'user'
+type AIDiagnosticsTab = 'risk' | 'context' | 'retrieval' | 'pipeline'
 
 interface AIChatMessage {
   id: string
@@ -75,11 +79,8 @@ interface AIPanelSnapshot {
   pipelineDebug: AIContinuationDebugResponse | null
   pipelineResult: AIContinuationGenerateResponse | null
   useContinuationPipeline: boolean
-  isContextPreviewOpen: boolean
-  isContextPreviewDialogOpen: boolean
-  isRetrievalPreviewOpen: boolean
-  isPipelineDebugOpen: boolean
-  isPipelineResultOpen: boolean
+  isDiagnosticsDialogOpen: boolean
+  activeDiagnosticsTab: AIDiagnosticsTab
 }
 
 const utilityTabs: Array<{ key: UtilityTabKey; label: string }> = [
@@ -95,7 +96,7 @@ const actionLabelMap = {
 } as const
 
 const DEFAULT_CONTINUE_INSTRUCTION = '请基于当前正文继续写下去，保持风格一致，并自然衔接上一段。'
-
+const AI_MODEL_USAGE_STORAGE_KEY = 'storyweave-ai-model-usage'
 const DEFAULT_AI_PANEL_WIDTH = 420
 const MIN_AI_PANEL_WIDTH = 320
 const MAX_AI_PANEL_WIDTH = 640
@@ -179,6 +180,55 @@ function writeAIPanelSnapshots(snapshots: Record<string, AIPanelSnapshot>) {
   }
 }
 
+interface AIModelUsageRecord {
+  count: number
+  lastUsedAt: number
+}
+
+function readAIModelUsage() {
+  if (typeof window === 'undefined') {
+    return {} as Record<string, AIModelUsageRecord>
+  }
+
+  try {
+    const raw = window.localStorage.getItem(AI_MODEL_USAGE_STORAGE_KEY)
+    if (!raw) {
+      return {} as Record<string, AIModelUsageRecord>
+    }
+
+    const parsed = JSON.parse(raw) as Record<string, Partial<AIModelUsageRecord>>
+    if (!parsed || typeof parsed !== 'object') {
+      return {} as Record<string, AIModelUsageRecord>
+    }
+
+    return Object.fromEntries(
+      Object.entries(parsed)
+        .filter((entry): entry is [string, Partial<AIModelUsageRecord>] => typeof entry[0] === 'string')
+        .map(([modelId, record]) => [
+          modelId,
+          {
+            count: Number(record.count) > 0 ? Number(record.count) : 0,
+            lastUsedAt: Number(record.lastUsedAt) > 0 ? Number(record.lastUsedAt) : 0,
+          },
+        ]),
+    )
+  } catch {
+    return {} as Record<string, AIModelUsageRecord>
+  }
+}
+
+function writeAIModelUsage(value: Record<string, AIModelUsageRecord>) {
+  if (typeof window === 'undefined') {
+    return
+  }
+
+  try {
+    window.localStorage.setItem(AI_MODEL_USAGE_STORAGE_KEY, JSON.stringify(value))
+  } catch {
+    // ignore storage write failures
+  }
+}
+
 export function AppShell() {
   const location = useLocation()
   const navigate = useNavigate()
@@ -200,7 +250,6 @@ export function AppShell() {
   )
   const [availableModels, setAvailableModels] = useState<AIModelOption[]>([])
   const [isLoadingModels, setIsLoadingModels] = useState(false)
-  const [isModelDialogOpen, setIsModelDialogOpen] = useState(false)
   const [isShortcutMenuOpen, setIsShortcutMenuOpen] = useState(false)
   const [aiState, setAIState] = useState<AIComposerState>(DEFAULT_AI_COMPOSER_STATE)
   const [aiMessages, setAIMessages] = useState<AIChatMessage[]>([])
@@ -212,11 +261,9 @@ export function AppShell() {
   const [isContextPreviewLoading, setIsContextPreviewLoading] = useState(false)
   const [isRetrievalPreviewLoading, setIsRetrievalPreviewLoading] = useState(false)
   const [isPipelineDebugLoading, setIsPipelineDebugLoading] = useState(false)
-  const [isContextPreviewOpen, setIsContextPreviewOpen] = useState(false)
-  const [isContextPreviewDialogOpen, setIsContextPreviewDialogOpen] = useState(false)
-  const [isRetrievalPreviewOpen, setIsRetrievalPreviewOpen] = useState(false)
-  const [isPipelineDebugOpen, setIsPipelineDebugOpen] = useState(false)
-  const [isPipelineResultOpen, setIsPipelineResultOpen] = useState(true)
+  const [isDiagnosticsDialogOpen, setIsDiagnosticsDialogOpen] = useState(false)
+  const [activeDiagnosticsTab, setActiveDiagnosticsTab] = useState<AIDiagnosticsTab>('risk')
+  const [modelUsage, setModelUsage] = useState<Record<string, AIModelUsageRecord>>(() => readAIModelUsage())
   const generationAbortRef = useRef<AbortController | null>(null)
   const aiPanelSnapshotRef = useRef<Record<string, AIPanelSnapshot>>(readAIPanelSnapshots())
   const previousAIScopeKeyRef = useRef<string | null>(null)
@@ -648,14 +695,11 @@ export function AppShell() {
       pipelineDebug,
       pipelineResult,
       useContinuationPipeline,
-      isContextPreviewOpen,
-      isContextPreviewDialogOpen,
-      isRetrievalPreviewOpen,
-      isPipelineDebugOpen,
-      isPipelineResultOpen,
+      isDiagnosticsDialogOpen,
+      activeDiagnosticsTab,
     }
     writeAIPanelSnapshots(aiPanelSnapshotRef.current)
-  }, [aiMessages, aiState, contextPreview, retrievalPreview, pipelineDebug, pipelineResult, useContinuationPipeline, currentAIScopeKey, isContextPreviewDialogOpen, isContextPreviewOpen, isRetrievalPreviewOpen, isPipelineDebugOpen, isPipelineResultOpen])
+  }, [aiMessages, aiState, contextPreview, retrievalPreview, pipelineDebug, pipelineResult, useContinuationPipeline, currentAIScopeKey, isDiagnosticsDialogOpen, activeDiagnosticsTab])
 
   useEffect(() => {
     const previousScopeKey = previousAIScopeKeyRef.current
@@ -673,11 +717,8 @@ export function AppShell() {
           pipelineDebug: null,
           pipelineResult: null,
           useContinuationPipeline: previousSnapshot.useContinuationPipeline ?? false,
-          isContextPreviewOpen: false,
-          isContextPreviewDialogOpen: false,
-          isRetrievalPreviewOpen: false,
-          isPipelineDebugOpen: false,
-          isPipelineResultOpen: true,
+          isDiagnosticsDialogOpen: false,
+          activeDiagnosticsTab: previousSnapshot.activeDiagnosticsTab ?? 'risk',
         }
         writeAIPanelSnapshots(aiPanelSnapshotRef.current)
       }
@@ -695,11 +736,8 @@ export function AppShell() {
       setPipelineDebug(null)
       setPipelineResult(null)
       setUseContinuationPipeline(false)
-      setIsContextPreviewOpen(false)
-      setIsContextPreviewDialogOpen(false)
-      setIsRetrievalPreviewOpen(false)
-      setIsPipelineDebugOpen(false)
-      setIsPipelineResultOpen(true)
+      setIsDiagnosticsDialogOpen(false)
+      setActiveDiagnosticsTab('risk')
       previousAIScopeKeyRef.current = currentAIScopeKey
       return
     }
@@ -713,11 +751,8 @@ export function AppShell() {
       setPipelineDebug(nextSnapshot.pipelineDebug ?? null)
       setPipelineResult(nextSnapshot.pipelineResult ?? null)
       setUseContinuationPipeline(nextSnapshot.useContinuationPipeline ?? false)
-      setIsContextPreviewOpen(nextSnapshot.isContextPreviewOpen)
-      setIsContextPreviewDialogOpen(nextSnapshot.isContextPreviewDialogOpen)
-      setIsRetrievalPreviewOpen(nextSnapshot.isRetrievalPreviewOpen ?? false)
-      setIsPipelineDebugOpen(nextSnapshot.isPipelineDebugOpen ?? false)
-      setIsPipelineResultOpen(nextSnapshot.isPipelineResultOpen ?? true)
+      setIsDiagnosticsDialogOpen(nextSnapshot.isDiagnosticsDialogOpen ?? false)
+      setActiveDiagnosticsTab(nextSnapshot.activeDiagnosticsTab ?? 'risk')
     } else {
       setAIState(buildDefaultAIComposerState(scopedEditorUtilityContext))
       setAIMessages([])
@@ -726,11 +761,8 @@ export function AppShell() {
       setPipelineDebug(null)
       setPipelineResult(null)
       setUseContinuationPipeline(false)
-      setIsContextPreviewOpen(false)
-      setIsContextPreviewDialogOpen(false)
-      setIsRetrievalPreviewOpen(false)
-      setIsPipelineDebugOpen(false)
-      setIsPipelineResultOpen(true)
+      setIsDiagnosticsDialogOpen(false)
+      setActiveDiagnosticsTab('risk')
     }
 
     previousAIScopeKeyRef.current = currentAIScopeKey
@@ -746,9 +778,8 @@ export function AppShell() {
     }))
     setContextPreview(null)
     setRetrievalPreview(null)
-    setIsContextPreviewOpen(false)
-    setIsContextPreviewDialogOpen(false)
-    setIsRetrievalPreviewOpen(false)
+    setIsDiagnosticsDialogOpen(false)
+    setActiveDiagnosticsTab('risk')
     generationAbortRef.current?.abort()
     generationAbortRef.current = null
     writeEditorAIPreviewContext(null)
@@ -767,11 +798,22 @@ export function AppShell() {
     }
   }
 
-  function handleOpenModelDialog() {
-    setIsModelDialogOpen(true)
-    if (availableModels.length === 0 && !isLoadingModels && hasSavedRuntimeKey) {
-      void handleLoadModels()
+  function recordModelUsage(modelId: string) {
+    const nextUsage: Record<string, AIModelUsageRecord> = {
+      ...modelUsage,
+      [modelId]: {
+        count: (modelUsage[modelId]?.count ?? 0) + 1,
+        lastUsedAt: Date.now(),
+      },
     }
+    setModelUsage(nextUsage)
+    writeAIModelUsage(nextUsage)
+  }
+
+  function handleSelectModel(modelId: string) {
+    setAIState((prev) => ({ ...prev, result: '', modelId }))
+    recordModelUsage(modelId)
+    toast.success(`下一次生成将使用模型：${modelId}`)
   }
 
   function handleStopGeneration() {
@@ -806,11 +848,8 @@ export function AppShell() {
     setPipelineDebug(null)
     setPipelineResult(null)
     setUseContinuationPipeline(false)
-    setIsContextPreviewOpen(false)
-    setIsContextPreviewDialogOpen(false)
-    setIsRetrievalPreviewOpen(false)
-    setIsPipelineDebugOpen(false)
-    setIsPipelineResultOpen(true)
+    setIsDiagnosticsDialogOpen(false)
+    setActiveDiagnosticsTab('risk')
     writeEditorAIPreviewContext(null)
     toast.message('已清空当前章节的 AI 记录')
   }
@@ -843,15 +882,31 @@ export function AppShell() {
       ])
       setContextPreview(preview)
       setRetrievalPreview(retrieval)
-      setIsContextPreviewOpen(true)
-      setIsContextPreviewDialogOpen(false)
-      setIsRetrievalPreviewOpen(true)
+      setActiveDiagnosticsTab('context')
+      setIsDiagnosticsDialogOpen(true)
     } catch (error) {
       toast.error(error instanceof Error ? error.message : '上下文预览加载失败')
     } finally {
       setIsContextPreviewLoading(false)
       setIsRetrievalPreviewLoading(false)
     }
+  }
+
+  async function handleOpenDiagnosticsCenter() {
+    if (contextPreview || retrievalPreview || pipelineResult || pipelineDebug) {
+      openDiagnosticsDialog(
+        pipelineResult
+          ? 'risk'
+          : contextPreview
+            ? 'context'
+            : retrievalPreview
+              ? 'retrieval'
+              : 'pipeline',
+      )
+      return
+    }
+
+    await handleLoadContextPreview()
   }
 
   async function handleGenerate() {
@@ -906,7 +961,6 @@ export function AppShell() {
         const result = await generateWithContinuationPipeline(payload)
         accumulatedResult = result.final_content
         setPipelineResult(result)
-        setIsPipelineResultOpen(true)
         setPipelineDebug((prev) =>
           prev && prev.final_content === result.final_content
             ? prev
@@ -1025,7 +1079,8 @@ export function AppShell() {
     try {
       const result = await debugContinuationPipeline(payload)
       setPipelineDebug(result)
-      setIsPipelineDebugOpen(true)
+      setActiveDiagnosticsTab('pipeline')
+      setIsDiagnosticsDialogOpen(true)
       toast.success('已生成 pipeline 调试结果')
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Pipeline 调试失败'
@@ -1051,6 +1106,39 @@ export function AppShell() {
     writeEditorAIPreviewContext(null)
     setAIState((prev) => ({ ...prev, result: '', isGenerating: false }))
   }
+
+  function openDiagnosticsDialog(tab: AIDiagnosticsTab) {
+    setActiveDiagnosticsTab(tab)
+    setIsDiagnosticsDialogOpen(true)
+  }
+
+  function handleSelectContinuationChain(nextUsePipeline: boolean) {
+    if (currentAIScopeKey) {
+      const previousSnapshot = aiPanelSnapshotRef.current[currentAIScopeKey]
+      aiPanelSnapshotRef.current[currentAIScopeKey] = {
+        ...previousSnapshot,
+        aiState: { ...aiState, isGenerating: false },
+        aiMessages,
+        contextPreview,
+        retrievalPreview,
+        pipelineDebug,
+        pipelineResult,
+        useContinuationPipeline: nextUsePipeline,
+        isDiagnosticsDialogOpen,
+        activeDiagnosticsTab,
+      }
+      writeAIPanelSnapshots(aiPanelSnapshotRef.current)
+    }
+    setUseContinuationPipeline(nextUsePipeline)
+    toast.success(`已切换为${nextUsePipeline ? 'Pipeline' : '旧链路'}生成`)
+  }
+
+  const diagnosticsTabs = [
+    { key: 'risk' as const, label: '风险提示', visible: Boolean(pipelineResult) },
+    { key: 'context' as const, label: '上下文', visible: Boolean(contextPreview) },
+    { key: 'retrieval' as const, label: '检索', visible: Boolean(retrievalPreview) },
+    { key: 'pipeline' as const, label: 'Pipeline 调试', visible: Boolean(pipelineDebug) },
+  ].filter((item) => item.visible)
 
   function closeUtilityDrawer() {
     if (scopedEditorUtilityContext?.updatedAt) {
@@ -1166,57 +1254,85 @@ export function AppShell() {
                 placeholder="描述续写目标、情绪、节奏或限制条件。按 Enter 发送，Shift+Enter 换行。"
               />
 
-              <div className="mt-3 flex items-center justify-between gap-2 border-t border-[#eef0f3] pt-3">
+              <div className="mt-3 border-t border-[#eef0f3] pt-3">
                 <div className="flex flex-wrap items-center gap-2">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button
+                        type="button"
+                        disabled={!hasSavedRuntimeKey || runtimeSettingsQuery.isLoading}
+                        className="inline-flex h-8 w-[140px] items-center justify-between rounded-full border border-[#d1d5db] bg-white px-3 text-[11px] text-[#4b5563] transition hover:border-[#9ca3af] hover:text-[#111827] disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <span className="truncate">{isLoadingModels && !selectedModelId ? '加载模型中...' : selectedModelId || '选择模型'}</span>
+                        <ChevronDown className="size-3.5 shrink-0 transition" />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent side="top" align="start" className="w-[280px] p-2">
+                      <div className="flex items-center justify-between px-1 pb-1.5">
+                        <DropdownMenuLabel className="px-0 py-0">可用模型</DropdownMenuLabel>
+                        <button
+                          type="button"
+                          onClick={(e) => { e.preventDefault(); void handleLoadModels() }}
+                          disabled={isLoadingModels || !hasSavedRuntimeKey}
+                          className="inline-flex size-6 items-center justify-center rounded-lg text-[#9ca3af] transition hover:bg-[#f3f4f6] hover:text-[#374151] disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                          {isLoadingModels ? <LoaderCircle className="size-3 animate-spin" /> : <RefreshCw className="size-3" />}
+                        </button>
+                      </div>
+                      <DropdownMenuSeparator />
+                      <div className="max-h-[320px] overflow-y-auto">
+                        {availableModels.length === 0 ? (
+                          <div className="px-2 py-3 text-xs leading-5 text-[#9ca3af]">
+                            {hasSavedRuntimeKey ? '暂无模型，点击右上角刷新按钮加载' : '请先在设置中心配置 API Key'}
+                          </div>
+                        ) : (
+                          <div className="space-y-0.5">
+                            {availableModels.map((model) => {
+                              const isSelected = model.id === selectedModelId
+                              return (
+                                <DropdownMenuItem
+                                  key={model.id}
+                                  onSelect={() => handleSelectModel(model.id)}
+                                  className={isSelected ? 'bg-emerald-50 text-emerald-700 focus:bg-emerald-50 focus:text-emerald-700' : ''}
+                                >
+                                  <span className="truncate">{model.id}</span>
+                                  {isSelected && <Check className="ml-auto size-3.5 shrink-0" />}
+                                </DropdownMenuItem>
+                              )
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                   <button
                     type="button"
-                    onClick={handleOpenModelDialog}
-                    disabled={isLoadingModels || !hasSavedRuntimeKey || runtimeSettingsQuery.isLoading}
-                    className="inline-flex h-8 items-center gap-2 rounded-full border border-[#d1d5db] bg-white px-3 text-[11px] text-[#4b5563] transition hover:border-[#9ca3af] hover:text-[#111827] disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    <span className="max-w-[180px] truncate">
-                      {isLoadingModels ? '加载模型中...' : selectedModelId || '选择模型'}
-                    </span>
-                    <ChevronRight className="size-3.5" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => void handleLoadContextPreview()}
+                    onClick={() => void handleOpenDiagnosticsCenter()}
                     disabled={isContextPreviewLoading || isRetrievalPreviewLoading || aiState.isGenerating}
                     className="inline-flex h-8 items-center gap-2 rounded-full border border-[#d1d5db] bg-white px-3 text-[11px] text-[#4b5563] transition hover:border-[#9ca3af] hover:text-[#111827] disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {isContextPreviewLoading || isRetrievalPreviewLoading ? <LoaderCircle className="size-3 animate-spin" /> : <BookCopy className="size-3.5" />}
-                    上下文预览
+                    诊断中心
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => void handleRunPipelineDebug()}
-                    disabled={isPipelineDebugLoading || aiState.isGenerating}
-                    className="inline-flex h-8 items-center gap-2 rounded-full border border-[#d1d5db] bg-white px-3 text-[11px] text-[#4b5563] transition hover:border-[#9ca3af] hover:text-[#111827] disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {isPipelineDebugLoading ? <LoaderCircle className="size-3 animate-spin" /> : <Bot className="size-3.5" />}
-                    Pipeline 调试
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setUseContinuationPipeline((prev) => !prev)}
+                  <Select
+                    value={useContinuationPipeline ? 'pipeline' : 'legacy'}
+                    onValueChange={(value) => handleSelectContinuationChain(value === 'pipeline')}
                     disabled={aiState.isGenerating}
-                    className={clsx(
-                      'inline-flex h-8 items-center gap-2 rounded-full border px-3 text-[11px] transition disabled:cursor-not-allowed disabled:opacity-50',
-                      useContinuationPipeline
-                        ? 'border-emerald-300 bg-emerald-50 text-emerald-700'
-                        : 'border-[#d1d5db] bg-white text-[#4b5563] hover:border-[#9ca3af] hover:text-[#111827]',
-                    )}
                   >
-                    <Bot className="size-3.5" />
-                    {useContinuationPipeline ? 'Pipeline 已启用' : '使用旧链路'}
-                  </button>
+                    <SelectTrigger className="h-8 w-[120px] rounded-full border-[#d1d5db] bg-white px-3 text-[11px] text-[#4b5563] shadow-none hover:border-[#9ca3af] hover:text-[#111827]">
+                      <SelectValue placeholder="选择链路" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="legacy">旧链路</SelectItem>
+                      <SelectItem value="pipeline">Pipeline</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
                 {aiState.result.trim() && !aiState.isGenerating ? (
                   <button
                     type="button"
                     onClick={handleApplyGeneratedText}
-                    className="inline-flex h-9 items-center justify-center rounded-xl bg-[#111827] px-4 text-xs font-medium text-white transition hover:bg-[#1f2937]"
+                    className="mt-3 inline-flex h-10 w-full items-center justify-center rounded-xl bg-[#111827] px-4 text-sm font-medium text-white transition hover:bg-[#1f2937]"
                   >
                     {resultApplyLabel}
                   </button>
@@ -1243,243 +1359,6 @@ export function AppShell() {
                 </button>
               </div>
 
-              {pipelineResult && useContinuationPipeline ? (
-                <div className="mt-3 rounded-[18px] border border-[#dbe3ea] bg-white">
-                  <button
-                    type="button"
-                    onClick={() => setIsPipelineResultOpen((prev) => !prev)}
-                    className="flex w-full items-center justify-between px-3 py-2 text-left"
-                  >
-                    <div>
-                      <div className="text-xs font-medium text-[#111827]">Pipeline 风险提示</div>
-                      <div className="mt-0.5 text-[11px] text-[#6b7280]">
-                        severity: {pipelineResult.continuity_report?.severity ?? 'unknown'} · warnings: {pipelineResult.warnings.length}
-                      </div>
-                    </div>
-                    <ChevronDown className={clsx('size-4 text-[#6b7280] transition', isPipelineResultOpen && 'rotate-180')} />
-                  </button>
-                  {isPipelineResultOpen ? (
-                    <div className="space-y-3 border-t border-[#eef0f3] px-3 py-3">
-                      <div
-                        className={clsx(
-                          'rounded-2xl border px-3 py-3 text-sm',
-                          pipelineResult.continuity_report?.severity === 'high'
-                            ? 'border-rose-200 bg-rose-50 text-rose-700'
-                            : pipelineResult.continuity_report?.severity === 'medium'
-                              ? 'border-amber-200 bg-amber-50 text-amber-700'
-                              : 'border-emerald-200 bg-emerald-50 text-emerald-700',
-                        )}
-                      >
-                        {pipelineResult.continuity_report?.summary || '未发现明显连续性风险。'}
-                      </div>
-                      {pipelineResult.warnings.length > 0 ? (
-                        <div className="rounded-2xl border border-[#eef0f3] bg-[#fcfcfd] px-3 py-3">
-                          <div className="mb-1 text-[11px] uppercase tracking-[0.18em] text-[#6b7280]">Warnings</div>
-                          <div className="space-y-1">
-                            {pipelineResult.warnings.map((item) => (
-                              <div key={item} className="text-xs leading-6 text-[#4b5563]">
-                                {item}
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      ) : null}
-                      {pipelineResult.fallbacks.length > 0 ? (
-                        <div className="rounded-2xl border border-[#eef0f3] bg-[#fcfcfd] px-3 py-3">
-                          <div className="mb-1 text-[11px] uppercase tracking-[0.18em] text-[#6b7280]">Fallbacks</div>
-                          <div className="flex flex-wrap gap-1.5">
-                            {pipelineResult.fallbacks.map((item) => (
-                              <span key={item} className="rounded-full border border-[#d1d5db] bg-white px-2 py-0.5 text-[11px] text-[#4b5563]">
-                                {item}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      ) : null}
-                    </div>
-                  ) : null}
-                </div>
-              ) : null}
-
-              {contextPreview ? (
-                <div className="mt-3 rounded-[18px] border border-[#dbe3ea] bg-white">
-                  <button
-                    type="button"
-                    onClick={() => setIsContextPreviewOpen((prev) => !prev)}
-                    className="flex w-full items-center justify-between px-3 py-2 text-left"
-                  >
-                      <div>
-                        <div className="text-xs font-medium text-[#111827]">上下文预览</div>
-                        <div className="mt-0.5 text-[11px] text-[#6b7280]">
-                          intent: {contextPreview.intent} · sections: {contextPreview.sections.length}
-                        </div>
-                      </div>
-                    <ChevronDown className={clsx('size-4 text-[#6b7280] transition', isContextPreviewOpen && 'rotate-180')} />
-                  </button>
-                  {isContextPreviewOpen ? (
-                    <div className="space-y-3 border-t border-[#eef0f3] px-3 py-3">
-                      <div className="grid grid-cols-2 gap-2 text-[11px] text-[#6b7280]">
-                        <div>recent memory: {contextPreview.metadata.recent_memory_count ?? 0}</div>
-                        <div>story memory: {contextPreview.metadata.has_story_memory ? 'yes' : 'no'}</div>
-                        <div>chapter found: {contextPreview.metadata.chapter_found ? 'yes' : 'no'}</div>
-                        <div>prev tail: {contextPreview.metadata.has_previous_chapter_tail ? 'yes' : 'no'}</div>
-                        <div>retrieved chunks: {contextPreview.metadata.retrieved_chunk_count ?? 0}</div>
-                        <div>query terms: {contextPreview.metadata.retrieval_query_terms?.length ?? 0}</div>
-                      </div>
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="text-[11px] text-[#6b7280]">侧栏仅展示摘要，完整内容可在弹窗中查看。</div>
-                        <button
-                          type="button"
-                          onClick={() => setIsContextPreviewDialogOpen(true)}
-                          className="inline-flex h-7 items-center rounded-full border border-[#d1d5db] bg-white px-3 text-[11px] text-[#4b5563] transition hover:border-[#9ca3af] hover:text-[#111827]"
-                        >
-                          全量查看
-                        </button>
-                      </div>
-                      <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
-                        {contextPreview.sections.map((section) => (
-                          <div key={section.title} className="rounded-2xl border border-[#eef0f3] bg-[#fcfcfd] px-3 py-3">
-                            <div className="mb-1 text-[11px] uppercase tracking-[0.18em] text-[#6b7280]">{section.title}</div>
-                            <pre className="max-h-32 overflow-y-auto whitespace-pre-wrap break-words text-xs leading-6 text-[#374151]">{section.content}</pre>
-                          </div>
-                        ))}
-                      </div>
-                      <div className="rounded-2xl border border-[#dbe3ea] bg-[#f8fafc] px-3 py-3">
-                        <div className="mb-1 text-[11px] uppercase tracking-[0.18em] text-[#6b7280]">Final Instruction</div>
-                        <pre className="max-h-56 overflow-y-auto whitespace-pre-wrap break-words text-xs leading-6 text-[#111827]">{contextPreview.final_instruction}</pre>
-                      </div>
-                    </div>
-                  ) : null}
-                </div>
-              ) : null}
-
-              {retrievalPreview ? (
-                <div className="mt-3 rounded-[18px] border border-[#dbe3ea] bg-white">
-                  <button
-                    type="button"
-                    onClick={() => setIsRetrievalPreviewOpen((prev) => !prev)}
-                    className="flex w-full items-center justify-between px-3 py-2 text-left"
-                  >
-                    <div>
-                      <div className="text-xs font-medium text-[#111827]">检索预览</div>
-                      <div className="mt-0.5 text-[11px] text-[#6b7280]">
-                        chunks: {retrievalPreview.chunks.length} · terms: {retrievalPreview.query_terms.length}
-                      </div>
-                    </div>
-                    <ChevronDown className={clsx('size-4 text-[#6b7280] transition', isRetrievalPreviewOpen && 'rotate-180')} />
-                  </button>
-                  {isRetrievalPreviewOpen ? (
-                    <div className="space-y-3 border-t border-[#eef0f3] px-3 py-3">
-                      <div className="grid grid-cols-2 gap-2 text-[11px] text-[#6b7280]">
-                        <div>candidate: {retrievalPreview.metadata.candidate_count ?? 0}</div>
-                        <div>matched: {retrievalPreview.metadata.matched_count ?? 0}</div>
-                        <div>returned: {retrievalPreview.metadata.returned_count ?? 0}</div>
-                        <div>chapter found: {retrievalPreview.metadata.chapter_found ? 'yes' : 'no'}</div>
-                      </div>
-                      <div className="rounded-2xl border border-[#eef0f3] bg-[#fcfcfd] px-3 py-3">
-                        <div className="mb-1 text-[11px] uppercase tracking-[0.18em] text-[#6b7280]">Query Terms</div>
-                        <div className="flex max-h-24 flex-wrap gap-1.5 overflow-y-auto pr-1">
-                          {retrievalPreview.query_terms.length > 0 ? (
-                            retrievalPreview.query_terms.map((term) => (
-                              <span key={term} className="rounded-full border border-[#d1d5db] bg-white px-2 py-0.5 text-[11px] text-[#4b5563]">
-                                {term}
-                              </span>
-                            ))
-                          ) : (
-                            <span className="text-xs text-[#6b7280]">暂无 query terms</span>
-                          )}
-                        </div>
-                      </div>
-                      <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
-                        {retrievalPreview.chunks.map((chunk) => (
-                          <div key={chunk.chunk_id} className="rounded-2xl border border-[#eef0f3] bg-[#fcfcfd] px-3 py-3">
-                            <div className="flex items-start justify-between gap-3">
-                              <div>
-                                <div className="text-[11px] uppercase tracking-[0.18em] text-[#6b7280]">
-                                  Chapter {chunk.chapter_order} · Chunk {chunk.chunk_index + 1}
-                                </div>
-                                <div className="mt-1 text-xs font-medium text-[#111827]">{chunk.scene_label || '未命名片段'}</div>
-                              </div>
-                              <div className="rounded-full border border-[#d1d5db] bg-white px-2 py-0.5 text-[11px] text-[#4b5563]">
-                                {chunk.score.toFixed(2)}
-                              </div>
-                            </div>
-                            <pre className="mt-2 max-h-28 overflow-y-auto whitespace-pre-wrap break-words text-xs leading-6 text-[#374151]">
-                              {chunk.content_short || chunk.content}
-                            </pre>
-                            {chunk.match_reasons.length > 0 ? (
-                              <div className="mt-2 space-y-1">
-                                {chunk.match_reasons.map((reason) => (
-                                  <div key={`${chunk.chunk_id}-${reason}`} className="text-[11px] text-[#6b7280]">
-                                    {reason}
-                                  </div>
-                                ))}
-                              </div>
-                            ) : null}
-                          </div>
-                        ))}
-                        {retrievalPreview.chunks.length === 0 ? (
-                          <div className="rounded-2xl border border-dashed border-[#d1d5db] px-3 py-4 text-xs text-[#6b7280]">
-                            当前没有召回到可用正文片段。
-                          </div>
-                        ) : null}
-                      </div>
-                    </div>
-                  ) : null}
-                </div>
-              ) : null}
-
-              {pipelineDebug ? (
-                <div className="mt-3 rounded-[18px] border border-[#dbe3ea] bg-white">
-                  <button
-                    type="button"
-                    onClick={() => setIsPipelineDebugOpen((prev) => !prev)}
-                    className="flex w-full items-center justify-between px-3 py-2 text-left"
-                  >
-                    <div>
-                      <div className="text-xs font-medium text-[#111827]">Pipeline 调试</div>
-                      <div className="mt-0.5 text-[11px] text-[#6b7280]">
-                        severity: {pipelineDebug.continuity_report?.severity ?? 'unknown'} · fallback: {pipelineDebug.fallbacks.length}
-                      </div>
-                    </div>
-                    <ChevronDown className={clsx('size-4 text-[#6b7280] transition', isPipelineDebugOpen && 'rotate-180')} />
-                  </button>
-                  {isPipelineDebugOpen ? (
-                    <div className="space-y-3 border-t border-[#eef0f3] px-3 py-3">
-                      <div className="grid grid-cols-2 gap-2 text-[11px] text-[#6b7280]">
-                        <div>planner: {String(pipelineDebug.metadata?.planner_used ?? false)}</div>
-                        <div>retriever: {String(pipelineDebug.metadata?.retriever_used ?? false)}</div>
-                        <div>checker: {String(pipelineDebug.metadata?.checker_used ?? false)}</div>
-                        <div>warnings: {pipelineDebug.warnings.length}</div>
-                      </div>
-                      {pipelineDebug.fallbacks.length > 0 ? (
-                        <div className="rounded-2xl border border-[#eef0f3] bg-[#fcfcfd] px-3 py-3">
-                          <div className="mb-1 text-[11px] uppercase tracking-[0.18em] text-[#6b7280]">Fallbacks</div>
-                          <div className="flex flex-wrap gap-1.5">
-                            {pipelineDebug.fallbacks.map((item) => (
-                              <span key={item} className="rounded-full border border-[#d1d5db] bg-white px-2 py-0.5 text-[11px] text-[#4b5563]">
-                                {item}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      ) : null}
-                      <div className="rounded-2xl border border-[#eef0f3] bg-[#fcfcfd] px-3 py-3">
-                        <div className="mb-1 text-[11px] uppercase tracking-[0.18em] text-[#6b7280]">Plan</div>
-                        <pre className="max-h-40 overflow-y-auto whitespace-pre-wrap break-words text-xs leading-6 text-[#374151]">{JSON.stringify(pipelineDebug.plan, null, 2)}</pre>
-                      </div>
-                      <div className="rounded-2xl border border-[#eef0f3] bg-[#fcfcfd] px-3 py-3">
-                        <div className="mb-1 text-[11px] uppercase tracking-[0.18em] text-[#6b7280]">Continuity Report</div>
-                        <pre className="max-h-40 overflow-y-auto whitespace-pre-wrap break-words text-xs leading-6 text-[#374151]">{JSON.stringify(pipelineDebug.continuity_report, null, 2)}</pre>
-                      </div>
-                      <div className="rounded-2xl border border-[#dbe3ea] bg-[#f8fafc] px-3 py-3">
-                        <div className="mb-1 text-[11px] uppercase tracking-[0.18em] text-[#6b7280]">Pipeline Output</div>
-                        <pre className="max-h-48 overflow-y-auto whitespace-pre-wrap break-words text-xs leading-6 text-[#111827]">{pipelineDebug.final_content}</pre>
-                      </div>
-                    </div>
-                  ) : null}
-                </div>
-              ) : null}
             </div>
 
           </div>
@@ -1488,65 +1367,230 @@ export function AppShell() {
     )
   }
 
-  const modelDialog = (
-    <ModelPickerDialog
-      open={isModelDialogOpen}
-      onOpenChange={setIsModelDialogOpen}
-      selectedModelId={selectedModelId}
-      availableModels={availableModels}
-      isLoadingModels={isLoadingModels}
-      hasSavedRuntimeKey={hasSavedRuntimeKey}
-      onRefresh={() => void handleLoadModels()}
-      onSelect={(modelId) => {
-        setAIState((prev) => ({ ...prev, result: '', modelId }))
-        toast.success(`下一次生成将使用模型：${modelId}`)
-      }}
-    />
-  )
-
-  const contextPreviewDialog = contextPreview ? (
-    <Dialog open={isContextPreviewDialogOpen} onOpenChange={setIsContextPreviewDialogOpen}>
-      <DialogContent className="max-w-5xl gap-0 overflow-hidden p-0">
+  const diagnosticsDialog = diagnosticsTabs.length > 0 ? (
+    <Dialog open={isDiagnosticsDialogOpen} onOpenChange={setIsDiagnosticsDialogOpen}>
+      <DialogContent className="max-w-6xl gap-0 overflow-hidden p-0">
         <DialogHeader className="border-b border-border px-6 py-5">
-          <DialogTitle>上下文预览</DialogTitle>
-        </DialogHeader>
-        <div className="max-h-[78vh] space-y-4 overflow-y-auto px-6 py-5">
-          <div className="grid grid-cols-2 gap-3 text-xs text-muted-foreground">
-            <div>intent: {contextPreview.intent}</div>
-            <div>sections: {contextPreview.sections.length}</div>
-            <div>recent memory: {contextPreview.metadata.recent_memory_count ?? 0}</div>
-            <div>story memory: {contextPreview.metadata.has_story_memory ? 'yes' : 'no'}</div>
-            <div>chapter found: {contextPreview.metadata.chapter_found ? 'yes' : 'no'}</div>
-            <div>prev tail: {contextPreview.metadata.has_previous_chapter_tail ? 'yes' : 'no'}</div>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <DialogTitle>诊断中心</DialogTitle>
+            <button
+              type="button"
+              onClick={() => void handleRunPipelineDebug()}
+              disabled={isPipelineDebugLoading || aiState.isGenerating}
+              className="inline-flex h-9 items-center gap-2 rounded-full border border-border bg-background px-4 text-xs text-foreground/75 transition hover:border-primary/35 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isPipelineDebugLoading ? <LoaderCircle className="size-3.5 animate-spin" /> : <Bot className="size-3.5" />}
+              运行深度诊断
+            </button>
           </div>
-          <div className="space-y-3">
-            {contextPreview.sections.map((section) => (
-              <div key={section.title} className="rounded-2xl border border-border bg-background px-4 py-4">
-                <div className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground">{section.title}</div>
-                <pre className="whitespace-pre-wrap break-words text-sm leading-7 text-foreground">{section.content}</pre>
-              </div>
+        </DialogHeader>
+        <div className="flex border-b border-border px-6 py-3">
+          <div className="flex flex-wrap gap-2">
+            {diagnosticsTabs.map((tab) => (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => setActiveDiagnosticsTab(tab.key)}
+                className={clsx(
+                  'inline-flex h-8 items-center rounded-full border px-3 text-xs transition',
+                  activeDiagnosticsTab === tab.key
+                    ? 'border-[#111827] bg-[#111827] text-white'
+                    : 'border-border bg-background text-muted-foreground hover:text-foreground',
+                )}
+              >
+                {tab.label}
+              </button>
             ))}
           </div>
-          <div className="rounded-2xl border border-border bg-muted/25 px-4 py-4">
-            <div className="mb-2 flex items-center justify-between gap-2">
-              <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Final Instruction</div>
-              <button
-                type="button"
-                onClick={async () => {
-                  try {
-                    await navigator.clipboard.writeText(contextPreview.final_instruction)
-                    toast.success('已复制完整上下文指令')
-                  } catch {
-                    toast.error('复制失败')
-                  }
-                }}
-                className="inline-flex h-7 items-center rounded-full border border-border bg-background px-3 text-[11px] text-foreground/75 transition hover:border-primary/35 hover:text-foreground"
+        </div>
+        <div className="max-h-[78vh] overflow-y-auto px-6 py-5">
+          {activeDiagnosticsTab === 'risk' && pipelineResult ? (
+            <div className="space-y-4">
+              <div
+                className={clsx(
+                  'rounded-2xl border px-4 py-4 text-sm',
+                  pipelineResult.continuity_report?.severity === 'high'
+                    ? 'border-rose-200 bg-rose-50 text-rose-700'
+                    : pipelineResult.continuity_report?.severity === 'medium'
+                      ? 'border-amber-200 bg-amber-50 text-amber-700'
+                      : 'border-emerald-200 bg-emerald-50 text-emerald-700',
+                )}
               >
-                复制
-              </button>
+                {pipelineResult.continuity_report?.summary || '未发现明显连续性风险。'}
+              </div>
+              <div className="grid grid-cols-2 gap-3 text-xs text-muted-foreground">
+                <div>severity: {pipelineResult.continuity_report?.severity ?? 'unknown'}</div>
+                <div>warnings: {pipelineResult.warnings.length}</div>
+                <div>fallbacks: {pipelineResult.fallbacks.length}</div>
+                <div>checker: {pipelineResult.metadata?.checker_used ? 'enabled' : 'unknown'}</div>
+              </div>
+              {pipelineResult.warnings.length > 0 ? (
+                <div className="rounded-2xl border border-border bg-background px-4 py-4">
+                  <div className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground">Warnings</div>
+                  <div className="space-y-2">
+                    {pipelineResult.warnings.map((item) => (
+                      <div key={item} className="text-sm leading-7 text-foreground">
+                        {item}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+              {pipelineResult.fallbacks.length > 0 ? (
+                <div className="rounded-2xl border border-border bg-background px-4 py-4">
+                  <div className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground">Fallbacks</div>
+                  <div className="flex flex-wrap gap-2">
+                    {pipelineResult.fallbacks.map((item) => (
+                      <span key={item} className="rounded-full border border-border bg-muted/20 px-3 py-1 text-xs text-foreground/75">
+                        {item}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+              <div className="rounded-2xl border border-border bg-background px-4 py-4">
+                <div className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground">Continuity Report</div>
+                <pre className="whitespace-pre-wrap break-words text-sm leading-7 text-foreground">
+                  {JSON.stringify(pipelineResult.continuity_report, null, 2)}
+                </pre>
+              </div>
             </div>
-            <pre className="whitespace-pre-wrap break-words text-sm leading-7 text-foreground">{contextPreview.final_instruction}</pre>
-          </div>
+          ) : null}
+
+          {activeDiagnosticsTab === 'context' && contextPreview ? (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-3 text-xs text-muted-foreground">
+                <div>intent: {contextPreview.intent}</div>
+                <div>sections: {contextPreview.sections.length}</div>
+                <div>recent memory: {contextPreview.metadata.recent_memory_count ?? 0}</div>
+                <div>story memory: {contextPreview.metadata.has_story_memory ? 'yes' : 'no'}</div>
+                <div>chapter found: {contextPreview.metadata.chapter_found ? 'yes' : 'no'}</div>
+                <div>prev tail: {contextPreview.metadata.has_previous_chapter_tail ? 'yes' : 'no'}</div>
+              </div>
+              <div className="space-y-3">
+                {contextPreview.sections.map((section) => (
+                  <div key={section.title} className="rounded-2xl border border-border bg-background px-4 py-4">
+                    <div className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground">{section.title}</div>
+                    <pre className="whitespace-pre-wrap break-words text-sm leading-7 text-foreground">{section.content}</pre>
+                  </div>
+                ))}
+              </div>
+              <div className="rounded-2xl border border-border bg-muted/25 px-4 py-4">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Final Instruction</div>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        await navigator.clipboard.writeText(contextPreview.final_instruction)
+                        toast.success('已复制完整上下文指令')
+                      } catch {
+                        toast.error('复制失败')
+                      }
+                    }}
+                    className="inline-flex h-7 items-center rounded-full border border-border bg-background px-3 text-[11px] text-foreground/75 transition hover:border-primary/35 hover:text-foreground"
+                  >
+                    复制
+                  </button>
+                </div>
+                <pre className="whitespace-pre-wrap break-words text-sm leading-7 text-foreground">{contextPreview.final_instruction}</pre>
+              </div>
+            </div>
+          ) : null}
+
+          {activeDiagnosticsTab === 'retrieval' && retrievalPreview ? (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-3 text-xs text-muted-foreground">
+                <div>candidate: {retrievalPreview.metadata.candidate_count ?? 0}</div>
+                <div>matched: {retrievalPreview.metadata.matched_count ?? 0}</div>
+                <div>returned: {retrievalPreview.metadata.returned_count ?? 0}</div>
+                <div>chapter found: {retrievalPreview.metadata.chapter_found ? 'yes' : 'no'}</div>
+              </div>
+              <div className="rounded-2xl border border-border bg-background px-4 py-4">
+                <div className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground">Query Terms</div>
+                <div className="flex flex-wrap gap-2">
+                  {retrievalPreview.query_terms.length > 0 ? (
+                    retrievalPreview.query_terms.map((term) => (
+                      <span key={term} className="rounded-full border border-border bg-muted/20 px-3 py-1 text-xs text-foreground/75">
+                        {term}
+                      </span>
+                    ))
+                  ) : (
+                    <span className="text-sm text-muted-foreground">暂无 query terms</span>
+                  )}
+                </div>
+              </div>
+              <div className="space-y-3">
+                {retrievalPreview.chunks.map((chunk) => (
+                  <div key={chunk.chunk_id} className="rounded-2xl border border-border bg-background px-4 py-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
+                          Chapter {chunk.chapter_order} · Chunk {chunk.chunk_index + 1}
+                        </div>
+                        <div className="mt-1 text-sm font-medium text-foreground">{chunk.scene_label || '未命名片段'}</div>
+                      </div>
+                      <div className="rounded-full border border-border bg-muted/20 px-3 py-1 text-xs text-foreground/75">
+                        {chunk.score.toFixed(2)}
+                      </div>
+                    </div>
+                    <pre className="mt-3 whitespace-pre-wrap break-words text-sm leading-7 text-foreground">
+                      {chunk.content_short || chunk.content}
+                    </pre>
+                    {chunk.match_reasons.length > 0 ? (
+                      <div className="mt-3 space-y-1">
+                        {chunk.match_reasons.map((reason) => (
+                          <div key={`${chunk.chunk_id}-${reason}`} className="text-xs text-muted-foreground">
+                            {reason}
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                ))}
+                {retrievalPreview.chunks.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-border px-4 py-6 text-sm text-muted-foreground">
+                    当前没有召回到可用正文片段。
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
+
+          {activeDiagnosticsTab === 'pipeline' && pipelineDebug ? (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-3 text-xs text-muted-foreground">
+                <div>planner: {String(pipelineDebug.metadata?.planner_used ?? false)}</div>
+                <div>retriever: {String(pipelineDebug.metadata?.retriever_used ?? false)}</div>
+                <div>checker: {String(pipelineDebug.metadata?.checker_used ?? false)}</div>
+                <div>warnings: {pipelineDebug.warnings.length}</div>
+              </div>
+              {pipelineDebug.fallbacks.length > 0 ? (
+                <div className="rounded-2xl border border-border bg-background px-4 py-4">
+                  <div className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground">Fallbacks</div>
+                  <div className="flex flex-wrap gap-2">
+                    {pipelineDebug.fallbacks.map((item) => (
+                      <span key={item} className="rounded-full border border-border bg-muted/20 px-3 py-1 text-xs text-foreground/75">
+                        {item}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+              <div className="rounded-2xl border border-border bg-background px-4 py-4">
+                <div className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground">Plan</div>
+                <pre className="whitespace-pre-wrap break-words text-sm leading-7 text-foreground">{JSON.stringify(pipelineDebug.plan, null, 2)}</pre>
+              </div>
+              <div className="rounded-2xl border border-border bg-background px-4 py-4">
+                <div className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground">Continuity Report</div>
+                <pre className="whitespace-pre-wrap break-words text-sm leading-7 text-foreground">{JSON.stringify(pipelineDebug.continuity_report, null, 2)}</pre>
+              </div>
+              <div className="rounded-2xl border border-border bg-muted/25 px-4 py-4">
+                <div className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground">Pipeline Output</div>
+                <pre className="whitespace-pre-wrap break-words text-sm leading-7 text-foreground">{pipelineDebug.final_content}</pre>
+              </div>
+            </div>
+          ) : null}
         </div>
       </DialogContent>
     </Dialog>
@@ -1554,8 +1598,7 @@ export function AppShell() {
 
   return (
     <div className="flex h-screen bg-background text-foreground selection:bg-primary/15 selection:text-foreground">
-      {modelDialog}
-      {contextPreviewDialog}
+      {diagnosticsDialog}
       <aside className="flex w-[88px] shrink-0 flex-col items-center border-r border-border bg-[#f6f1e8] px-3 py-5">
         <div className="flex size-12 items-center justify-center rounded-2xl border border-primary/15 bg-primary/10 text-primary shadow-[0_12px_30px_rgba(16,185,129,0.08)]">
           <Sparkles className="size-4" />
