@@ -1,0 +1,385 @@
+[
+  {
+    "id": "huaiyun-current-tail-001",
+    "name": "怀云：第二章应优先承接当前章节尾部",
+    "group": "current_chapter_continuation",
+    "enabled": true,
+    "project_snapshot": {
+      "project_title": "怀云",
+      "project_summary": "长安背景的古风长篇。云缨因抓到与尧天有关的小贼，被狄仁杰带入命案调查；大理寺命案一路牵到济世堂怪病、醉红楼胭脂铺与城北货栈，赵怀真始终在关键处点出线索却不肯说透。",
+      "characters": [
+        {
+          "name": "云缨",
+          "role": "主角",
+          "constraints": [
+            "大理寺卿之女，红衣银枪，行事风风火火",
+            "嘴硬心热，查案时会冲在前面，但并不迟钝",
+            "此时正憋着一口气，既想追线索，也对赵怀真的神秘态度不服"
+          ]
+        },
+        {
+          "name": "赵怀真",
+          "role": "主角",
+          "constraints": [
+            "温润克制，精通医理与方术",
+            "知道得比云缨多，但只在关键处含蓄点拨",
+            "不会突然把幕后答案一次说破"
+          ]
+        },
+        {
+          "name": "狄仁杰",
+          "role": "配角",
+          "constraints": [
+            "大理寺主事者，给云缨案子入口，但要求她守规矩"
+          ]
+        },
+        {
+          "name": "李元芳",
+          "role": "配角",
+          "constraints": [
+            "大理寺密探，提供案情碎片与货栈线索"
+          ]
+        }
+      ],
+      "worldbook": [
+        {
+          "topic": "案件主线",
+          "rule": "当前案子由大理寺诡异尸体与济世堂怪病牵出，赵怀真判断病人用了同一批胭脂。"
+        },
+        {
+          "topic": "可疑地点",
+          "rule": "醉红楼胭脂铺后堂有可疑对话，赵怀真提醒云缨不要在铺中硬闯，并把线索引向城北货栈。"
+        },
+        {
+          "topic": "当前推进点",
+          "rule": "第二章真实尾部已经推进到云缨动身前往城北货栈，样本应承接这一刻，而不是回退到更早的济世堂或铺中盘问场景。"
+        }
+      ],
+      "chapters": [
+        {
+          "title": "第一章 长安红缨闯大祸",
+          "tail_excerpt": "云缨追贼时初遇赵怀真，被他一句“枪尖偏了三寸，力道散了五分”气得牙痒；回府后李元芳点出那小贼与尧天有关。"
+        },
+        {
+          "title": "第二章 穷书生妙手回春",
+          "tail_excerpt": "“赵怀真！”她冲着他的背影喊道，“你到底什么意思？”然而街上人来人往，哪里还有人回应？云缨气得跺脚，心里却暗暗记下了李元芳方才无意间提到的“城北货栈”。这个赵怀真，到底是在帮她，还是在耍她？她咬了咬牙，转身朝城北的方向走去。不管怎样，这桩案子，她一定要查个水落石出！"
+        }
+      ],
+      "story_memory": {
+        "global_plot_summary": "云缨已从抓贼意外正式卷入案件，第二章里先去大理寺接手命案，再查到济世堂怪病，随后被赵怀真点出“新开的胭脂铺”这条线；醉红楼胭脂铺后堂的异常让她进一步锁定城北货栈。",
+        "global_open_loops": [
+          "城北货栈里到底藏着什么人和货",
+          "赵怀真为何总能提前踩中关键线索",
+          "醉红楼胭脂铺背后与尧天有没有直接关联"
+        ]
+      },
+      "recent_memories": [
+        {
+          "chapter_title": "第一章 长安红缨闯大祸",
+          "summary": "云缨追捕小贼时认识赵怀真，李元芳提醒她那小贼和尧天有关。"
+        },
+        {
+          "chapter_title": "第二章 穷书生妙手回春",
+          "summary": "狄仁杰让云缨查济世堂怪病；赵怀真指出病人用了同一批胭脂；云缨摸到醉红楼胭脂铺后堂异动，又被赵怀真提醒转查城北货栈。"
+        }
+      ],
+      "notes": [
+        "该样本以第二章数据库真实正文尾部为准。",
+        "这里的 story memory 经过人工清洗，不直接照抄数据库里已漂移的 ProjectStoryMemory。"
+      ]
+    },
+    "request": {
+      "text": "“赵怀真！”她冲着他的背影喊道，“你到底什么意思？”然而街上人来人往，哪里还有人回应？云缨气得跺脚，心里却暗暗记下了李元芳方才无意间提到的“城北货栈”。这个赵怀真，到底是在帮她，还是在耍她？她咬了咬牙，转身朝城北的方向走去。不管怎样，这桩案子，她一定要查个水落石出！",
+      "instruction": "继续写这一段，优先承接云缨此刻的动作和情绪，让她沿着城北货栈的线索推进，但不要立刻揭晓真相。",
+      "chapter_id": "01KR1H49D88G2R6FNMGYE2VR5G",
+      "model_provider": "openai",
+      "model_id": "deepseek-v4-pro",
+      "temperature": 0.8,
+      "max_tokens": 900
+    },
+    "live_request": {
+      "project_id": "01KR1H49D2B8AS0F7B1QKAKNAA",
+      "chapter_id": "01KR1H49D88G2R6FNMGYE2VR5G",
+      "owner_id": "01KR1G4ZNXGM9KH38A3SAZNXYE"
+    },
+    "expectations": {
+      "must_include": [
+        "承接云缨转身去城北货栈后的行动",
+        "保留她对赵怀真的怀疑和不服气",
+        "剧情继续推进线索而非原地解释"
+      ],
+      "must_avoid": [
+        "回到济世堂或醉红楼更早场景重新起笔",
+        "直接揭晓幕后人物身份",
+        "让赵怀真突然现身把答案全部说破"
+      ],
+      "continuation_anchor": "承接“她咬了咬牙，转身朝城北的方向走去。不管怎样，这桩案子，她一定要查个水落石出”",
+      "expected_open_loops": [
+        "城北货栈的秘密",
+        "赵怀真的真实立场"
+      ],
+      "forbidden_conflicts": [
+        "current_chapter_continuation_miss",
+        "premature_loop_resolution"
+      ],
+      "quality_notes": [
+        "应优先延续当前动作、情绪和查案冲劲，不要平地回顾。",
+        "允许出现赶路、观察、试探，但不应立刻破案。"
+      ]
+    },
+    "metadata": {
+      "source": "docker-postgres",
+      "difficulty": "medium",
+      "failure_modes": [
+        "current_chapter_continuation_miss",
+        "instruction_underfollow"
+      ],
+      "tags": [
+        "live",
+        "huaiyun",
+        "current-tail"
+      ],
+      "created_at": "2026-05-08"
+    }
+  },
+  {
+    "id": "huaiyun-prev-tail-002",
+    "name": "怀云：第三章起笔应承接第二章结尾",
+    "group": "previous_chapter_tail_alignment",
+    "enabled": true,
+    "project_snapshot": {
+      "project_title": "怀云",
+      "project_summary": "数据库当前状态里，第三章标题已存在，`word_count=2829`，但 `plain_text` 与 `content` 实际为空；因此 live benchmark 需要显式验证第三章续写时，系统是否仍能优先承接第二章真实结尾，而不是被漂移记忆带去旧草稿内容。",
+      "characters": [
+        {
+          "name": "云缨",
+          "role": "主角",
+          "constraints": [
+            "行动快、嘴硬心热",
+            "刚被赵怀真吊起胃口，不会在新章开头突然冷下来",
+            "会顺着城北货栈这条线继续追下去"
+          ]
+        },
+        {
+          "name": "赵怀真",
+          "role": "关键线索人物",
+          "constraints": [
+            "他的作用应体现在上一章留下的线索余波里，而不是新章起笔就跑出来讲解一切"
+          ]
+        }
+      ],
+      "worldbook": [
+        {
+          "topic": "章节承接",
+          "rule": "第三章真实可依赖的高信号上下文是第二章末尾：云缨确认要去城北货栈，且情绪仍带着不服与追查冲劲。"
+        },
+        {
+          "topic": "存储漂移",
+          "rule": "第三章数据库记录存在“章节字数/记忆条目已生成，但正文存储为空”的漂移现象，benchmark 不应把这些漂移记忆当成比上一章尾部更高优先级的锚点。"
+        }
+      ],
+      "chapters": [
+        {
+          "title": "第二章 穷书生妙手回春",
+          "tail_excerpt": "“赵怀真！”她冲着他的背影喊道，“你到底什么意思？”然而街上人来人往，哪里还有人回应？云缨气得跺脚，心里却暗暗记下了李元芳方才无意间提到的“城北货栈”。这个赵怀真，到底是在帮她，还是在耍她？她咬了咬牙，转身朝城北的方向走去。不管怎样，这桩案子，她一定要查个水落石出！"
+        },
+        {
+          "title": "第三章 欠债还钱以身抵？",
+          "current_text": ""
+        }
+      ],
+      "story_memory": {
+        "global_plot_summary": "以真实章节文本为准，第三章新场景入口应直接接在第二章结尾之后，目标地点就是城北货栈。",
+        "global_open_loops": [
+          "城北货栈里藏着什么",
+          "赵怀真为何能准确指向这条线",
+          "醉红楼一线与大理寺命案如何连起来"
+        ]
+      },
+      "recent_memories": [
+        {
+          "chapter_title": "第二章 穷书生妙手回春",
+          "summary": "云缨从济世堂和醉红楼一路追到新线索，最终被赵怀真点到城北货栈，并立即动身。"
+        }
+      ],
+      "notes": [
+        "第三章当前无可靠正文存储，重点验证新章开头是否承接上一章尾部。",
+        "数据库内现存 chapter memory / story memory 含旧草稿痕迹，样本按人工清洗后的高信号事实书写。"
+      ]
+    },
+    "request": {
+      "text": "",
+      "instruction": "直接续写第三章开头，承接云缨前往城北货栈的这一刻，保持节奏明快，但不要一上来就破案。",
+      "chapter_id": "01KR1H49D853TX2NASZ6ZNG8PP",
+      "model_provider": "openai",
+      "model_id": "deepseek-v4-pro",
+      "temperature": 0.8,
+      "max_tokens": 900
+    },
+    "live_request": {
+      "project_id": "01KR1H49D2B8AS0F7B1QKAKNAA",
+      "chapter_id": "01KR1H49D853TX2NASZ6ZNG8PP",
+      "owner_id": "01KR1G4ZNXGM9KH38A3SAZNXYE"
+    },
+    "expectations": {
+      "must_include": [
+        "从云缨赶往城北货栈起笔",
+        "延续追查案子的主线",
+        "保留她的主动性和冲劲"
+      ],
+      "must_avoid": [
+        "重新介绍云缨或赵怀真背景",
+        "突然切到与城北货栈无关的新场景",
+        "一开头就把案子答案说透"
+      ],
+      "continuation_anchor": "承接第二章结尾“她咬了咬牙，转身朝城北的方向走去。不管怎样，这桩案子，她一定要查个水落石出”",
+      "expected_open_loops": [
+        "城北货栈藏着什么",
+        "赵怀真的暗示来源"
+      ],
+      "forbidden_conflicts": [
+        "previous_chapter_tail_misalignment",
+        "open_loop_drop"
+      ],
+      "quality_notes": [
+        "重点是开头承接自然，直接从动作线往前走。",
+        "如果系统被第三章漂移记忆拖走，通常会提前写出货栈内部既定场景或赵怀真现身劝阻，这都算风险。"
+      ]
+    },
+    "metadata": {
+      "source": "docker-postgres",
+      "difficulty": "medium",
+      "failure_modes": [
+        "previous_chapter_tail_misalignment",
+        "open_loop_drop",
+        "memory_drift_override"
+      ],
+      "tags": [
+        "live",
+        "huaiyun",
+        "previous-tail"
+      ],
+      "created_at": "2026-05-08"
+    }
+  },
+  {
+    "id": "huaiyun-knowledge-003",
+    "name": "怀云：第三章起笔不应让云缨提前知道幕后盯梢者",
+    "group": "knowledge_boundary",
+    "enabled": true,
+    "project_snapshot": {
+      "project_title": "怀云",
+      "project_summary": "第二章数据库真实结尾里，云缨决定去城北货栈后，文本紧接着给了读者一个额外视角：醉红楼胭脂铺后堂有人冷眼盯上她，并吩咐去查她底细。这个信息只属于读者和暗线，不属于云缨当下可知范围。",
+      "characters": [
+        {
+          "name": "云缨",
+          "role": "主角",
+          "constraints": [
+            "她知道自己正顺着城北货栈追查案件",
+            "她不知道是谁在醉红楼后堂盯着她",
+            "她也不知道那句“去查查她的底细”已经被说出口"
+          ]
+        },
+        {
+          "name": "幕后盯梢者",
+          "role": "暗线人物",
+          "constraints": [
+            "可以作为读者层面的危险氛围存在，不能直接泄漏成云缨的明确信息"
+          ]
+        }
+      ],
+      "worldbook": [
+        {
+          "topic": "知识边界",
+          "rule": "第三章起笔可以写不安感、被跟踪感或危险逼近，但不能让云缨凭空知道后堂对话内容，更不能直接确认幕后人物身份。"
+        },
+        {
+          "topic": "真实锚点",
+          "rule": "上一章真正属于云缨视角的锚点仍是她动身去城北货栈，而不是后堂视角本身。"
+        }
+      ],
+      "chapters": [
+        {
+          "title": "第二章 穷书生妙手回春",
+          "tail_excerpt": "“赵怀真！”她冲着他的背影喊道，“你到底什么意思？”然而街上人来人往，哪里还有人回应？云缨气得跺脚，心里却暗暗记下了李元芳方才无意间提到的“城北货栈”。这个赵怀真，到底是在帮她，还是在耍她？她咬了咬牙，转身朝城北的方向走去。不管怎样，这桩案子，她一定要查个水落石出！而她不知道的是，在那繁华的醉红楼胭脂铺后堂，一双眼睛正透过窗棂，冷冷地注视着她的背影。“那个红衣女子……”一个阴沉的声音响起，“去查查她的底细。”"
+        },
+        {
+          "title": "第三章 欠债还钱以身抵？",
+          "current_text": ""
+        }
+      ],
+      "story_memory": {
+        "global_plot_summary": "案件表层线索已经把云缨推向城北货栈，读者侧暗线则显示她已进入某股势力的视野。两条线可以同时存在，但不能混成角色先验知识。",
+        "global_open_loops": [
+          "谁在醉红楼后堂盯着云缨",
+          "这股势力与城北货栈是什么关系",
+          "云缨到了货栈会先撞见什么"
+        ]
+      },
+      "recent_memories": [
+        {
+          "chapter_title": "第二章 穷书生妙手回春",
+          "summary": "对云缨本人而言，她只知道自己要继续追查城北货栈；对读者而言，后堂已有人开始调查她。"
+        }
+      ],
+      "notes": [
+        "该样本故意保留第二章真实的读者视角尾巴，用来验证 pipeline/checker 是否能守住信息边界。",
+        "上一章尾部的 reader-only 信息不应在第三章开头被改写成云缨的亲耳所闻、亲眼所见或直接判断。"
+      ]
+    },
+    "request": {
+      "text": "",
+      "instruction": "续写第三章开头，让云缨继续追查城北货栈，保持悬念，但不要让她提前知道或者直接说出幕后盯着她的人是谁。",
+      "chapter_id": "01KR1H49D853TX2NASZ6ZNG8PP",
+      "model_provider": "openai",
+      "model_id": "deepseek-v4-pro",
+      "temperature": 0.8,
+      "max_tokens": 900
+    },
+    "live_request": {
+      "project_id": "01KR1H49D2B8AS0F7B1QKAKNAA",
+      "chapter_id": "01KR1H49D853TX2NASZ6ZNG8PP",
+      "owner_id": "01KR1G4ZNXGM9KH38A3SAZNXYE"
+    },
+    "expectations": {
+      "must_include": [
+        "云缨继续追查城北货栈",
+        "保留悬念感",
+        "读者可感受到危险临近，但云缨不能掌握幕后真相"
+      ],
+      "must_avoid": [
+        "云缨直接知道幕后盯梢者身份",
+        "云缨直接引用后堂那句对话",
+        "开局就揭露暗线人物姓名或组织"
+      ],
+      "continuation_anchor": "承接第二章末尾云缨动身去城北货栈，同时守住后堂盯梢信息只属于读者侧的边界",
+      "expected_open_loops": [
+        "幕后盯梢者是谁",
+        "城北货栈会遇到什么"
+      ],
+      "forbidden_conflicts": [
+        "knowledge_boundary_break",
+        "premature_loop_resolution"
+      ],
+      "quality_notes": [
+        "允许写出她隐约觉得不对劲，但不能捏造“她听见了后堂对话”“她知道有人在窗后盯她”这类超前信息。",
+        "如果系统把 reader-only 尾巴直接继承成角色视角，就是该样本要抓的主要错误。"
+      ]
+    },
+    "metadata": {
+      "source": "docker-postgres",
+      "difficulty": "medium",
+      "failure_modes": [
+        "knowledge_boundary_break",
+        "instruction_underfollow",
+        "reader_only_leak"
+      ],
+      "tags": [
+        "live",
+        "huaiyun",
+        "knowledge-boundary"
+      ],
+      "created_at": "2026-05-08"
+    }
+  }
+]

@@ -1,0 +1,50 @@
+[
+  {
+    "id": "bench-live-example-001",
+    "name": "替换为真实项目后的 live benchmark 样本",
+    "group": "current_chapter_continuation",
+    "enabled": false,
+    "project_snapshot": {
+      "project_title": "示例",
+      "project_summary": "这里保留脱敏说明，方便人工理解样本意图。",
+      "characters": [],
+      "worldbook": [],
+      "chapters": [],
+      "story_memory": {},
+      "recent_memories": [],
+      "notes": []
+    },
+    "request": {
+      "text": "这里放本次续写时的用户输入正文，可以为空字符串。",
+      "instruction": "这里放真实要测试的续写指令。",
+      "chapter_id": "display-only-chapter-id",
+      "model_provider": "openai",
+      "model_id": "gpt-4.1",
+      "temperature": 0.8,
+      "max_tokens": 1200
+    },
+    "live_request": {
+      "project_id": "replace-with-real-project-id",
+      "chapter_id": "replace-with-real-chapter-id-or-null",
+      "owner_id": "replace-with-real-owner-id-or-null"
+    },
+    "expectations": {
+      "must_include": [],
+      "must_avoid": [],
+      "continuation_anchor": "说明这次应该承接哪里",
+      "expected_open_loops": [],
+      "forbidden_conflicts": [],
+      "quality_notes": []
+    },
+    "metadata": {
+      "source": "manual-curation",
+      "difficulty": "medium",
+      "failure_modes": [],
+      "tags": [
+        "live",
+        "template"
+      ],
+      "created_at": "2026-05-08"
+    }
+  }
+]

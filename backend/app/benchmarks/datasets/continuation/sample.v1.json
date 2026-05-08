@@ -1,0 +1,331 @@
+[
+  {
+    "id": "bench-current-tail-001",
+    "runtime_owner_id": "01KR1G4ZNXGM9KH38A3SAZNXYE",
+    "name": "当前章节半段续写应承接本章尾部",
+    "group": "current_chapter_continuation",
+    "enabled": true,
+    "project_snapshot": {
+      "project_title": "雾港回声",
+      "project_summary": "近未来海港都市悬疑故事。主角林澈在调查旧港失踪案时，逐步接近被掩埋多年的实验真相。",
+      "characters": [
+        {
+          "name": "林澈",
+          "role": "主角，调查记者",
+          "constraints": [
+            "说话克制，观察细节敏锐",
+            "不会轻易暴露自己的怀疑"
+          ]
+        },
+        {
+          "name": "周岚",
+          "role": "线人",
+          "constraints": [
+            "对旧港事故心怀恐惧",
+            "知道部分真相，但不会一次说完"
+          ]
+        }
+      ],
+      "worldbook": [
+        {
+          "topic": "旧港档案室",
+          "rule": "夜间安保更严，普通人无法随意进入"
+        }
+      ],
+      "chapters": [
+        {
+          "title": "第十二章",
+          "summary": "林澈从周岚口中得知旧港事故存在第二份记录，但周岚没有说出保管人名字。",
+          "tail_excerpt": "周岚把烟摁灭在生锈的栏杆上，抬眼看了他一瞬，像是终于下定了决心。"
+        },
+        {
+          "title": "第十三章",
+          "summary": "林澈在避风堤与周岚继续交谈，试图逼近那份记录的去向。",
+          "current_text": "海风从堤坝尽头卷回来，带着潮湿的铁锈味。林澈没有催她，只把那张被海水打湿的便签慢慢抚平，等她自己开口。周岚盯着那张便签，指节一点点收紧，像是被什么旧画面拽住。"
+        }
+      ],
+      "story_memory": {
+        "global_plot_summary": "林澈正在追查旧港事故背后的实验项目，线索集中在失踪档案、港务系统和幸存者证词上。",
+        "global_open_loops": [
+          "第二份事故记录由谁保管",
+          "周岚为何长期回避旧港档案室"
+        ]
+      },
+      "recent_memories": [
+        {
+          "chapter_title": "第十二章",
+          "summary": "周岚承认事故报告有缺页，并暗示还有第二份完整版记录。"
+        }
+      ],
+      "notes": [
+        "当前章节已经写了一段，续写必须直接承接本章尾部情绪和动作。"
+      ]
+    },
+    "request": {
+      "text": "海风从堤坝尽头卷回来，带着潮湿的铁锈味。林澈没有催她，只把那张被海水打湿的便签慢慢抚平，等她自己开口。周岚盯着那张便签，指节一点点收紧，像是被什么旧画面拽住。",
+      "instruction": "继续写这一段对话，先让周岚松口一点，但不要直接说出保管人的名字，保持压抑克制。",
+      "chapter_id": "sample-chapter-013",
+      "model_provider": "openai",
+      "model_id": "deepseek-v4-pro",
+      "temperature": 0.8,
+      "max_tokens": 900
+    },
+    "expectations": {
+      "must_include": [
+        "续写直接承接周岚即将开口的状态",
+        "周岚透露更多信息，但不点名保管人",
+        "林澈保持克制，不要突然强硬质问"
+      ],
+      "must_avoid": [
+        "回到第十二章重新起笔",
+        "直接揭示保管人的真实身份",
+        "突然跳到其他地点或第二天"
+      ],
+      "continuation_anchor": "承接当前章节最后一句“像是被什么旧画面拽住”",
+      "expected_open_loops": [
+        "第二份事故记录由谁保管",
+        "周岚为何回避旧港档案室"
+      ],
+      "forbidden_conflicts": [
+        "timeline_conflict",
+        "knowledge_boundary_break"
+      ],
+      "quality_notes": [
+        "氛围要延续当前的压抑和停顿感。"
+      ]
+    },
+    "metadata": {
+      "source": "manual-curation",
+      "difficulty": "medium",
+      "failure_modes": [
+        "current_chapter_continuation_miss",
+        "instruction_underfollow"
+      ],
+      "tags": [
+        "continuation",
+        "chapter-tail",
+        "dialogue"
+      ],
+      "created_at": "2026-05-08"
+    }
+  },
+  {
+    "id": "bench-prev-tail-002",
+    "runtime_owner_id": "01KR1G4ZNXGM9KH38A3SAZNXYE",
+    "name": "新章节起笔应承接上一章结尾动作",
+    "group": "previous_chapter_tail_alignment",
+    "enabled": true,
+    "project_snapshot": {
+      "project_title": "雪线之下",
+      "project_summary": "高寒边境悬疑故事。调查员沈砚在雪线哨站追查一起失联事件，逐步发现军械库记录被人篡改。",
+      "characters": [
+        {
+          "name": "沈砚",
+          "role": "调查员",
+          "constraints": [
+            "判断谨慎，不会无证据下结论",
+            "面对危险时先观察再行动"
+          ]
+        },
+        {
+          "name": "顾遥",
+          "role": "哨站医生",
+          "constraints": [
+            "情绪稳，但会刻意回避与军械库有关的话题"
+          ]
+        }
+      ],
+      "worldbook": [
+        {
+          "topic": "雪线哨站夜巡",
+          "rule": "夜间巡逻期间哨站外能见度极低，行动必须依赖探照灯和路钉。"
+        }
+      ],
+      "chapters": [
+        {
+          "title": "第八章",
+          "summary": "沈砚在库房外发现被新雪掩埋的拖拽痕迹，顾遥在远处叫住了他。",
+          "tail_excerpt": "探照灯的白光扫过坡下时，沈砚忽然看见雪地尽头有一枚半埋着的军扣，像是在黑夜里闪了一下。"
+        },
+        {
+          "title": "第九章",
+          "summary": "新章应从发现军扣后的即时反应写起。",
+          "current_text": ""
+        }
+      ],
+      "story_memory": {
+        "global_plot_summary": "军械库记录被篡改，失联士兵最后一次出现地点与坡下巡逻路线重合。",
+        "global_open_loops": [
+          "军扣属于谁",
+          "顾遥为什么刻意避开库房话题"
+        ]
+      },
+      "recent_memories": [
+        {
+          "chapter_title": "第八章",
+          "summary": "沈砚夜巡时发现异常拖拽痕迹，并在坡下远处瞥见可疑反光。"
+        }
+      ],
+      "notes": [
+        "当前章节尚未开写，这次续写应承接上一章尾部动作，不应平地起新场景。"
+      ]
+    },
+    "request": {
+      "text": "",
+      "instruction": "直接续写下一章开头，承接沈砚看到军扣后的即时反应，保持冷静克制，不要立刻揭晓真相。",
+      "chapter_id": "sample-chapter-009",
+      "model_provider": "openai",
+      "model_id": "deepseek-v4-pro",
+      "temperature": 0.8,
+      "max_tokens": 900
+    },
+    "expectations": {
+      "must_include": [
+        "从看到军扣后的即时反应起笔",
+        "保留雪夜巡逻环境细节",
+        "沈砚先观察判断，再决定是否靠近"
+      ],
+      "must_avoid": [
+        "重新介绍人物背景",
+        "直接跳到第二天或哨站室内",
+        "直接揭晓军扣主人"
+      ],
+      "continuation_anchor": "承接上一章结尾发现半埋军扣的瞬间",
+      "expected_open_loops": [
+        "军扣属于谁",
+        "坡下拖拽痕迹通向哪里"
+      ],
+      "forbidden_conflicts": [
+        "timeline_conflict",
+        "premature_loop_resolution"
+      ],
+      "quality_notes": [
+        "起笔要短促，先稳住环境与动作，再推进判断。"
+      ]
+    },
+    "metadata": {
+      "source": "manual-curation",
+      "difficulty": "easy",
+      "failure_modes": [
+        "previous_chapter_tail_misalignment",
+        "open_loop_drop"
+      ],
+      "tags": [
+        "continuation",
+        "chapter-opening",
+        "previous-tail"
+      ],
+      "created_at": "2026-05-08"
+    }
+  },
+  {
+    "id": "bench-knowledge-boundary-003",
+    "runtime_owner_id": "01KR1G4ZNXGM9KH38A3SAZNXYE",
+    "name": "角色不应提前知道隐藏身份",
+    "group": "knowledge_boundary",
+    "enabled": true,
+    "project_snapshot": {
+      "project_title": "镜厅手记",
+      "project_summary": "舞台剧团背景悬疑故事。女主许栀追查匿名资助人身份，但当前阶段只有读者知道资助人和剧团经理有关。",
+      "characters": [
+        {
+          "name": "许栀",
+          "role": "女主，编剧助理",
+          "constraints": [
+            "敏感细腻，但不会凭空断言",
+            "当前还不知道匿名资助人的真实身份"
+          ]
+        },
+        {
+          "name": "韩叙",
+          "role": "剧团经理",
+          "constraints": [
+            "表面温和，擅长转移话题",
+            "真实与匿名资助线有关，但尚未暴露"
+          ]
+        }
+      ],
+      "worldbook": [
+        {
+          "topic": "匿名资助线",
+          "rule": "在第十五章之前，任何角色都不能明确说出资助人与韩叙有关。"
+        }
+      ],
+      "chapters": [
+        {
+          "title": "第十章",
+          "summary": "许栀在排练厅外偷听到一段含糊对话，怀疑资助人就在剧团内部。",
+          "tail_excerpt": "她把那句没听完整的话反复在心里过了一遍，却始终差着最关键的那一截。"
+        },
+        {
+          "title": "第十一章",
+          "summary": "许栀与韩叙在走廊偶遇，想试探更多信息。",
+          "current_text": "走廊尽头的安全灯坏了一盏，光线像被谁从中间折断。许栀抱着改到一半的剧本，停在那片忽明忽暗的阴影边上，刚好看见韩叙从办公室出来。"
+        }
+      ],
+      "story_memory": {
+        "global_plot_summary": "匿名资助人身份仍未公开，只能确认线索与剧团内部财务调度有关。",
+        "global_open_loops": [
+          "匿名资助人到底是谁",
+          "韩叙为什么掌握部分未公开的资金信息"
+        ]
+      },
+      "recent_memories": [
+        {
+          "chapter_title": "第十章",
+          "summary": "许栀偷听到内部对话，确认资助人很可能来自剧团内部，但没有具体对象。"
+        }
+      ],
+      "notes": [
+        "这类样本主要检测 knowledge boundary，角色只能试探，不能说破。"
+      ]
+    },
+    "request": {
+      "text": "走廊尽头的安全灯坏了一盏，光线像被谁从中间折断。许栀抱着改到一半的剧本，停在那片忽明忽暗的阴影边上，刚好看见韩叙从办公室出来。",
+      "instruction": "继续写这一段试探性的对话，要有压迫感，但不要让许栀提前知道匿名资助人的真实身份。",
+      "chapter_id": "sample-chapter-011",
+      "model_provider": "openai",
+      "model_id": "deepseek-v4-pro",
+      "temperature": 0.8,
+      "max_tokens": 900
+    },
+    "expectations": {
+      "must_include": [
+        "许栀只能旁敲侧击",
+        "韩叙继续回避或转移话题",
+        "保留走廊压迫感和试探张力"
+      ],
+      "must_avoid": [
+        "许栀直接说出韩叙就是匿名资助人",
+        "韩叙主动坦白真实身份",
+        "突然切到其他角色视角解释真相"
+      ],
+      "continuation_anchor": "承接许栀在走廊遇见韩叙的这一刻",
+      "expected_open_loops": [
+        "匿名资助人到底是谁",
+        "韩叙为何掌握异常资金信息"
+      ],
+      "forbidden_conflicts": [
+        "knowledge_boundary_break",
+        "premature_loop_resolution"
+      ],
+      "quality_notes": [
+        "重点不在揭晓，而在制造更具体的怀疑。"
+      ]
+    },
+    "metadata": {
+      "source": "manual-curation",
+      "difficulty": "medium",
+      "failure_modes": [
+        "knowledge_boundary_break",
+        "instruction_underfollow"
+      ],
+      "tags": [
+        "continuation",
+        "dialogue",
+        "knowledge-boundary"
+      ],
+      "created_at": "2026-05-08"
+    }
+  }
+]
