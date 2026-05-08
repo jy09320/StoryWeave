@@ -143,6 +143,7 @@ async def generate_with_continuation_pipeline(
         continuity_report=result["continuity_report"],
         warnings=result["warnings"],
         fallbacks=result["fallbacks"],
+        trace=result["trace"],
         metadata=result["metadata"],
     )
 

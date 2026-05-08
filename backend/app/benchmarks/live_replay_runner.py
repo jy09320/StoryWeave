@@ -669,6 +669,7 @@ async def run_snapshot_variant(sample: dict[str, Any], variant: str) -> dict[str
                     "continuity_report": {},
                     "warnings": [],
                     "fallbacks": [],
+                    "trace": [],
                     "metadata": {"path": "snapshot-baseline"},
                 }
                 plan = {"metadata": {"source": "baseline"}}
@@ -706,6 +707,7 @@ async def run_snapshot_variant(sample: dict[str, Any], variant: str) -> dict[str
                     "continuity_report": continuity_report,
                     "warnings": continuation_pipeline_service._collect_warnings(continuity_report),
                     "fallbacks": ["snapshot-mode"],
+                    "trace": [],
                     "metadata": {"path": "snapshot-pipeline"},
                 }
     except Exception as exc:
@@ -725,8 +727,10 @@ async def run_snapshot_variant(sample: dict[str, Any], variant: str) -> dict[str
         artifacts["context_bundle"] = context_bundle
         artifacts["draft"] = draft
         artifacts["continuity_report"] = result.get("continuity_report", {})
+        artifacts["trace"] = result.get("trace", [])
     elif variant == "pipeline":
         artifacts["continuity_report"] = result.get("continuity_report", {})
+        artifacts["trace"] = result.get("trace", [])
     rule_score = build_rule_score(sample, result.get("final_content", ""))
 
     return {
@@ -741,6 +745,7 @@ async def run_snapshot_variant(sample: dict[str, Any], variant: str) -> dict[str
             "avg_latency_ms": latency_ms,
             "warning_count": len(result.get("warnings", [])),
             "fallback_count": len(result.get("fallbacks", [])),
+            "trace_step_count": len(result.get("trace", [])),
             "rule_score": rule_score["score"],
             "rule_score_max": rule_score["max_score"],
         },
@@ -773,6 +778,7 @@ async def run_variant(sample: dict[str, Any], variant: str) -> dict[str, Any]:
                     "continuity_report": {},
                     "warnings": [],
                     "fallbacks": [],
+                    "trace": [],
                     "metadata": {"path": "baseline"},
                 }
             else:
@@ -806,8 +812,10 @@ async def run_variant(sample: dict[str, Any], variant: str) -> dict[str, Any]:
         artifacts["context_bundle"] = result.get("context_bundle", {})
         artifacts["draft"] = result.get("draft", {})
         artifacts["continuity_report"] = result.get("continuity_report", {})
+        artifacts["trace"] = result.get("trace", [])
     elif variant == "pipeline":
         artifacts["continuity_report"] = result.get("continuity_report", {})
+        artifacts["trace"] = result.get("trace", [])
     rule_score = build_rule_score(sample, result.get("final_content", ""))
 
     return {
@@ -822,6 +830,7 @@ async def run_variant(sample: dict[str, Any], variant: str) -> dict[str, Any]:
             "avg_latency_ms": latency_ms,
             "warning_count": len(result.get("warnings", [])),
             "fallback_count": len(result.get("fallbacks", [])),
+            "trace_step_count": len(result.get("trace", [])),
             "rule_score": rule_score["score"],
             "rule_score_max": rule_score["max_score"],
         },

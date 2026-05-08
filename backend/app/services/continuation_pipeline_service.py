@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import logging
 import re
+from datetime import UTC, datetime
+from time import perf_counter
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -52,6 +54,7 @@ class ContinuationPipelineService:
             "owner_id": owner_id,
         }
         fallbacks: list[str] = []
+        trace: list[dict[str, Any]] = []
 
         loaded_context = await ai_service.load_generation_context(
             db,
@@ -62,28 +65,113 @@ class ContinuationPipelineService:
         if not loaded_context:
             raise RuntimeError("Project generation context not found")
 
+        planner_started = perf_counter()
+        planner_started_at = self._trace_timestamp()
         plan = await continuation_planner_service.plan(
             db,
             request=request,
             loaded_context=loaded_context,
         )
+        planner_fallbacks: list[str] = []
         if (plan.get("metadata") or {}).get("source") == "default":
-            fallbacks.append("planner:default")
+            planner_fallbacks.append("planner:default")
+            fallbacks.extend(planner_fallbacks)
+        trace.append(
+            self._build_trace_step(
+                step_key="planner",
+                label="分析承接点",
+                status="completed",
+                started_at=planner_started_at,
+                finished_at=self._trace_timestamp(),
+                duration_ms=self._elapsed_ms(planner_started),
+                input_summary={
+                    "has_user_text": bool(self._safe_text(user_text)),
+                    "instruction_length": len(user_instruction or ""),
+                },
+                output_summary=self._summarize_plan(plan),
+                fallbacks=planner_fallbacks,
+                payload_ref="plan",
+            )
+        )
 
-        context_bundle = await self._build_context_bundle(
+        retriever_started = perf_counter()
+        retriever_started_at = self._trace_timestamp()
+        retrieval = await self._retrieve_context_materials(
             db,
             request=request,
             loaded_context=loaded_context,
             plan=plan,
             fallbacks=fallbacks,
         )
+        retrieval_fallbacks = [item for item in fallbacks if item.startswith("retriever:")]
+        trace.append(
+            self._build_trace_step(
+                step_key="retriever",
+                label="检索相关剧情",
+                status="completed" if retrieval.get("chunks") or retrieval.get("query_terms") else "skipped",
+                started_at=retriever_started_at,
+                finished_at=self._trace_timestamp(),
+                duration_ms=self._elapsed_ms(retriever_started),
+                input_summary={
+                    "writing_goal": self._clip_text(self._safe_text(plan.get("writing_goal")), limit=120),
+                },
+                output_summary=self._summarize_retrieval(retrieval),
+                fallbacks=retrieval_fallbacks,
+                warnings=["未召回到正文片段"] if not retrieval.get("chunks") else [],
+                payload_ref="context_bundle.retrieved_chunks",
+            )
+        )
+
+        bundle_started = perf_counter()
+        bundle_started_at = self._trace_timestamp()
+        context_bundle = self._build_context_bundle(
+            request=request,
+            loaded_context=loaded_context,
+            retrieval=retrieval,
+        )
+        trace.append(
+            self._build_trace_step(
+                step_key="context_bundle",
+                label="整理角色与伏笔",
+                status="completed",
+                started_at=bundle_started_at,
+                finished_at=self._trace_timestamp(),
+                duration_ms=self._elapsed_ms(bundle_started),
+                input_summary={
+                    "recent_memory_count": len(loaded_context.get("recent_memories") or []),
+                    "has_story_memory": loaded_context.get("story_memory") is not None,
+                },
+                output_summary=self._summarize_context_bundle(context_bundle),
+                payload_ref="context_bundle",
+            )
+        )
+
+        writer_started = perf_counter()
+        writer_started_at = self._trace_timestamp()
         draft = await self._write_draft(
             db,
             request=request,
             plan=plan,
             context_bundle=context_bundle,
         )
+        trace.append(
+            self._build_trace_step(
+                step_key="writer",
+                label="生成正文",
+                status="completed",
+                started_at=writer_started_at,
+                finished_at=self._trace_timestamp(),
+                duration_ms=self._elapsed_ms(writer_started),
+                input_summary={
+                    "used_sections": len(draft.get("used_sections") or []),
+                },
+                output_summary=self._summarize_draft(draft),
+                payload_ref="draft",
+            )
+        )
 
+        checker_started = perf_counter()
+        checker_started_at = self._trace_timestamp()
         continuity_report = await continuity_checker_service.check(
             db,
             request=request,
@@ -91,8 +179,67 @@ class ContinuationPipelineService:
             context_bundle=context_bundle,
             draft_content=draft["content"],
         )
+        checker_status = "completed" if continuity_report.get("check_status") == "completed" else "skipped"
+        checker_fallbacks: list[str] = []
         if continuity_report.get("check_status") != "completed":
-            fallbacks.append("checker:skipped")
+            checker_fallbacks.append("checker:skipped")
+            fallbacks.extend(checker_fallbacks)
+        trace.append(
+            self._build_trace_step(
+                step_key="checker",
+                label="检查连续性",
+                status=checker_status,
+                started_at=checker_started_at,
+                finished_at=self._trace_timestamp(),
+                duration_ms=self._elapsed_ms(checker_started),
+                input_summary={
+                    "draft_length": len(draft.get("content") or ""),
+                },
+                output_summary=self._summarize_continuity_report(continuity_report),
+                warnings=self._collect_warnings(continuity_report),
+                fallbacks=checker_fallbacks,
+                payload_ref="continuity_report",
+            )
+        )
+
+        fallback_finished_at = self._trace_timestamp()
+        trace.append(
+            self._build_trace_step(
+                step_key="fallback_decision",
+                label="整理回退与告警",
+                status="completed",
+                started_at=fallback_finished_at,
+                finished_at=fallback_finished_at,
+                duration_ms=0,
+                output_summary={
+                    "fallback_count": len(fallbacks),
+                    "warning_count": len(self._collect_warnings(continuity_report)),
+                },
+                warnings=self._collect_warnings(continuity_report),
+                fallbacks=fallbacks,
+                payload_ref="fallbacks",
+            )
+        )
+        final_finished_at = self._trace_timestamp()
+        trace.append(
+            self._build_trace_step(
+                step_key="final_output",
+                label="完成",
+                status="completed",
+                started_at=final_finished_at,
+                finished_at=final_finished_at,
+                duration_ms=0,
+                output_summary={
+                    "final_content_length": len(draft["content"] or ""),
+                    "severity": continuity_report.get("severity") or "unknown",
+                },
+                warnings=self._collect_warnings(continuity_report),
+                fallbacks=fallbacks,
+                payload_ref="final_content",
+            )
+        )
+
+        warnings = self._collect_warnings(continuity_report)
 
         return {
             "plan": plan if debug else {"metadata": plan.get("metadata", {})},
@@ -100,17 +247,19 @@ class ContinuationPipelineService:
             "draft": draft if debug else {"used_sections": draft.get("used_sections", []), "generation_notes": draft.get("generation_notes", [])},
             "continuity_report": continuity_report,
             "final_content": draft["content"],
-            "warnings": self._collect_warnings(continuity_report),
+            "warnings": warnings,
             "fallbacks": fallbacks,
+            "trace": trace,
             "metadata": {
                 "planner_used": True,
                 "retriever_used": True,
                 "checker_used": True,
                 "debug": debug,
+                "trace_available": True,
             },
         }
 
-    async def _build_context_bundle(
+    async def _retrieve_context_materials(
         self,
         db: AsyncSession,
         *,
@@ -119,12 +268,9 @@ class ContinuationPipelineService:
         plan: dict[str, Any],
         fallbacks: list[str],
     ) -> dict[str, Any]:
-        project: Project = loaded_context["project"]
         chapter = loaded_context.get("chapter")
-        previous_chapter = loaded_context.get("previous_chapter")
         recent_memories: list[ChapterMemory] = loaded_context.get("recent_memories") or []
         story_memory: ProjectStoryMemory | None = loaded_context.get("story_memory")
-
         retrieval_limit = 6
         retrieval_text = "\n".join(
             piece for piece in [request.get("user_text") or "", plan.get("writing_goal") or ""] if piece
@@ -156,6 +302,20 @@ class ContinuationPipelineService:
                 "chunks": [],
                 "metadata": {"source": "empty_fallback", "returned_chunk_count": 0},
             }
+        return retrieval
+
+    def _build_context_bundle(
+        self,
+        *,
+        request: dict[str, Any],
+        loaded_context: dict[str, Any],
+        retrieval: dict[str, Any],
+    ) -> dict[str, Any]:
+        project: Project = loaded_context["project"]
+        chapter = loaded_context.get("chapter")
+        previous_chapter = loaded_context.get("previous_chapter")
+        recent_memories: list[ChapterMemory] = loaded_context.get("recent_memories") or []
+        story_memory: ProjectStoryMemory | None = loaded_context.get("story_memory")
 
         current_chapter_tail = self._build_current_chapter_tail(chapter)
         previous_chapter_tail_raw = (
@@ -515,6 +675,89 @@ class ContinuationPipelineService:
             "estimated_tokens": estimated_tokens,
             "trimmed_sections": [],
             "section_lengths": section_lengths,
+        }
+
+    def _trace_timestamp(self) -> str:
+        return datetime.now(UTC).isoformat()
+
+    def _elapsed_ms(self, started_at: float) -> int:
+        return max(0, int((perf_counter() - started_at) * 1000))
+
+    def _build_trace_step(
+        self,
+        *,
+        step_key: str,
+        label: str,
+        status: str,
+        started_at: str,
+        finished_at: str,
+        duration_ms: int,
+        input_summary: dict[str, Any] | None = None,
+        output_summary: dict[str, Any] | None = None,
+        warnings: list[str] | None = None,
+        fallbacks: list[str] | None = None,
+        payload_ref: str | None = None,
+    ) -> dict[str, Any]:
+        return {
+            "step_key": step_key,
+            "label": label,
+            "status": status,
+            "started_at": started_at,
+            "finished_at": finished_at,
+            "duration_ms": duration_ms,
+            "input_summary": input_summary or {},
+            "output_summary": output_summary or {},
+            "warnings": warnings or [],
+            "fallbacks": fallbacks or [],
+            "payload_ref": payload_ref,
+        }
+
+    def _summarize_plan(self, plan: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "writing_goal": self._clip_text(self._safe_text(plan.get("writing_goal")), limit=120),
+            "must_include_count": len(plan.get("must_include") or []),
+            "must_avoid_count": len(plan.get("must_avoid") or []),
+            "open_loop_count": len(plan.get("relevant_open_loops") or []),
+            "source": (plan.get("metadata") or {}).get("source") or "unknown",
+        }
+
+    def _summarize_retrieval(self, retrieval: dict[str, Any]) -> dict[str, Any]:
+        metadata = retrieval.get("metadata") or {}
+        return {
+            "query_terms": (retrieval.get("query_terms") or [])[:6],
+            "chunk_count": len(retrieval.get("chunks") or []),
+            "graph_evidence_count": len(retrieval.get("graph_evidence") or []),
+            "source": metadata.get("source") or "default",
+            "returned_chunk_count": metadata.get("returned_chunk_count"),
+        }
+
+    def _summarize_context_bundle(self, context_bundle: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "has_current_chapter_tail": bool(context_bundle.get("current_chapter_tail")),
+            "has_previous_chapter_tail": bool(context_bundle.get("previous_chapter_tail")),
+            "recent_memory_count": len(context_bundle.get("recent_memories") or []),
+            "retrieved_chunk_count": len(context_bundle.get("retrieved_chunks") or []),
+            "graph_evidence_count": len(context_bundle.get("graph_evidence") or []),
+            "estimated_tokens": ((context_bundle.get("token_budget_report") or {}).get("estimated_tokens")),
+        }
+
+    def _summarize_draft(self, draft: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "content_length": len(draft.get("content") or ""),
+            "used_sections": draft.get("used_sections") or [],
+            "generation_notes": draft.get("generation_notes") or [],
+            "model_id": draft.get("model_id") or "",
+        }
+
+    def _summarize_continuity_report(self, continuity_report: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "severity": continuity_report.get("severity") or "unknown",
+            "check_status": continuity_report.get("check_status") or "unknown",
+            "timeline_conflicts": len(continuity_report.get("timeline_conflicts") or []),
+            "character_conflicts": len(continuity_report.get("character_conflicts") or []),
+            "world_rule_conflicts": len(continuity_report.get("world_rule_conflicts") or []),
+            "knowledge_boundary_conflicts": len(continuity_report.get("knowledge_boundary_conflicts") or []),
+            "open_loop_misalignment": len(continuity_report.get("open_loop_misalignment") or []),
         }
 
     def _collect_warnings(self, continuity_report: dict[str, Any]) -> list[str]:
