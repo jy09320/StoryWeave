@@ -903,6 +903,48 @@ class AIService:
             max_tokens=max_tokens,
         )
 
+    async def generate_plain_text_stream(
+        self,
+        db: AsyncSession,
+        *,
+        text: str,
+        instruction: str,
+        model_provider: str | None,
+        model_id: str | None,
+        temperature: float,
+        max_tokens: int,
+        owner_id: str | None = None,
+    ):
+        runtime_config = await self.resolve_runtime_config(db, model_provider, model_id, owner_id)
+        provider = str(runtime_config["provider"])
+        resolved_model_id = str(runtime_config["model_id"])
+        api_key = runtime_config["api_key"]
+        base_url = runtime_config["base_url"]
+
+        if provider == "anthropic":
+            async for chunk in self.generate_stream_anthropic(
+                api_key=api_key,
+                base_url=base_url,
+                text=text,
+                instruction=instruction,
+                model=resolved_model_id,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            ):
+                yield chunk
+            return
+
+        async for chunk in self.generate_stream_openai(
+            api_key=api_key,
+            base_url=base_url,
+            text=text,
+            instruction=instruction,
+            model=resolved_model_id,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        ):
+            yield chunk
+
     async def generate_plain_text(
         self,
         db: AsyncSession,

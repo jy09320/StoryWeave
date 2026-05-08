@@ -1,3 +1,4 @@
+import asyncio
 import json
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -146,6 +147,62 @@ async def generate_with_continuation_pipeline(
         trace=result["trace"],
         metadata=result["metadata"],
     )
+
+
+@router.post("/continuation/stream")
+async def stream_continuation_pipeline(
+    req: AIGenerateRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    queue: asyncio.Queue[dict[str, str] | None] = asyncio.Queue()
+
+    async def push_progress(payload: dict):
+        await queue.put({"event": "progress", "data": json.dumps(payload)})
+
+    async def run_pipeline():
+        try:
+            result = await continuation_pipeline_service.run(
+                db,
+                project_id=req.project_id,
+                chapter_id=req.chapter_id,
+                user_text=req.text,
+                user_instruction=req.instruction,
+                model_provider=req.model_provider,
+                model_id=req.model_id,
+                temperature=req.temperature,
+                max_tokens=req.max_tokens,
+                owner_id=current_user.id,
+                debug=False,
+                progress_callback=push_progress,
+            )
+            response_payload = AIContinuationGenerateResponse(
+                final_content=result["final_content"],
+                continuity_report=result["continuity_report"],
+                warnings=result["warnings"],
+                fallbacks=result["fallbacks"],
+                trace=result["trace"],
+                metadata=result["metadata"],
+            )
+            await queue.put({"event": "complete", "data": response_payload.model_dump_json()})
+        except Exception as exc:
+            await queue.put({"event": "error", "data": json.dumps({"error": str(exc)})})
+        finally:
+            await queue.put(None)
+
+    async def event_generator():
+        task = asyncio.create_task(run_pipeline())
+        try:
+            while True:
+                item = await queue.get()
+                if item is None:
+                    break
+                yield item
+        finally:
+            if not task.done():
+                task.cancel()
+
+    return EventSourceResponse(event_generator())
 
 
 @router.post("/continuation/debug", response_model=AIContinuationDebugResponse)

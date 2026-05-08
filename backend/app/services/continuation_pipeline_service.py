@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import inspect
 import logging
 import re
 from datetime import UTC, datetime
 from time import perf_counter
-from typing import Any
+from typing import Any, Awaitable, Callable
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,6 +16,8 @@ from app.services.continuation_planner_service import continuation_planner_servi
 from app.services.continuity_checker_service import continuity_checker_service
 
 logger = logging.getLogger(__name__)
+
+ProgressCallback = Callable[[dict[str, Any]], Awaitable[None] | None]
 
 _WRITER_SYSTEM_PROMPT = """你是长篇小说续写写作者。请基于给定的续写计划和上下文包生成单个候选正文。
 
@@ -41,6 +44,7 @@ class ContinuationPipelineService:
         max_tokens: int,
         owner_id: str | None = None,
         debug: bool = False,
+        progress_callback: ProgressCallback | None = None,
     ) -> dict[str, Any]:
         request = {
             "project_id": project_id,
@@ -67,6 +71,12 @@ class ContinuationPipelineService:
 
         planner_started = perf_counter()
         planner_started_at = self._trace_timestamp()
+        await self._emit_progress(
+            progress_callback,
+            trace=self._build_running_trace(trace, step_key="planner", label="分析承接点", started_at=planner_started_at),
+            step_key="planner",
+            status="running",
+        )
         plan = await continuation_planner_service.plan(
             db,
             request=request,
@@ -93,9 +103,16 @@ class ContinuationPipelineService:
                 payload_ref="plan",
             )
         )
+        await self._emit_progress(progress_callback, trace=trace, step_key="planner", status=trace[-1]["status"])
 
         retriever_started = perf_counter()
         retriever_started_at = self._trace_timestamp()
+        await self._emit_progress(
+            progress_callback,
+            trace=self._build_running_trace(trace, step_key="retriever", label="检索相关剧情", started_at=retriever_started_at),
+            step_key="retriever",
+            status="running",
+        )
         retrieval = await self._retrieve_context_materials(
             db,
             request=request,
@@ -121,9 +138,16 @@ class ContinuationPipelineService:
                 payload_ref="context_bundle.retrieved_chunks",
             )
         )
+        await self._emit_progress(progress_callback, trace=trace, step_key="retriever", status=trace[-1]["status"])
 
         bundle_started = perf_counter()
         bundle_started_at = self._trace_timestamp()
+        await self._emit_progress(
+            progress_callback,
+            trace=self._build_running_trace(trace, step_key="context_bundle", label="整理角色与伏笔", started_at=bundle_started_at),
+            step_key="context_bundle",
+            status="running",
+        )
         context_bundle = self._build_context_bundle(
             request=request,
             loaded_context=loaded_context,
@@ -145,14 +169,22 @@ class ContinuationPipelineService:
                 payload_ref="context_bundle",
             )
         )
+        await self._emit_progress(progress_callback, trace=trace, step_key="context_bundle", status=trace[-1]["status"])
 
         writer_started = perf_counter()
         writer_started_at = self._trace_timestamp()
+        await self._emit_progress(
+            progress_callback,
+            trace=self._build_running_trace(trace, step_key="writer", label="生成正文", started_at=writer_started_at),
+            step_key="writer",
+            status="running",
+        )
         draft = await self._write_draft(
             db,
             request=request,
             plan=plan,
             context_bundle=context_bundle,
+            progress_callback=progress_callback,
         )
         trace.append(
             self._build_trace_step(
@@ -169,9 +201,16 @@ class ContinuationPipelineService:
                 payload_ref="draft",
             )
         )
+        await self._emit_progress(progress_callback, trace=trace, step_key="writer", status=trace[-1]["status"])
 
         checker_started = perf_counter()
         checker_started_at = self._trace_timestamp()
+        await self._emit_progress(
+            progress_callback,
+            trace=self._build_running_trace(trace, step_key="checker", label="检查连续性", started_at=checker_started_at),
+            step_key="checker",
+            status="running",
+        )
         continuity_report = await continuity_checker_service.check(
             db,
             request=request,
@@ -201,6 +240,7 @@ class ContinuationPipelineService:
                 payload_ref="continuity_report",
             )
         )
+        await self._emit_progress(progress_callback, trace=trace, step_key="checker", status=trace[-1]["status"])
 
         fallback_finished_at = self._trace_timestamp()
         trace.append(
@@ -220,7 +260,14 @@ class ContinuationPipelineService:
                 payload_ref="fallbacks",
             )
         )
+        await self._emit_progress(progress_callback, trace=trace, step_key="fallback_decision", status="completed")
         final_finished_at = self._trace_timestamp()
+        await self._emit_progress(
+            progress_callback,
+            trace=self._build_running_trace(trace, step_key="final_output", label="完成", started_at=final_finished_at),
+            step_key="final_output",
+            status="running",
+        )
         trace.append(
             self._build_trace_step(
                 step_key="final_output",
@@ -238,6 +285,7 @@ class ContinuationPipelineService:
                 payload_ref="final_content",
             )
         )
+        await self._emit_progress(progress_callback, trace=trace, step_key="final_output", status="completed")
 
         warnings = self._collect_warnings(continuity_report)
 
@@ -258,6 +306,51 @@ class ContinuationPipelineService:
                 "trace_available": True,
             },
         }
+
+    async def _emit_progress(
+        self,
+        progress_callback: ProgressCallback | None,
+        *,
+        trace: list[dict[str, Any]],
+        step_key: str,
+        status: str,
+    ) -> None:
+        if progress_callback is None:
+            return
+        payload = {
+            "type": "trace",
+            "trace": trace,
+            "step_key": step_key,
+            "status": status,
+        }
+        result = progress_callback(payload)
+        if inspect.isawaitable(result):
+            await result
+
+    def _build_running_trace(
+        self,
+        trace: list[dict[str, Any]],
+        *,
+        step_key: str,
+        label: str,
+        started_at: str,
+    ) -> list[dict[str, Any]]:
+        return [
+            *trace,
+            {
+                "step_key": step_key,
+                "label": label,
+                "status": "running",
+                "started_at": started_at,
+                "finished_at": None,
+                "duration_ms": None,
+                "input_summary": {},
+                "output_summary": {},
+                "warnings": [],
+                "fallbacks": [],
+                "payload_ref": None,
+            },
+        ]
 
     async def _retrieve_context_materials(
         self,
@@ -376,6 +469,7 @@ class ContinuationPipelineService:
         request: dict[str, Any],
         plan: dict[str, Any],
         context_bundle: dict[str, Any],
+        progress_callback: ProgressCallback | None = None,
     ) -> dict[str, Any]:
         writer_prompt = self._build_writer_prompt(
             user_instruction=request.get("user_instruction") or "",
@@ -384,16 +478,29 @@ class ContinuationPipelineService:
             context_bundle=context_bundle,
         )
 
-        content = await ai_service.generate_plain_text(
+        chunks: list[str] = []
+        chapter_completion_requested = bool((plan.get("metadata") or {}).get("chapter_completion_requested"))
+        effective_max_tokens = int(request.get("max_tokens") or 2000)
+        if chapter_completion_requested and effective_max_tokens < 4000:
+            effective_max_tokens = 4000
+        async for chunk in ai_service.generate_plain_text_stream(
             db,
             text=writer_prompt,
             instruction=_WRITER_SYSTEM_PROMPT,
             model_provider=request.get("model_provider"),
             model_id=request.get("model_id"),
             temperature=float(request.get("temperature") or 0.8),
-            max_tokens=int(request.get("max_tokens") or 2000),
+            max_tokens=effective_max_tokens,
             owner_id=request.get("owner_id"),
-        )
+        ):
+            chunks.append(chunk)
+            if progress_callback is not None:
+                payload = {"type": "content_chunk", "chunk": chunk}
+                result = progress_callback(payload)
+                if inspect.isawaitable(result):
+                    await result
+
+        content = "".join(chunks)
         return {
             "content": content,
             "model_provider": request.get("model_provider") or "",
@@ -432,11 +539,18 @@ class ContinuationPipelineService:
         preferred_anchor = context_bundle.get("preferred_continuation_anchor") or user_text
         anchor_focus = context_bundle.get("current_tail_focus") or context_bundle.get("previous_tail_focus") or preferred_anchor
         previous_reader_only_tail = self._safe_text((context_bundle.get("metadata") or {}).get("previous_reader_only_tail"))
+        plan_metadata = plan.get("metadata") or {}
+        chapter_title = self._safe_text(plan_metadata.get("chapter_title"))
+        chapter_completion_requested = bool(plan_metadata.get("chapter_completion_requested"))
         parts.append("承接优先级：当前章节已写尾部 > 用户输入正文 > 上一章结尾。如果当前章节已写尾部存在，必须先承接它。")
         parts.append("开头硬约束：前两句必须直接延续承接点最后一个动作、情绪或场景位置，不得重新改写更早发生过的对话、相遇、解释或铺垫。")
         parts.append("禁止回退：如果承接点已经写到‘她转身离开’‘他已经走了’‘她朝城北走去’这类状态，开头不能再把赵怀真拉回面前说话，不能再回到醉红楼铺内重新演一遍刚才的对话。")
         parts.append("只输出新增正文，不要输出章节标题、小标题、说明文字。")
         parts.append("不要复述用户输入或当前章节已写内容的原句；从它们的结尾继续写。首句不要直接重复承接点里的原句、整段尾句或同义改写版尾句。")
+        parts.append("首句完整性硬约束：第一句必须是能独立成立的完整句，不要用‘连着’‘却’‘而’‘但’‘只是’‘如果’这类承接词直接起句，也不要省略主语或动作让句子像丢了上半句。")
+        parts.append("首段场景硬约束：前 120 到 180 字必须停留在当前同一现场、同一视角、同一时间切片，先写承接点之后立刻发生的动作、感官或反应。")
+        parts.append("开头禁止立刻跳到线索总结、案情复盘、组织猜测、下一步规划；这些只能在当前场景站稳之后再慢慢转入。")
+        parts.append("结尾完整性硬约束：最后一句也必须是完整句，不要用‘如果’‘可’‘而’‘却’这类悬空转折收尾，不要停在半截判断、半截动作或明显没说完的推理上。")
         parts.append("检索片段、伏笔、角色设定只能作为补充约束，不能拿来重开场景，更不能照抄成开头。")
         parts.append("视角硬约束：只能写当前视角角色此刻能直接看到、听到、闻到、推断到的信息。不要把只属于读者、幕后人物或后堂暗线的信息写成云缨已经知道。")
         parts.append("禁止句式：不要写“她不知道的是”“而她不知道的是”“他不知道的是”“镜头转到”“与此同时在暗处”这类切到幕后旁白视角的句子。")
@@ -448,6 +562,10 @@ class ContinuationPipelineService:
         elif context_bundle.get("previous_tail_focus"):
             parts.append("首段结构硬约束：先写云缨承接上一章结尾后的动作或情绪，再写她朝城北货栈前进，之后才能切到货栈环境或新线索。不要一上来直接做全景场景介绍。")
         parts.append(f"用户任务：{user_instruction}")
+        if chapter_title:
+            parts.append(f"当前章节标题：{chapter_title}")
+        if chapter_completion_requested:
+            parts.append("本次任务要求：写到本章结束。结尾必须形成一个明确的本章收束点，而不是停在松散的中途过渡。")
         parts.append(f"开头必须咬住的尾部焦点：{anchor_focus}")
         parts.append(f"必须直接承接的锚点：{preferred_anchor}")
         parts.append(f"续写承接点：{plan.get('scene_continuation_point') or ''}")

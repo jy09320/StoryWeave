@@ -92,6 +92,8 @@ class ContinuationPlannerService:
 
         user_instruction = self._clip_text(request.get("user_instruction"), limit=240) or "继续写下去"
         user_text = self._clip_text(request.get("user_text"), limit=240)
+        chapter_title = self._safe_text(chapter.title if chapter else None)
+        chapter_completion_requested = self._is_chapter_completion_request(user_instruction)
         current_chapter_tail = self._extract_chapter_tail(chapter, source_limit=600, clip_limit=300)
 
         continuation_point = self._clip_text(
@@ -109,6 +111,9 @@ class ContinuationPlannerService:
         relevant_open_loops: list[str] = []
         character_constraints: list[str] = []
         timeline_constraints: list[str] = []
+
+        if chapter_completion_requested:
+            must_include.append("本次续写要形成明确的本章收束，而不是只写一小段过渡")
 
         for memory in recent_memories[:2]:
             for item in memory.open_loops[:2]:
@@ -180,12 +185,24 @@ class ContinuationPlannerService:
         ]
         if user_instruction:
             style_notes.append(f"遵循用户任务：{user_instruction}")
+        if chapter_completion_requested:
+            style_notes.append("这是本章收束型续写，结尾要自然落到一个阶段性完成点")
 
         risk_focus = ["承接自然度", "角色一致性", "时间线连续性"]
+        if chapter_completion_requested:
+            risk_focus.append("本章收束感")
+
+        writing_goal = user_instruction
+        if chapter_title and chapter_completion_requested:
+            writing_goal = f"{user_instruction}；本次续写需要完成本章收束，推进方向应与章节标题《{chapter_title}》的主题相符。"
+        elif chapter_title:
+            writing_goal = f"{user_instruction}；可参考章节标题《{chapter_title}》的主题方向，但以叙事自然承接为优先。"
+        elif chapter_completion_requested:
+            writing_goal = f"{user_instruction}；本次续写需要完成本章收束，而不是只写一小段过渡。"
 
         return {
             "scene_continuation_point": continuation_point,
-            "writing_goal": user_instruction,
+            "writing_goal": writing_goal,
             "must_include": must_include[:5],
             "must_avoid": must_avoid[:5],
             "relevant_open_loops": relevant_open_loops[:5],
@@ -197,6 +214,7 @@ class ContinuationPlannerService:
                 "source": "default",
                 "project_title": project.title if project else None,
                 "chapter_title": chapter.title if chapter else None,
+                "chapter_completion_requested": chapter_completion_requested,
                 "used_current_chapter_tail": bool(current_chapter_tail),
                 "used_previous_chapter_tail": bool(not current_chapter_tail and previous_chapter and previous_chapter.plain_text),
                 "anchor_text": current_chapter_tail
@@ -225,6 +243,8 @@ class ContinuationPlannerService:
             f"用户指令：{request.get('user_instruction') or ''}",
             f"用户输入：{self._clip_text(request.get('user_text'), limit=1600) or ''}",
         ]
+        if self._is_chapter_completion_request(request.get("user_instruction")):
+            parts.append("额外要求：用户这次不是只要续一点，而是要写到本章结束，请把“本章收束”当成硬目标。")
         chapter_tail = self._extract_chapter_tail(chapter, source_limit=1200, clip_limit=500)
         if chapter_tail:
             parts.append(f"当前章节已写尾部：{chapter_tail}")
@@ -322,6 +342,13 @@ class ContinuationPlannerService:
             return True
         overlap = anchor_terms & continuation_terms
         return len(overlap) >= 2 or bool(overlap and len(anchor_text) < 80)
+
+    def _is_chapter_completion_request(self, instruction: object) -> bool:
+        cleaned = self._safe_text(instruction) or ""
+        if not cleaned:
+            return False
+        markers = ("写到本章完", "写到本章结束", "本章完", "本章结束", "收住本章", "收束本章", "把这章写完", "写完整章", "写完这一章", "写完本章", "续写完本章", "完成本章", "写到章末", "写到结尾")
+        return any(marker in cleaned for marker in markers)
 
     def _merge_unique_string_lists(self, left: object, right: object, *, limit: int) -> list[str]:
         merged: list[str] = []

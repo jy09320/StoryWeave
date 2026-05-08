@@ -138,6 +138,38 @@ class ContinuityCheckerService:
                 }
             )
 
+        first_paragraph = self._get_first_paragraph(draft_content)
+        if first_paragraph and self._starts_with_fragment_connector(first_paragraph):
+            report["timeline_conflicts"].append(
+                {
+                    "issue": "首句像断在半空中",
+                    "reason": "候选正文的开头以承接词或转折词直接起句，但前面的主体或动作没有补出来，读感会像上半句丢失了。",
+                    "evidence": self._clip_text(first_paragraph, limit=80) or "",
+                    "suggestion": "把第一句改成完整的动作、感官或反应句，不要用‘连着’‘却’等词直接起句。",
+                }
+            )
+
+        if preferred_anchor and first_paragraph and self._starts_with_early_recap(first_paragraph):
+            report["timeline_conflicts"].append(
+                {
+                    "issue": "首段过早跳到复盘推理",
+                    "reason": "候选正文虽然稍微油到了承接点，但很快就从当前场景跳到线索总结、案情判断或下一步推理，导致前后画面没有真正连上。",
+                    "evidence": self._clip_text(first_paragraph, limit=140) or "",
+                    "suggestion": "先写承接点之后立刻发生的动作、目光、呼吸或现场细节，等场景站稳后再进入推理。",
+                }
+            )
+
+        last_sentence = self._get_last_sentence(draft_content)
+        if last_sentence and self._ends_with_fragment_connector(last_sentence):
+            report["timeline_conflicts"].append(
+                {
+                    "issue": "尾句像断在半空中",
+                    "reason": "候选正文的最后一句停在悬空转折、半截判断或没落稳的动作上，读起来像这一句还没写完。",
+                    "evidence": self._clip_text(last_sentence, limit=100) or "",
+                    "suggestion": "把结尾句补成完整句，要么明确落在动作完成点，要么落在情绪、判断或本章收束点上。",
+                }
+            )
+
         for item in plan.get("timeline_constraints") or []:
             if isinstance(item, str) and self._is_specific_constraint(item) and item not in draft_content:
                 report["timeline_conflicts"].append(
@@ -483,6 +515,57 @@ class ContinuityCheckerService:
         left_terms = self._extract_terms(left[:60])
         right_terms = self._extract_terms(right[:80])
         return bool(left_terms) and len(left_terms & right_terms) >= max(3, len(left_terms) // 2)
+
+    def _get_first_paragraph(self, draft: str) -> str:
+        cleaned = draft.strip()
+        if not cleaned:
+            return ""
+        for separator in ("\r\n\r\n", "\n\n"):
+            if separator in cleaned:
+                cleaned = cleaned.split(separator, 1)[0]
+                break
+        if "\n" in cleaned:
+            cleaned = cleaned.split("\n", 1)[0]
+        return cleaned[:220].strip()
+
+    def _get_last_sentence(self, draft: str) -> str:
+        cleaned = draft.strip()
+        if not cleaned:
+            return ""
+        cleaned = cleaned.splitlines()[-1].strip() or cleaned
+        parts = [item.strip() for item in re.split(r"(?<=[。！？!?])", cleaned) if item.strip()]
+        return (parts[-1] if parts else cleaned)[-120:].strip()
+
+    def _starts_with_fragment_connector(self, paragraph: str) -> bool:
+        cleaned = self._safe_text(paragraph) or ""
+        if not cleaned:
+            return False
+        return cleaned.startswith(("连着", "却", "而", "但", "只是", "如果", "可", "偏偏"))
+
+    def _ends_with_fragment_connector(self, sentence: str) -> bool:
+        cleaned = self._safe_text(sentence) or ""
+        if not cleaned:
+            return False
+        if cleaned.endswith(("如果", "可是", "可", "而", "却", "只是")):
+            return True
+        if cleaned.startswith(("如果", "可", "而", "却")) and not any(mark in cleaned for mark in ("。", "！", "？", "!", "?")):
+            return True
+        fragment_markers = ("会不会就是", "如果真是", "可", "不对", "而这一切", "只是")
+        if len(cleaned) <= 18 and any(cleaned.startswith(marker) for marker in fragment_markers):
+            return True
+        if cleaned.endswith(("会不会", "为什么", "怎么会", "究竟")):
+            return True
+        return False
+
+    def _starts_with_early_recap(self, paragraph: str) -> bool:
+        cleaned = self._safe_text(paragraph) or ""
+        if len(cleaned) < 40:
+            return False
+        reasoning_markers = ("如果", "会不会", "为何", "为什么", "看来", "果然", "原来", "不对", "也就是说")
+        scene_markers = ("风", "灯", "脚步", "呼吸", "袖", "手", "目光", "巷", "夜", "门", "墙", "地面", "回头", "停住", "看见", "听见")
+        reasoning_hits = sum(1 for item in reasoning_markers if item in cleaned)
+        scene_hits = sum(1 for item in scene_markers if item in cleaned)
+        return reasoning_hits >= 2 and scene_hits <= 1
 
     def _extract_terms(self, value: str) -> set[str]:
         normalized = "".join(ch if ch.isalnum() else " " for ch in value)

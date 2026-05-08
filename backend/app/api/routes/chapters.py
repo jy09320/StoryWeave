@@ -6,10 +6,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
 from app.core.database import get_db
-from app.models.project import Chapter, ChapterVersion, DocumentChunk, Project
+from app.models.project import Chapter, ChapterMemory, ChapterVersion, DocumentChunk, Project
 from app.models.user import User
 from app.schemas.project import (
     ChapterCreate,
+    ChapterMemoryResponse,
+    ChapterMemoryUpdate,
     ChapterReorderItem,
     ChapterResponse,
     ChapterUpdate,
@@ -195,6 +197,63 @@ async def list_chapter_versions(
         .order_by(ChapterVersion.created_at.desc())
     )
     return result.scalars().all()
+
+
+@router.get("/{chapter_id}/memory", response_model=ChapterMemoryResponse)
+async def get_chapter_memory(
+    chapter_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    await _require_chapter(chapter_id, current_user.id, db)
+    result = await db.execute(select(ChapterMemory).where(ChapterMemory.chapter_id == chapter_id))
+    memory = result.scalar_one_or_none()
+    if not memory:
+        raise HTTPException(status_code=404, detail="Chapter memory not found")
+    return memory
+
+
+@router.put("/{chapter_id}/memory", response_model=ChapterMemoryResponse)
+async def update_chapter_memory(
+    chapter_id: str,
+    data: ChapterMemoryUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    chapter = await _require_chapter(chapter_id, current_user.id, db)
+    result = await db.execute(select(ChapterMemory).where(ChapterMemory.chapter_id == chapter_id))
+    memory = result.scalar_one_or_none()
+    if not memory:
+        raise HTTPException(status_code=404, detail="Chapter memory not found")
+    for key, value in data.model_dump(exclude_unset=True).items():
+        setattr(memory, key, value)
+    await db.commit()
+    await db.refresh(memory)
+    try:
+        await story_memory_service.refresh_for_project(
+            db,
+            project_id=chapter.project_id,
+            updated_from_chapter_id=chapter.id,
+        )
+        await story_graph_service.refresh_for_project(db, project_id=chapter.project_id)
+    except Exception:
+        logger.exception("Story memory refresh failed after manual memory update for chapter=%s", chapter_id)
+    return memory
+
+
+@router.post("/{chapter_id}/memory/refresh", response_model=ChapterMemoryResponse)
+async def refresh_chapter_memory(
+    chapter_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    chapter = await _require_chapter(chapter_id, current_user.id, db)
+    await _refresh_story_memory_for_chapter(db, chapter)
+    result = await db.execute(select(ChapterMemory).where(ChapterMemory.chapter_id == chapter_id))
+    memory = result.scalar_one_or_none()
+    if not memory:
+        raise HTTPException(status_code=422, detail="Chapter has no content to extract memory from")
+    return memory
 
 
 @router.delete("/{chapter_id}")
