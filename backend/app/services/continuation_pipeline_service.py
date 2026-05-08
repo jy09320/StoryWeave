@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -157,17 +158,38 @@ class ContinuationPipelineService:
             }
 
         current_chapter_tail = self._build_current_chapter_tail(chapter)
+        previous_chapter_tail_raw = (
+            self._clip_text(previous_chapter.plain_text[-1500:], limit=1500)
+            if previous_chapter and previous_chapter.plain_text
+            else None
+        )
+        previous_reader_only_tail = self._extract_reader_only_tail(previous_chapter_tail_raw)
+        previous_chapter_tail = self._strip_reader_only_tail(previous_chapter_tail_raw)
+        current_tail_focus = self._build_tail_focus_excerpt(current_chapter_tail, limit=180)
+        previous_tail_focus = self._build_tail_focus_excerpt(previous_chapter_tail, limit=180)
+        preferred_anchor = self._choose_preferred_anchor(
+            user_text=self._safe_text(request.get("user_text")),
+            current_tail_focus=current_tail_focus,
+            current_chapter_tail=current_chapter_tail,
+            previous_tail_focus=previous_tail_focus,
+            previous_chapter_tail=previous_chapter_tail,
+        )
+        retrieved_chunks = retrieval.get("chunks", [])
+        graph_evidence = retrieval.get("graph_evidence", [])
+        if current_chapter_tail:
+            retrieved_chunks = retrieved_chunks[:2]
         bundle = {
             "project_summary": self._build_project_summary(project),
             "story_memory_summary": self._safe_text(story_memory.global_plot_summary) if story_memory else None,
             "current_chapter_summary": self._build_current_chapter_summary(chapter),
             "current_chapter_tail": current_chapter_tail,
-            "previous_chapter_tail": self._clip_text(previous_chapter.plain_text[-1500:], limit=1500)
-            if previous_chapter and previous_chapter.plain_text
-            else None,
+            "current_tail_focus": current_tail_focus,
+            "previous_chapter_tail": None if current_chapter_tail else previous_chapter_tail,
+            "previous_tail_focus": None if current_chapter_tail else previous_tail_focus,
+            "preferred_continuation_anchor": preferred_anchor,
             "recent_memories": [self._serialize_recent_memory(memory) for memory in recent_memories[:3]],
-            "retrieved_chunks": retrieval.get("chunks", []),
-            "graph_evidence": [],
+            "retrieved_chunks": retrieved_chunks,
+            "graph_evidence": graph_evidence[:4],
             "character_context": self._serialize_character_context(project),
             "world_context": self._serialize_world_context(project),
             "query_terms": retrieval.get("query_terms", []),
@@ -175,12 +197,15 @@ class ContinuationPipelineService:
                 project_summary=self._build_project_summary(project),
                 story_memory_summary=self._safe_text(story_memory.global_plot_summary) if story_memory else None,
                 current_chapter_summary=self._build_current_chapter_summary(chapter),
-                current_chapter_tail=current_chapter_tail,
-                previous_chapter_tail=previous_chapter.plain_text[-1500:] if previous_chapter and previous_chapter.plain_text else None,
+                current_chapter_tail=current_tail_focus or current_chapter_tail,
+                previous_chapter_tail=previous_tail_focus or previous_chapter_tail,
                 recent_memories=recent_memories,
-                retrieved_chunks=retrieval.get("chunks", []),
+                retrieved_chunks=retrieved_chunks,
             ),
-            "metadata": retrieval.get("metadata", {}),
+            "metadata": {
+                **(retrieval.get("metadata", {}) or {}),
+                "previous_reader_only_tail": previous_reader_only_tail,
+            },
         }
         return bundle
 
@@ -213,12 +238,19 @@ class ContinuationPipelineService:
             "content": content,
             "model_provider": request.get("model_provider") or "",
             "model_id": request.get("model_id") or "",
-            "generation_notes": [],
+            "generation_notes": [
+                "anchor:current_chapter_tail"
+                if context_bundle.get("current_chapter_tail")
+                else "anchor:previous_chapter_tail"
+                if context_bundle.get("previous_chapter_tail")
+                else "anchor:user_text"
+            ],
             "used_sections": [
                 "plan",
                 "project_summary",
                 "story_memory_summary",
                 "current_chapter_summary",
+                "current_tail_focus",
                 "current_chapter_tail",
                 "recent_memories",
                 "retrieved_chunks",
@@ -237,7 +269,27 @@ class ContinuationPipelineService:
         context_bundle: dict[str, Any],
     ) -> str:
         parts: list[str] = []
+        preferred_anchor = context_bundle.get("preferred_continuation_anchor") or user_text
+        anchor_focus = context_bundle.get("current_tail_focus") or context_bundle.get("previous_tail_focus") or preferred_anchor
+        previous_reader_only_tail = self._safe_text((context_bundle.get("metadata") or {}).get("previous_reader_only_tail"))
+        parts.append("承接优先级：当前章节已写尾部 > 用户输入正文 > 上一章结尾。如果当前章节已写尾部存在，必须先承接它。")
+        parts.append("开头硬约束：前两句必须直接延续承接点最后一个动作、情绪或场景位置，不得重新改写更早发生过的对话、相遇、解释或铺垫。")
+        parts.append("禁止回退：如果承接点已经写到‘她转身离开’‘他已经走了’‘她朝城北走去’这类状态，开头不能再把赵怀真拉回面前说话，不能再回到醉红楼铺内重新演一遍刚才的对话。")
+        parts.append("只输出新增正文，不要输出章节标题、小标题、说明文字。")
+        parts.append("不要复述用户输入或当前章节已写内容的原句；从它们的结尾继续写。首句不要直接重复承接点里的原句、整段尾句或同义改写版尾句。")
+        parts.append("检索片段、伏笔、角色设定只能作为补充约束，不能拿来重开场景，更不能照抄成开头。")
+        parts.append("视角硬约束：只能写当前视角角色此刻能直接看到、听到、闻到、推断到的信息。不要把只属于读者、幕后人物或后堂暗线的信息写成云缨已经知道。")
+        parts.append("禁止句式：不要写“她不知道的是”“而她不知道的是”“他不知道的是”“镜头转到”“与此同时在暗处”这类切到幕后旁白视角的句子。")
+        parts.append("信息来源硬约束：不要写云缨“听见了后堂对话”“看见了窗后黑影”“认出了暗处盯梢者”这类她并未亲历获得的信息；如果要表现危险临近，只能写她的直觉、异样感、可疑动静或现场可见线索。")
+        if previous_reader_only_tail:
+            parts.append(f"读者专属暗线信息（禁止改写成云缨已知）：{previous_reader_only_tail}")
+        if context_bundle.get("current_chapter_tail"):
+            parts.append("首段结构硬约束：先写当前尾句之后立刻发生的动作、反应或观察，再推进到下一步线索。不要把视角拉回当前尾句之前的街头对话、铺内盘问或人物重新出场。")
+        elif context_bundle.get("previous_tail_focus"):
+            parts.append("首段结构硬约束：先写云缨承接上一章结尾后的动作或情绪，再写她朝城北货栈前进，之后才能切到货栈环境或新线索。不要一上来直接做全景场景介绍。")
         parts.append(f"用户任务：{user_instruction}")
+        parts.append(f"开头必须咬住的尾部焦点：{anchor_focus}")
+        parts.append(f"必须直接承接的锚点：{preferred_anchor}")
         parts.append(f"续写承接点：{plan.get('scene_continuation_point') or ''}")
         parts.append(f"写作目标：{plan.get('writing_goal') or ''}")
 
@@ -256,6 +308,7 @@ class ContinuationPipelineService:
             ("项目摘要", context_bundle.get("project_summary")),
             ("长期主线记忆", context_bundle.get("story_memory_summary")),
             ("当前章节摘要", context_bundle.get("current_chapter_summary")),
+            ("尾部焦点摘录", context_bundle.get("current_tail_focus") or context_bundle.get("previous_tail_focus")),
             ("当前章节已写尾部", context_bundle.get("current_chapter_tail")),
             ("上一章结尾", context_bundle.get("previous_chapter_tail")),
         ):
@@ -276,6 +329,16 @@ class ContinuationPipelineService:
                 content = self._safe_text(chunk.get("content_short") or chunk.get("content")) or ""
                 lines.append(f"{index}. {scene_label}: {content}")
             parts.append("相关历史正文片段：\n" + "\n".join(lines))
+
+        graph_evidence = context_bundle.get("graph_evidence") or []
+        if graph_evidence:
+            lines = []
+            for index, item in enumerate(graph_evidence[:4], start=1):
+                evidence_type = self._safe_text(item.get("type")) or "graph"
+                label = self._safe_text(item.get("label")) or f"graph-{index}"
+                summary = self._safe_text(item.get("summary")) or ""
+                lines.append(f"{index}. [{evidence_type}] {label}: {summary}")
+            parts.append("剧情图谱证据：\n" + "\n".join(lines))
 
         character_context = context_bundle.get("character_context") or []
         if character_context:
@@ -350,10 +413,82 @@ class ContinuationPipelineService:
     def _build_current_chapter_tail(self, chapter: Any) -> str | None:
         if chapter is None:
             return None
-        source = self._safe_text(getattr(chapter, "plain_text", None)) or self._safe_text(getattr(chapter, "content", None))
+        source = self._safe_text(getattr(chapter, "plain_text", None)) or self._strip_html(getattr(chapter, "content", None))
         if not source:
             return None
         return self._clip_text(source[-1200:], limit=800)
+
+    def _build_tail_focus_excerpt(self, tail: str | None, *, limit: int) -> str | None:
+        cleaned = self._safe_text(tail)
+        if not cleaned:
+            return None
+        cleaned = self._strip_reader_only_tail(cleaned)
+        sentences = re.split(r"(?<=[。！？!?])", cleaned)
+        focused = "".join(part.strip() for part in sentences[-2:] if part.strip())
+        candidate = focused or cleaned[-limit:]
+        if len(candidate) <= limit:
+            return candidate
+        return candidate[-limit:]
+
+    def _choose_preferred_anchor(
+        self,
+        *,
+        user_text: str | None,
+        current_tail_focus: str | None,
+        current_chapter_tail: str | None,
+        previous_tail_focus: str | None,
+        previous_chapter_tail: str | None,
+    ) -> str | None:
+        if user_text:
+            if self._text_overlaps(user_text, current_tail_focus) or self._text_overlaps(user_text, current_chapter_tail):
+                return user_text
+            if self._text_overlaps(user_text, previous_tail_focus) or self._text_overlaps(user_text, previous_chapter_tail):
+                return user_text
+        return current_tail_focus or current_chapter_tail or user_text or previous_tail_focus or previous_chapter_tail
+
+    def _text_overlaps(self, left: str | None, right: str | None) -> bool:
+        left_clean = self._safe_text(left)
+        right_clean = self._safe_text(right)
+        if not left_clean or not right_clean:
+            return False
+        left_terms = self._extract_terms(left_clean)
+        right_terms = self._extract_terms(right_clean)
+        return bool(left_terms and right_terms and len(left_terms & right_terms) >= 2)
+
+    def _extract_terms(self, value: str) -> set[str]:
+        terms: set[str] = set()
+        for token in re.findall(r"[\u4e00-\u9fff]+|[A-Za-z0-9]+", value.lower()):
+            if re.fullmatch(r"[A-Za-z0-9]+", token):
+                if len(token) >= 2:
+                    terms.add(token)
+                continue
+            if len(token) == 1:
+                terms.add(token)
+                continue
+            for size in (2, 3):
+                if len(token) < size:
+                    continue
+                for index in range(len(token) - size + 1):
+                    terms.add(token[index : index + size])
+        return terms
+
+    def _strip_reader_only_tail(self, value: str) -> str:
+        markers = ("而她不知道的是", "她不知道的是", "而他不知道的是", "他不知道的是")
+        for marker in markers:
+            index = value.find(marker)
+            if index > 0:
+                return value[:index].rstrip()
+        return value
+
+    def _extract_reader_only_tail(self, value: str | None) -> str | None:
+        if not value:
+            return None
+        markers = ("而她不知道的是", "她不知道的是", "而他不知道的是", "他不知道的是")
+        for marker in markers:
+            index = value.find(marker)
+            if index >= 0:
+                return value[index:].strip()
+        return None
 
     def _build_token_budget_report(
         self,
@@ -395,6 +530,12 @@ class ContinuationPipelineService:
             return None
         cleaned = " ".join(value.split()).strip()
         return cleaned or None
+
+    def _strip_html(self, value: object) -> str | None:
+        if not isinstance(value, str):
+            return None
+        stripped = re.sub(r"<[^>]+>", " ", value)
+        return self._safe_text(stripped)
 
     def _clip_text(self, value: str | None, *, limit: int) -> str | None:
         if value is None:
