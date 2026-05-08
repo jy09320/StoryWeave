@@ -36,7 +36,8 @@ JSON 结构固定为：
 要求：
 1. 必须返回合法 JSON
 2. 如果没有明显问题，数组返回空
-3. 不要编造上下文中不存在的设定"""
+3. 不要编造上下文中不存在的设定
+4. 优先检查高价值冲突，不要泛泛而谈"""
 
 
 class ContinuityCheckerService:
@@ -69,7 +70,7 @@ class ContinuityCheckerService:
                 model_provider=request.get("model_provider"),
                 model_id=request.get("model_id"),
                 temperature=0.1,
-                max_tokens=1100,
+                max_tokens=600,
                 owner_id=request.get("owner_id"),
             )
         except Exception as exc:
@@ -107,25 +108,24 @@ class ContinuityCheckerService:
         }
 
         previous_tail = self._safe_text(context_bundle.get("previous_chapter_tail")) or ""
-        if previous_tail and draft_content:
-            if self._has_overlap(previous_tail[-120:], draft_content[:220]) is False:
-                report["timeline_conflicts"].append(
-                    {
-                        "issue": "承接可能偏弱",
-                        "reason": "候选正文开头与上一章结尾缺少明显语义承接。",
-                        "evidence": self._clip_text(previous_tail[-120:], limit=120) or "",
-                        "suggestion": "检查开头是否需要补一个承接动作、情绪或场景锚点。",
-                    }
-                )
+        if previous_tail and draft_content and self._has_overlap(previous_tail[-120:], draft_content[:220]) is False:
+            report["timeline_conflicts"].append(
+                {
+                    "issue": "承接可能偏弱",
+                    "reason": "候选正文开头与上一章结尾缺少明显承接。",
+                    "evidence": self._clip_text(previous_tail[-120:], limit=120) or "",
+                    "suggestion": "补一个承接动作、情绪或场景锚点。",
+                }
+            )
 
         for item in plan.get("timeline_constraints") or []:
             if isinstance(item, str) and item and item not in draft_content:
                 report["timeline_conflicts"].append(
                     {
                         "issue": "时间线约束未显式体现",
-                        "reason": "规划里存在时间/地点约束，但候选正文中未明显出现。",
+                        "reason": "规划里存在时间或地点约束，但候选正文中未明显出现。",
                         "evidence": item,
-                        "suggestion": "确认该约束是否应通过动作、地点或叙述语句显式保留。",
+                        "suggestion": "确认该约束是否需要通过动作、地点或叙述语句保留。",
                     }
                 )
 
@@ -134,7 +134,7 @@ class ContinuityCheckerService:
             report["open_loop_misalignment"].append(
                 {
                     "issue": "相关伏笔未被触及",
-                    "reason": "本次规划要求关注的 open loop 在候选正文中没有明显推进痕迹。",
+                    "reason": "本次规划要求关注的 open loop 在候选正文中没有明显推进。",
                     "evidence": self._clip_text(" / ".join(str(item) for item in open_loops[:3]), limit=140) or "",
                     "suggestion": "至少补一个关联动作、提及或悬念延续点。",
                 }
@@ -153,24 +153,30 @@ class ContinuityCheckerService:
         context_bundle: dict[str, Any],
         draft_content: str,
     ) -> str:
+        compact_plan = {
+            "scene_continuation_point": plan.get("scene_continuation_point"),
+            "writing_goal": plan.get("writing_goal"),
+            "relevant_open_loops": (plan.get("relevant_open_loops") or [])[:3],
+            "character_constraints": (plan.get("character_constraints") or [])[:3],
+            "timeline_constraints": (plan.get("timeline_constraints") or [])[:3],
+            "must_avoid": (plan.get("must_avoid") or [])[:3],
+        }
+        compact_context = {
+            "story_memory_summary": self._clip_text(self._safe_text(context_bundle.get("story_memory_summary")), limit=240),
+            "current_chapter_summary": self._clip_text(self._safe_text(context_bundle.get("current_chapter_summary")), limit=220),
+            "previous_chapter_tail": self._clip_text(self._safe_text(context_bundle.get("previous_chapter_tail")), limit=240),
+            "recent_memories": self._compact_recent_memories(context_bundle.get("recent_memories")),
+            "character_context": self._compact_string_list(context_bundle.get("character_context"), limit=3, text_limit=100),
+            "world_context": self._compact_string_list(context_bundle.get("world_context"), limit=3, text_limit=100),
+        }
         parts = [
             f"用户任务：{request.get('user_instruction') or ''}",
             "续写计划：",
-            json.dumps(plan, ensure_ascii=False),
-            "上下文包摘要：",
-            json.dumps(
-                {
-                    "story_memory_summary": context_bundle.get("story_memory_summary"),
-                    "current_chapter_summary": context_bundle.get("current_chapter_summary"),
-                    "recent_memories": context_bundle.get("recent_memories"),
-                    "character_context": context_bundle.get("character_context"),
-                    "world_context": context_bundle.get("world_context"),
-                    "query_terms": context_bundle.get("query_terms"),
-                },
-                ensure_ascii=False,
-            ),
+            json.dumps(compact_plan, ensure_ascii=False),
+            "核心上下文：",
+            json.dumps(compact_context, ensure_ascii=False),
             "候选正文：",
-            self._clip_text(draft_content, limit=3000) or "",
+            self._clip_text(draft_content, limit=1800) or "",
         ]
         return "\n\n".join(parts)
 
@@ -225,6 +231,30 @@ class ContinuityCheckerService:
                 }
             )
         return normalized[:8]
+
+    def _compact_recent_memories(self, value: object) -> list[str]:
+        if not isinstance(value, list):
+            return []
+        compact: list[str] = []
+        for item in value[:2]:
+            if not isinstance(item, str):
+                continue
+            clipped = self._clip_text(item, limit=120)
+            if clipped:
+                compact.append(clipped)
+        return compact
+
+    def _compact_string_list(self, value: object, *, limit: int, text_limit: int) -> list[str]:
+        if not isinstance(value, list):
+            return []
+        compact: list[str] = []
+        for item in value[:limit]:
+            if not isinstance(item, str):
+                continue
+            clipped = self._clip_text(item, limit=text_limit)
+            if clipped:
+                compact.append(clipped)
+        return compact
 
     def _compute_severity(self, report: dict[str, Any], fallback: str | None = None) -> str:
         high_signal = len(report.get("timeline_conflicts", [])) + len(report.get("world_rule_conflicts", []))
