@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -69,8 +70,8 @@ class ContinuationPlannerService:
             return default_plan
 
         try:
-            payload = json.loads(raw)
-        except json.JSONDecodeError:
+            payload = self._extract_json_payload(raw)
+        except (json.JSONDecodeError, TypeError, ValueError):
             logger.warning("Continuation planner returned invalid JSON, using default plan")
             return default_plan
 
@@ -112,7 +113,7 @@ class ContinuationPlannerService:
         for memory in recent_memories[:2]:
             for item in memory.open_loops[:2]:
                 description = self._clip_text(self._pick_from_dict(item, "description", "label"), limit=80)
-                if description and description not in relevant_open_loops:
+                if self._is_useful_hint(description) and description not in relevant_open_loops:
                     relevant_open_loops.append(description)
                     must_include.append(f"处理或延续：{description}")
 
@@ -121,46 +122,48 @@ class ContinuationPlannerService:
                     self._pick_from_dict(item, "after", "reason", "character_id_or_name"),
                     limit=80,
                 )
-                if description and description not in character_constraints:
+                if self._is_useful_hint(description) and description not in character_constraints:
                     character_constraints.append(description)
 
-            for item in memory.timeline_markers[:2]:
-                description = self._clip_text(
-                    " / ".join(
-                        piece
-                        for piece in [
-                            self._safe_text(item.get("time")),
-                            self._safe_text(item.get("location")),
-                            self._safe_text(item.get("scene")),
-                        ]
-                        if piece
-                    ),
-                    limit=100,
-                )
-                if description and description not in timeline_constraints:
-                    timeline_constraints.append(description)
+            if not current_chapter_tail:
+                for item in memory.timeline_markers[:2]:
+                    description = self._clip_text(
+                        " / ".join(
+                            piece
+                            for piece in [
+                                self._safe_text(item.get("time")),
+                                self._safe_text(item.get("location")),
+                                self._safe_text(item.get("scene")),
+                            ]
+                            if piece
+                        ),
+                        limit=100,
+                    )
+                    if self._is_useful_hint(description) and description not in timeline_constraints:
+                        timeline_constraints.append(description)
 
         if story_memory is not None:
             for item in story_memory.active_conflicts[:3]:
                 description = self._clip_text(self._pick_from_dict(item, "description", "label"), limit=80)
-                if description and description not in relevant_open_loops:
+                if self._is_useful_hint(description) and description not in relevant_open_loops:
                     relevant_open_loops.append(description)
 
-            for item in story_memory.timeline_constraints[:3]:
-                description = self._clip_text(
-                    " / ".join(
-                        piece
-                        for piece in [
-                            self._safe_text(item.get("time")),
-                            self._safe_text(item.get("location")),
-                            self._safe_text(item.get("scene")),
-                        ]
-                        if piece
-                    ),
-                    limit=100,
-                )
-                if description and description not in timeline_constraints:
-                    timeline_constraints.append(description)
+            if not current_chapter_tail:
+                for item in story_memory.timeline_constraints[:3]:
+                    description = self._clip_text(
+                        " / ".join(
+                            piece
+                            for piece in [
+                                self._safe_text(item.get("time")),
+                                self._safe_text(item.get("location")),
+                                self._safe_text(item.get("scene")),
+                            ]
+                            if piece
+                        ),
+                        limit=100,
+                    )
+                    if self._is_useful_hint(description) and description not in timeline_constraints:
+                        timeline_constraints.append(description)
 
         must_avoid = [
             "无铺垫跳时间线",
@@ -195,6 +198,12 @@ class ContinuationPlannerService:
                 "project_title": project.title if project else None,
                 "chapter_title": chapter.title if chapter else None,
                 "used_current_chapter_tail": bool(current_chapter_tail),
+                "used_previous_chapter_tail": bool(not current_chapter_tail and previous_chapter and previous_chapter.plain_text),
+                "anchor_text": current_chapter_tail
+                or user_text
+                or self._clip_text(previous_chapter.plain_text[-400:], limit=220)
+                if previous_chapter and previous_chapter.plain_text
+                else None,
             },
         }
 
@@ -251,18 +260,95 @@ class ContinuationPlannerService:
 
     def _merge_with_default(self, *, default_plan: dict[str, Any], plan: dict[str, Any]) -> dict[str, Any]:
         merged = dict(default_plan)
+        anchor_text = self._safe_text((default_plan.get("metadata") or {}).get("anchor_text"))
         for key, value in plan.items():
             if key == "metadata":
                 continue
             if isinstance(value, str) and value:
+                if key == "scene_continuation_point" and anchor_text and not self._is_anchor_aligned(anchor_text, value):
+                    continue
                 merged[key] = value
             elif isinstance(value, list) and value:
-                merged[key] = value
+                if key in {"must_avoid", "style_notes", "risk_focus"}:
+                    merged[key] = self._merge_unique_string_lists(default_plan.get(key), value, limit=6)
+                else:
+                    merged[key] = value
         merged["metadata"] = {
             **(default_plan.get("metadata") or {}),
             **(plan.get("metadata") or {}),
         }
         return merged
+
+    def _extract_json_payload(self, raw: object) -> dict[str, Any]:
+        if not isinstance(raw, str):
+            raise TypeError("Planner raw response is not a string")
+
+        stripped = raw.strip()
+        if not stripped:
+            raise ValueError("Planner raw response is empty")
+
+        try:
+            payload = json.loads(stripped)
+            if isinstance(payload, dict):
+                return payload
+        except json.JSONDecodeError:
+            pass
+
+        if stripped.startswith("```"):
+            lines = stripped.splitlines()
+            if len(lines) >= 3:
+                stripped = "\n".join(lines[1:-1]).strip()
+                try:
+                    payload = json.loads(stripped)
+                    if isinstance(payload, dict):
+                        return payload
+                except json.JSONDecodeError:
+                    pass
+
+        start = stripped.find("{")
+        end = stripped.rfind("}")
+        if start < 0 or end < 0 or end <= start:
+            raise ValueError("No JSON object found in planner response")
+
+        payload = json.loads(stripped[start : end + 1])
+        if not isinstance(payload, dict):
+            raise ValueError("Planner response JSON is not an object")
+        return payload
+
+    def _is_anchor_aligned(self, anchor_text: str, continuation_point: str) -> bool:
+        anchor_terms = self._extract_terms(anchor_text)
+        continuation_terms = self._extract_terms(continuation_point)
+        if not anchor_terms or not continuation_terms:
+            return True
+        overlap = anchor_terms & continuation_terms
+        return len(overlap) >= 2 or bool(overlap and len(anchor_text) < 80)
+
+    def _merge_unique_string_lists(self, left: object, right: object, *, limit: int) -> list[str]:
+        merged: list[str] = []
+        for source in (left, right):
+            if not isinstance(source, list):
+                continue
+            for item in source:
+                if not isinstance(item, str):
+                    continue
+                cleaned = " ".join(item.split()).strip()
+                if cleaned and cleaned not in merged:
+                    merged.append(cleaned)
+        return merged[:limit]
+
+    def _is_useful_hint(self, value: str | None) -> bool:
+        if not value:
+            return False
+        cleaned = value.strip()
+        if len(cleaned) < 4:
+            return False
+        if cleaned.startswith("#"):
+            return False
+        if "<p>" in cleaned or "</p>" in cleaned:
+            return False
+        if cleaned.count("。") > 2 and len(cleaned) > 50:
+            return False
+        return True
 
     def _normalize_string_list(self, value: object, *, limit: int) -> list[str]:
         if not isinstance(value, list):
@@ -292,7 +378,7 @@ class ContinuationPlannerService:
     def _extract_chapter_tail(self, chapter: Chapter | None, *, source_limit: int, clip_limit: int) -> str | None:
         if chapter is None:
             return None
-        source = self._safe_text(chapter.plain_text) or self._safe_text(chapter.content)
+        source = self._safe_text(chapter.plain_text) or self._safe_text(self._strip_html(chapter.content))
         if not source:
             return None
         return self._clip_text(source[-source_limit:], limit=clip_limit)
@@ -302,6 +388,16 @@ class ContinuationPlannerService:
             return None
         cleaned = " ".join(value.split()).strip()
         return cleaned or None
+
+    def _extract_terms(self, value: str) -> set[str]:
+        normalized = "".join(ch if ch.isalnum() else " " for ch in value)
+        return {item for item in normalized.split() if len(item) >= 2}
+
+    def _strip_html(self, value: object) -> str | None:
+        if not isinstance(value, str):
+            return None
+        stripped = re.sub(r"<[^>]+>", " ", value)
+        return self._safe_text(stripped)
 
     def _clip_text(self, value: str | None, *, limit: int) -> str | None:
         if value is None:

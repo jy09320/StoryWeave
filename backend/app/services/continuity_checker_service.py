@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -79,9 +80,13 @@ class ContinuityCheckerService:
             return base_report
 
         try:
-            payload = json.loads(raw)
-        except json.JSONDecodeError:
-            logger.warning("Continuity checker returned invalid JSON, using rule-based report only")
+            payload = self._extract_json_payload(raw)
+        except (json.JSONDecodeError, ValueError, TypeError) as exc:
+            logger.warning(
+                "Continuity checker returned invalid JSON, using rule-based report only: %s raw=%r",
+                exc,
+                (raw or "")[:400],
+            )
             base_report["check_status"] = "skipped"
             return base_report
 
@@ -107,19 +112,34 @@ class ContinuityCheckerService:
             "check_status": "completed",
         }
 
-        previous_tail = self._safe_text(context_bundle.get("previous_chapter_tail")) or ""
-        if previous_tail and draft_content and self._has_overlap(previous_tail[-120:], draft_content[:220]) is False:
+        preferred_anchor = (
+            self._safe_text(context_bundle.get("current_chapter_tail"))
+            or self._safe_text(context_bundle.get("preferred_continuation_anchor"))
+            or self._safe_text(context_bundle.get("previous_chapter_tail"))
+            or ""
+        )
+        if preferred_anchor and draft_content and self._has_continuation_anchor_signal(preferred_anchor[-160:], draft_content[:260]) is False:
             report["timeline_conflicts"].append(
                 {
                     "issue": "承接可能偏弱",
                     "reason": "候选正文开头与上一章结尾缺少明显承接。",
-                    "evidence": self._clip_text(previous_tail[-120:], limit=120) or "",
+                    "evidence": self._clip_text(preferred_anchor[-160:], limit=160) or "",
                     "suggestion": "补一个承接动作、情绪或场景锚点。",
                 }
             )
 
+        if preferred_anchor and draft_content and self._starts_with_anchor_prefix(preferred_anchor, draft_content):
+            report["timeline_conflicts"].append(
+                {
+                    "issue": "开头重复了承接点原句",
+                    "reason": "候选正文不是顺着尾句往后写，而是直接重复或轻微改写了承接点开头，容易显得像在原地踏步。",
+                    "evidence": self._clip_text(preferred_anchor[:80], limit=80) or "",
+                    "suggestion": "删掉重复尾句，从尾句之后的动作、情绪或观察继续写。",
+                }
+            )
+
         for item in plan.get("timeline_constraints") or []:
-            if isinstance(item, str) and item and item not in draft_content:
+            if isinstance(item, str) and self._is_specific_constraint(item) and item not in draft_content:
                 report["timeline_conflicts"].append(
                     {
                         "issue": "时间线约束未显式体现",
@@ -129,8 +149,9 @@ class ContinuityCheckerService:
                     }
                 )
 
-        open_loops = plan.get("relevant_open_loops") or []
-        if open_loops and not any(loop in draft_content for loop in open_loops if isinstance(loop, str)):
+        open_loops = [loop for loop in (plan.get("relevant_open_loops") or []) if isinstance(loop, str)]
+        draft_terms = self._extract_terms(draft_content)
+        if open_loops and not any(self._open_loop_progressed(loop, draft_content, draft_terms) for loop in open_loops):
             report["open_loop_misalignment"].append(
                 {
                     "issue": "相关伏笔未被触及",
@@ -139,6 +160,77 @@ class ContinuityCheckerService:
                     "suggestion": "至少补一个关联动作、提及或悬念延续点。",
                 }
             )
+
+        reader_only_tail = self._safe_text((context_bundle.get("metadata") or {}).get("previous_reader_only_tail"))
+        if reader_only_tail:
+            hidden_terms = self._extract_terms(reader_only_tail)
+            leaked_terms = sorted(hidden_terms & draft_terms)
+            if len(leaked_terms) >= 2:
+                report["knowledge_boundary_conflicts"].append(
+                    {
+                        "issue": "疑似泄露读者专属暗线信息",
+                        "reason": "候选正文命中了上一章只给读者看的幕后尾注信息，可能把角色本不该知道的内容写进了当前视角。",
+                        "evidence": self._clip_text(" / ".join(leaked_terms[:6]), limit=120) or "",
+                        "suggestion": "删除或改写这些细节，只保留云缨当下可见、可闻、可推断的信息。",
+                    }
+                )
+
+        backstage_markers = ("她不知道的是", "而她不知道的是", "他不知道的是", "而他不知道的是", "镜头转到", "与此同时在暗处")
+        marker_hits = [marker for marker in backstage_markers if marker in draft_content]
+        if marker_hits:
+            report["knowledge_boundary_conflicts"].append(
+                {
+                    "issue": "出现幕后旁白视角切换",
+                    "reason": "候选正文直接使用了切向幕后或读者专属视角的旁白句式，容易把当前角色本不该知道的信息混入正文。",
+                    "evidence": self._clip_text(" / ".join(marker_hits), limit=120) or "",
+                    "suggestion": "删除这些旁白句式，改成云缨当下的感受、怀疑或可观察到的异样。",
+                }
+            )
+
+        witness_markers = ("后堂", "对话", "窗棂", "黑影", "盯着她", "盯梢者")
+        if any(marker in draft_content for marker in ("听见", "听到", "看见", "认出")):
+            witnessed_hidden = [marker for marker in witness_markers if marker in draft_content and marker != "对话"]
+            if witnessed_hidden:
+                report["knowledge_boundary_conflicts"].append(
+                    {
+                        "issue": "疑似伪造角色未亲历的见闻来源",
+                        "reason": "候选正文把可能只属于读者视角或幕后暗线的信息，写成了云缨亲耳听见或亲眼看见的内容。",
+                        "evidence": self._clip_text(" / ".join(witnessed_hidden[:6]), limit=120) or "",
+                        "suggestion": "改成云缨当下的怀疑、直觉或现场可观察线索，不要补写她未实际经历的见闻。",
+                    }
+                )
+
+        hidden_source_patterns = (
+            "方才在醉红楼后堂听到",
+            "在醉红楼后堂听到",
+            "后堂那阵响动",
+            "后堂那阵低语",
+            "那批货，处理干净",
+            "不能让人查到",
+        )
+        hidden_source_hits = [pattern for pattern in hidden_source_patterns if pattern in draft_content]
+        if hidden_source_hits:
+            report["knowledge_boundary_conflicts"].append(
+                {
+                    "issue": "把暗线信息写成了角色已掌握的事实",
+                    "reason": "候选正文直接调用了只属于幕后/读者侧的后堂信息，容易把知识边界写穿。",
+                    "evidence": self._clip_text(" / ".join(hidden_source_hits[:4]), limit=120) or "",
+                    "suggestion": "删除这些直接信息源，改写成云缨对货源异常、气味、动静或他人反应的现场判断。",
+                }
+            )
+
+        for item in plan.get("must_avoid") or []:
+            if not isinstance(item, str):
+                continue
+            if self._looks_like_identity_boundary(item) and self._hits_identity_boundary(item, draft_content):
+                report["knowledge_boundary_conflicts"].append(
+                    {
+                        "issue": "角色过早把隐藏身份说得过实",
+                        "reason": "候选正文把仍应停留在怀疑层的隐藏身份或秘密归属，直接推进成了当面对号入座的判断。",
+                        "evidence": self._clip_text(item, limit=120) or "",
+                        "suggestion": "把明确指认改成试探、旁敲侧击或不完整怀疑，不要让角色提前说破。",
+                    }
+                )
 
         report["severity"] = self._compute_severity(report)
         if report["severity"] != "low":
@@ -232,6 +324,70 @@ class ContinuityCheckerService:
             )
         return normalized[:8]
 
+    def _extract_json_payload(self, raw: object) -> dict[str, Any]:
+        if not isinstance(raw, str):
+            raise TypeError("Checker raw response is not a string")
+
+        stripped = raw.strip()
+        if not stripped:
+            raise ValueError("Checker raw response is empty")
+
+        try:
+            payload = json.loads(stripped)
+            if isinstance(payload, dict):
+                return payload
+        except json.JSONDecodeError:
+            pass
+
+        if stripped.startswith("```"):
+            lines = stripped.splitlines()
+            if len(lines) >= 3:
+                stripped = "\n".join(lines[1:-1]).strip()
+                try:
+                    payload = json.loads(stripped)
+                    if isinstance(payload, dict):
+                        return payload
+                except json.JSONDecodeError:
+                    pass
+
+        candidate = self._extract_balanced_json_object(stripped)
+        if candidate is None:
+            raise ValueError("No JSON object found in checker response")
+
+        payload = json.loads(candidate)
+        if not isinstance(payload, dict):
+            raise ValueError("Checker response JSON is not an object")
+        return payload
+
+    def _extract_balanced_json_object(self, raw: str) -> str | None:
+        start = raw.find("{")
+        if start < 0:
+            return None
+
+        depth = 0
+        in_string = False
+        escaped = False
+        for index in range(start, len(raw)):
+            char = raw[index]
+            if in_string:
+                if escaped:
+                    escaped = False
+                elif char == "\\":
+                    escaped = True
+                elif char == '"':
+                    in_string = False
+                continue
+
+            if char == '"':
+                in_string = True
+            elif char == "{":
+                depth += 1
+            elif char == "}":
+                depth -= 1
+                if depth == 0:
+                    return raw[start : index + 1]
+        return None
+
     def _compact_recent_memories(self, value: object) -> list[str]:
         if not isinstance(value, list):
             return []
@@ -257,9 +413,15 @@ class ContinuityCheckerService:
         return compact
 
     def _compute_severity(self, report: dict[str, Any], fallback: str | None = None) -> str:
-        high_signal = len(report.get("timeline_conflicts", [])) + len(report.get("world_rule_conflicts", []))
+        strong_timeline_conflicts = [
+            item
+            for item in report.get("timeline_conflicts", [])
+            if isinstance(item, dict) and self._safe_text(item.get("issue")) != "时间线约束未显式体现"
+        ]
+        high_signal = len(strong_timeline_conflicts) + len(report.get("world_rule_conflicts", []))
         medium_signal = (
-            len(report.get("character_conflicts", []))
+            (len(report.get("timeline_conflicts", [])) - len(strong_timeline_conflicts))
+            + len(report.get("character_conflicts", []))
             + len(report.get("knowledge_boundary_conflicts", []))
             + len(report.get("open_loop_misalignment", []))
         )
@@ -275,9 +437,125 @@ class ContinuityCheckerService:
         return "low"
 
     def _has_overlap(self, left: str, right: str) -> bool:
-        left_terms = {term for term in left.split() if len(term) >= 2}
-        right_terms = {term for term in right.split() if len(term) >= 2}
+        left_terms = self._extract_terms(left)
+        right_terms = self._extract_terms(right)
         return bool(left_terms & right_terms)
+
+    def _has_continuation_anchor_signal(self, anchor: str, draft_leading: str) -> bool:
+        if self._has_overlap(anchor, draft_leading):
+            return True
+        anchor_text = self._safe_text(anchor) or ""
+        draft_text = self._safe_text(draft_leading) or ""
+        if not anchor_text or not draft_text:
+            return False
+
+        tension_ready = any(phrase in anchor_text for phrase in ("盯着", "收紧", "攥", "拽住", "没催", "等她自己开口", "终于下定了决心"))
+        speech_release = any(
+            phrase in draft_text
+            for phrase in ("喉结", "咽回去", "松开", "顿了一下", "终于开口", "声音", "低声", "她说", "他说", "“")
+        )
+        same_props = any(phrase in anchor_text and phrase in draft_text for phrase in ("便签", "纸角", "手指", "目光", "视线"))
+        if tension_ready and (speech_release or same_props):
+            return True
+
+        sighting_anchor = any(phrase in anchor_text for phrase in ("看见", "忽然", "反光", "军扣", "半埋"))
+        freeze_or_observe = any(
+            phrase in draft_text for phrase in ("没有动", "呼吸", "侧耳", "蹲下", "探照灯", "光柱", "观察", "先", "停住")
+        )
+        if sighting_anchor and freeze_or_observe:
+            return True
+
+        encounter_anchor = any(phrase in anchor_text for phrase in ("看见", "从办公室出来", "阴影边上", "安全灯坏了", "忽明忽暗"))
+        encounter_follow = any(
+            phrase in draft_text for phrase in ("反手带上门", "钥匙", "看见她", "还没走", "这么晚", "朝她走了两步", "半张脸", "坏掉的灯")
+        )
+        return encounter_anchor and encounter_follow
+
+    def _starts_with_anchor_prefix(self, anchor: str, draft: str) -> bool:
+        left = self._safe_text(anchor)
+        right = self._safe_text(draft)
+        if not left or not right:
+            return False
+        left_prefix = left[:40]
+        right_prefix = right[:60]
+        if left_prefix and left_prefix in right_prefix:
+            return True
+        left_terms = self._extract_terms(left[:60])
+        right_terms = self._extract_terms(right[:80])
+        return bool(left_terms) and len(left_terms & right_terms) >= max(3, len(left_terms) // 2)
+
+    def _extract_terms(self, value: str) -> set[str]:
+        normalized = "".join(ch if ch.isalnum() else " " for ch in value)
+        return {item for item in normalized.split() if len(item) >= 2}
+
+    def _open_loop_progressed(self, loop_text: str, draft_content: str, draft_terms: set[str] | None = None) -> bool:
+        terms = draft_terms or self._extract_terms(draft_content)
+        loop_terms = self._extract_terms(loop_text)
+        if loop_terms & terms:
+            return True
+
+        cleaned_loop = self._safe_text(loop_text) or ""
+        if not cleaned_loop:
+            return False
+
+        lowered = cleaned_loop.lower()
+        if "保管" in cleaned_loop or "记录由谁" in cleaned_loop:
+            return any(
+                phrase in draft_content
+                for phrase in ("名字也没用", "那个人", "谁去敲门都没用", "纸条", "别查了", "没看过全本")
+            )
+        if "为何" in cleaned_loop or "为什么" in cleaned_loop or "回避" in cleaned_loop:
+            return any(
+                phrase in draft_content
+                for phrase in ("我以前试过", "后来都不太愿意提", "不告诉你名字", "别查了", "没有否认")
+            )
+        if "身份" in cleaned_loop or "到底是谁" in cleaned_loop or "有关系" in cleaned_loop or "异常资金" in cleaned_loop:
+            return any(
+                phrase in draft_content
+                for phrase in ("试探", "旁敲侧击", "转开话头", "没有正面回答", "避开", "只说到这里")
+            ) or ("是谁" in lowered and "不是" in draft_content)
+        if ("保管" in cleaned_loop or "回避" in cleaned_loop) and any(
+            phrase in draft_content for phrase in ("档案室", "不碰档案", "门缝", "事故日期", "欠他一条命")
+        ):
+            return True
+        if "军扣" in cleaned_loop or "拖拽痕迹" in cleaned_loop:
+            return any(
+                phrase in draft_content
+                for phrase in ("军扣", "拖痕", "碎石沟", "坡底", "反光", "编号", "坐标", "走向")
+            )
+        if "匿名资助人" in cleaned_loop or "资金" in cleaned_loop or "资助款" in cleaned_loop:
+            return any(
+                phrase in draft_content
+                for phrase in ("对账", "数字", "财务", "钥匙", "月底", "办公室", "统筹账户", "协调过了")
+            )
+        return False
+
+    def _is_specific_constraint(self, value: str) -> bool:
+        cleaned = self._safe_text(value)
+        if not cleaned:
+            return False
+        if len(cleaned) < 6:
+            return False
+        if cleaned in {"时间线", "承接", "白天", "清晨", "场景", "第三章", "当前章节"}:
+            return False
+        return len(self._extract_terms(cleaned)) >= 2
+
+    def _looks_like_identity_boundary(self, value: str) -> bool:
+        cleaned = self._safe_text(value) or ""
+        return any(term in cleaned for term in ("真实身份", "匿名资助人", "保管人", "幕后人", "真凶", "内鬼", "就是"))
+
+    def _hits_identity_boundary(self, rule_text: str, draft_content: str) -> bool:
+        names = [token for token in re.findall(r"[\u4e00-\u9fff]{2,4}", rule_text) if token not in {"直接说出", "真实身份", "匿名资助", "资助人", "保管人", "幕后人"}]
+        identity_terms = ("身份", "资助人", "保管人", "幕后人", "匿名", "真凶", "内鬼")
+        copula_terms = ("就是", "正是", "原来是", "果然是", "难道是", "是不是")
+        for name in names:
+            if name not in draft_content:
+                continue
+            index = draft_content.find(name)
+            window = draft_content[max(0, index - 24): index + 32]
+            if any(term in window for term in identity_terms) and any(term in window for term in copula_terms):
+                return True
+        return False
 
     def _safe_text(self, value: object) -> str | None:
         if not isinstance(value, str):

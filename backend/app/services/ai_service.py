@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 import logging
+import re
 from typing import Any
 
 from anthropic import AsyncAnthropic
@@ -200,6 +201,38 @@ class AIService:
 
         excerpt = tail[-1800:]
         return f"当前章节已写尾部（{chapter.title}）：\n{excerpt}"
+
+    def _build_tail_focus_section(self, tail: str | None, *, label: str) -> str | None:
+        if not tail:
+            return None
+        cleaned = " ".join(tail.split()).strip()
+        if not cleaned:
+            return None
+        cleaned = self._strip_reader_only_tail(cleaned)
+        sentences = re.split(r"(?<=[。！？!?])", cleaned)
+        focused = "".join(part.strip() for part in sentences[-3:] if part.strip())
+        excerpt = focused or cleaned[-220:]
+        if len(excerpt) > 220:
+            excerpt = excerpt[-220:]
+        return f"{label}：\n{excerpt}"
+
+    def _strip_reader_only_tail(self, value: str) -> str:
+        markers = ("而她不知道的是", "她不知道的是", "而他不知道的是", "他不知道的是")
+        for marker in markers:
+            index = value.find(marker)
+            if index > 0:
+                return value[:index].rstrip()
+        return value
+
+    def _extract_reader_only_tail(self, value: str | None) -> str | None:
+        if not value:
+            return None
+        markers = ("而她不知道的是", "她不知道的是", "而他不知道的是", "他不知道的是")
+        for marker in markers:
+            index = value.find(marker)
+            if index >= 0:
+                return value[index:].strip()
+        return None
 
     def _build_retrieved_chunks_section(self, retrieval: dict[str, Any] | None) -> str | None:
         if not retrieval:
@@ -409,14 +442,35 @@ class AIService:
             "当前章节",
             self._build_chapter_context_section(chapter, include_notes=intent in {"continue", "consistency"}),
         )
-        add_section("当前章节已写尾部", self._build_current_chapter_tail_section(chapter))
+        current_tail_section = self._build_current_chapter_tail_section(chapter)
+        previous_tail_raw = previous_chapter.plain_text if previous_chapter and previous_chapter.plain_text else None
+        previous_tail_sanitized = self._strip_reader_only_tail(previous_tail_raw) if previous_tail_raw else None
+        current_tail_focus_section = self._build_tail_focus_section(
+            chapter.plain_text if chapter and chapter.plain_text else None,
+            label="开头必须咬住的尾部焦点",
+        )
+        previous_tail_focus_section = self._build_tail_focus_section(
+            previous_tail_sanitized,
+            label="开头必须咬住的上一章尾部焦点",
+        )
+        add_section("尾部焦点", current_tail_focus_section or previous_tail_focus_section)
+        add_section("当前章节已写尾部", current_tail_section)
         for index, memory in enumerate(recent_memories, start=1):
             add_section(
                 f"近期剧情记忆 {index}",
                 self._build_chapter_memory_section(memory, label=f"近期剧情记忆 {index}"),
             )
-        add_section("相关历史正文片段", self._build_retrieved_chunks_section(retrieval))
-        add_section("上一章结尾原文", self._build_previous_chapter_tail_section(previous_chapter))
+        trimmed_retrieval = dict(retrieval)
+        if current_tail_section:
+            trimmed_retrieval["chunks"] = (retrieval.get("chunks") or [])[:2]
+        add_section("相关历史正文片段", self._build_retrieved_chunks_section(trimmed_retrieval))
+        if not current_tail_section:
+            add_section(
+                "上一章结尾原文",
+                f"上一章结尾原文（{previous_chapter.title}）：\n{self._clip_text(previous_tail_sanitized, limit=1500)}"
+                if previous_chapter and previous_tail_sanitized
+                else None,
+            )
         add_section(
             "角色上下文",
             self._build_character_context_section(project, detail_level="full" if intent == "consistency" else "medium"),
@@ -428,9 +482,22 @@ class AIService:
 
         context_block = "\n\n".join(section["content"] for section in sections)
         if context_block:
+            has_previous_tail_only = bool(previous_chapter is not None and previous_chapter.plain_text and not current_tail_section)
+            previous_tail_rule = (
+                "如果这次主要承接上一章结尾，首段必须先写主角承接上一章后的动作或情绪，再写她朝目标场景前进，之后才能切到新场景细节。\n"
+                if has_previous_tail_only
+                else ""
+            )
             final_instruction = (
                 f"{instruction}\n\n"
                 "如果当前章节已经存在未写完的正文，请优先紧接当前章节已写尾部继续写；只有在当前章节尾部信息不足时，才把上一章结尾当作补充参考。\n"
+                "前两句必须直接承接承接点最后一个动作、情绪或场景位置，不要回到更早的对话、铺垫或解释重新起笔。\n"
+                "只输出新增正文，不要补章节标题、小标题或说明。\n"
+                "检索到的历史片段和伏笔只能作为约束，不要照抄成开头。\n"
+                "只能写当前视角角色此刻能直接看到、听到、闻到、推断到的信息；不要把只属于读者、幕后人物或后堂暗线的信息写成云缨已经知道。\n"
+                "不要写“她不知道的是”“而她不知道的是”“他不知道的是”“镜头转到”“与此同时在暗处”这类切到幕后旁白视角的句子。\n"
+                "不要写云缨“听见了后堂对话”“看见了窗后黑影”“认出了暗处盯梢者”这类她并未亲历获得的信息；若要表现危险临近，只能写她的直觉、异样感、可疑动静或现场可见线索。\n"
+                f"{previous_tail_rule}"
                 f"{self._build_intent_guide(intent)}\n"
                 "如果生成内容与上下文冲突，优先保持角色设定、世界观规则、章节记忆、检索片段与长期主线一致。\n\n"
                 f"{context_block}"
