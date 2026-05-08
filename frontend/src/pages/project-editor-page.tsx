@@ -421,6 +421,40 @@ export function ProjectEditorPage() {
     enabled: Boolean(chapterId) && isVersionDialogOpen,
   })
 
+  useEffect(() => {
+    setChapterMemory(null)
+    setMemorySummaryDraft('')
+    setIsMemoryLoading(false)
+  }, [chapterId])
+
+  useEffect(() => {
+    if (!chapterId || !isMemoryPanelOpen) {
+      return
+    }
+
+    let cancelled = false
+    setIsMemoryLoading(true)
+
+    void getChapterMemory(chapterId)
+      .then((memory) => {
+        if (cancelled) return
+        setChapterMemory(memory)
+        setMemorySummaryDraft(memory?.summary_short ?? '')
+      })
+      .catch(() => {
+        if (cancelled) return
+        toast.error('加载章节记忆失败')
+      })
+      .finally(() => {
+        if (cancelled) return
+        setIsMemoryLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [chapterId, isMemoryPanelOpen])
+
   function clearAutosaveTimer() {
     if (autosaveTimerRef.current) {
       window.clearTimeout(autosaveTimerRef.current)
@@ -557,18 +591,6 @@ export function ProjectEditorPage() {
   async function handleOpenMemoryPanel() {
     if (!chapterId) return
     setIsMemoryPanelOpen(true)
-    if (!chapterMemory) {
-      setIsMemoryLoading(true)
-      try {
-        const memory = await getChapterMemory(chapterId)
-        setChapterMemory(memory)
-        setMemorySummaryDraft(memory?.summary_short ?? '')
-      } catch {
-        toast.error('加载章节记忆失败')
-      } finally {
-        setIsMemoryLoading(false)
-      }
-    }
   }
 
   async function handleRefreshMemory() {
