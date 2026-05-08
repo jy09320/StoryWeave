@@ -43,7 +43,7 @@ import {
 import { formatDate } from '@/lib/format'
 import { debugContinuationPipeline, generateWithContinuationPipeline, getAIContextPreview, getAIRetrievalPreview, getAIRuntimeSettings, isAbortError, listAIRuntimeModels, normalizeAIError, streamGenerate, type AIModelOption } from '@/services/ai'
 import { getProject } from '@/services/projects'
-import type { AIGeneratePayload, AIContextPreviewResponse, AIContinuationDebugResponse, AIContinuationGenerateResponse, AIRetrievalPreviewResponse, ProjectDetail } from '@/types/api'
+import type { AIGeneratePayload, AIContextPreviewResponse, AIContinuationDebugResponse, AIContinuationGenerateResponse, AIContinuationTraceStep, AIRetrievalPreviewResponse, ProjectDetail } from '@/types/api'
 import { useAuth } from '@/contexts/auth-context'
 
 const primaryNavItems = [
@@ -102,6 +102,15 @@ const MIN_AI_PANEL_WIDTH = 320
 const MAX_AI_PANEL_WIDTH = 640
 const EDITOR_SHORTCUT_HINT_STORAGE_KEY = 'storyweave-editor-shortcut-hint-dismissed'
 const EDITOR_AI_PANEL_SNAPSHOTS_STORAGE_KEY = 'storyweave-editor-ai-panel-snapshots'
+const PIPELINE_TRACE_STEP_ORDER = ['planner', 'retriever', 'context_bundle', 'writer', 'checker', 'final_output'] as const
+const PIPELINE_TRACE_STEP_META = [
+  { step_key: 'planner', label: '分析承接点' },
+  { step_key: 'retriever', label: '检索相关剧情' },
+  { step_key: 'context_bundle', label: '整理角色与伏笔' },
+  { step_key: 'writer', label: '生成正文' },
+  { step_key: 'checker', label: '检查连续性' },
+  { step_key: 'final_output', label: '完成' },
+] as const
 const DEFAULT_AI_COMPOSER_STATE: AIComposerState = {
   instruction: DEFAULT_CONTINUE_INSTRUCTION,
   modelId: '',
@@ -116,6 +125,102 @@ function getAIInstruction(context: EditorUtilityContext | null) {
   }
 
   return `请围绕这段文字继续扩写，补足细节、情绪和动作，但保持与当前章节一致：“${context.selectedText}”`
+}
+
+function buildLivePipelineTrace(elapsedMs: number): AIContinuationTraceStep[] {
+  const liveIndex = Math.min(Math.floor(elapsedMs / 1800), PIPELINE_TRACE_STEP_META.length - 1)
+  return PIPELINE_TRACE_STEP_META.map((item, index) => ({
+    step_key: item.step_key,
+    label: item.label,
+    status: index < liveIndex ? 'completed' : index === liveIndex ? 'running' : 'pending',
+    warnings: [],
+    fallbacks: [],
+    duration_ms: index < liveIndex ? 1800 : undefined,
+  }))
+}
+
+function getUserVisibleTraceSteps(trace: AIContinuationTraceStep[] | null | undefined): AIContinuationTraceStep[] {
+  const steps = trace ?? []
+  const mapped = PIPELINE_TRACE_STEP_ORDER
+    .map((key) => steps.find((item) => item.step_key === key))
+    .filter((item): item is AIContinuationTraceStep => Boolean(item))
+  return mapped
+}
+
+function getTraceStatusTone(status: string) {
+  if (status === 'completed') {
+    return 'border-emerald-200 bg-emerald-50 text-emerald-700'
+  }
+  if (status === 'running') {
+    return 'border-sky-200 bg-sky-50 text-sky-700'
+  }
+  if (status === 'skipped') {
+    return 'border-amber-200 bg-amber-50 text-amber-700'
+  }
+  if (status === 'failed') {
+    return 'border-rose-200 bg-rose-50 text-rose-700'
+  }
+  return 'border-[#e5e7eb] bg-white text-[#6b7280]'
+}
+
+function getTraceStatusLabel(status: string) {
+  if (status === 'completed') {
+    return '已完成'
+  }
+  if (status === 'running') {
+    return '进行中'
+  }
+  if (status === 'skipped') {
+    return '已跳过'
+  }
+  if (status === 'failed') {
+    return '失败'
+  }
+  return '待开始'
+}
+
+function formatTraceDuration(durationMs: number | null | undefined) {
+  if (typeof durationMs !== 'number' || Number.isNaN(durationMs)) {
+    return '--'
+  }
+  if (durationMs < 1000) {
+    return `${durationMs} ms`
+  }
+  return `${(durationMs / 1000).toFixed(durationMs >= 10_000 ? 0 : 1)} s`
+}
+
+function summarizeTraceStep(step: AIContinuationTraceStep) {
+  const summary = step.output_summary ?? {}
+  if (step.step_key === 'planner') {
+    const writingGoal = typeof summary.writing_goal === 'string' ? summary.writing_goal : ''
+    return writingGoal || '已生成续写计划'
+  }
+  if (step.step_key === 'retriever') {
+    const chunkCount = typeof summary.chunk_count === 'number' ? summary.chunk_count : 0
+    const graphEvidenceCount = typeof summary.graph_evidence_count === 'number' ? summary.graph_evidence_count : 0
+    return `召回 ${chunkCount} 段正文，${graphEvidenceCount} 条图谱证据`
+  }
+  if (step.step_key === 'context_bundle') {
+    const estimatedTokens = typeof summary.estimated_tokens === 'number' ? summary.estimated_tokens : 0
+    return `上下文装配完成，预计 ${estimatedTokens} tokens`
+  }
+  if (step.step_key === 'writer') {
+    const contentLength = typeof summary.content_length === 'number' ? summary.content_length : 0
+    return `正文生成完成，约 ${contentLength} 字符`
+  }
+  if (step.step_key === 'checker') {
+    const severity = typeof summary.severity === 'string' ? summary.severity : 'unknown'
+    return `连续性检查完成，风险等级 ${severity}`
+  }
+  if (step.step_key === 'fallback_decision') {
+    const fallbackCount = typeof summary.fallback_count === 'number' ? summary.fallback_count : 0
+    const warningCount = typeof summary.warning_count === 'number' ? summary.warning_count : 0
+    return `${fallbackCount} 次 fallback，${warningCount} 条告警`
+  }
+  if (step.step_key === 'final_output') {
+    return '结果已返回到编辑器'
+  }
+  return ''
 }
 
 const worldSectionMeta = [
@@ -257,6 +362,8 @@ export function AppShell() {
   const [retrievalPreview, setRetrievalPreview] = useState<AIRetrievalPreviewResponse | null>(null)
   const [pipelineDebug, setPipelineDebug] = useState<AIContinuationDebugResponse | null>(null)
   const [pipelineResult, setPipelineResult] = useState<AIContinuationGenerateResponse | null>(null)
+  const [pipelineRunStartedAt, setPipelineRunStartedAt] = useState<number | null>(null)
+  const [pipelineTraceTick, setPipelineTraceTick] = useState(0)
   const [useContinuationPipeline, setUseContinuationPipeline] = useState(false)
   const [isContextPreviewLoading, setIsContextPreviewLoading] = useState(false)
   const [isRetrievalPreviewLoading, setIsRetrievalPreviewLoading] = useState(false)
@@ -268,6 +375,37 @@ export function AppShell() {
   const aiPanelSnapshotRef = useRef<Record<string, AIPanelSnapshot>>(readAIPanelSnapshots())
   const previousAIScopeKeyRef = useRef<string | null>(null)
   const shortcutMenuRef = useRef<HTMLDivElement | null>(null)
+
+  const diagnosticsTrace = useMemo(
+    () => (pipelineDebug?.trace?.length ? pipelineDebug.trace : pipelineResult?.trace ?? []),
+    [pipelineDebug, pipelineResult],
+  )
+  const pipelineStepTrace = useMemo(() => {
+    if (aiState.isGenerating && useContinuationPipeline && pipelineRunStartedAt) {
+      const elapsedMs = Math.max(0, (pipelineTraceTick || Date.now()) - pipelineRunStartedAt)
+      return buildLivePipelineTrace(elapsedMs)
+    }
+    return getUserVisibleTraceSteps(diagnosticsTrace)
+  }, [aiState.isGenerating, useContinuationPipeline, pipelineRunStartedAt, pipelineTraceTick, diagnosticsTrace])
+  const pipelineTraceTotalDurationMs = useMemo(
+    () => diagnosticsTrace.reduce((total, step) => total + (typeof step.duration_ms === 'number' ? step.duration_ms : 0), 0),
+    [diagnosticsTrace],
+  )
+  const activePipelineStep = useMemo(
+    () => pipelineStepTrace.find((step) => step.status === 'running') ?? pipelineStepTrace.find((step) => step.status === 'pending') ?? null,
+    [pipelineStepTrace],
+  )
+
+  useEffect(() => {
+    if (!(aiState.isGenerating && useContinuationPipeline && pipelineRunStartedAt)) {
+      return
+    }
+
+    const timer = window.setInterval(() => {
+      setPipelineTraceTick(Date.now())
+    }, 900)
+    return () => window.clearInterval(timer)
+  }, [aiState.isGenerating, useContinuationPipeline, pipelineRunStartedAt])
 
   const isProjectScoped = Boolean(projectId) && location.pathname.startsWith(`/projects/${projectId}`)
   const isEditorRoute = isProjectScoped && location.pathname.includes('/editor/')
@@ -819,6 +957,7 @@ export function AppShell() {
   function handleStopGeneration() {
     generationAbortRef.current?.abort()
     generationAbortRef.current = null
+    setPipelineRunStartedAt(null)
     setAIState((prev) => ({ ...prev, isGenerating: false, requestId: prev.requestId + 1 }))
     if (projectId && chapterId) {
       writeEditorAIPreviewContext({
@@ -847,6 +986,8 @@ export function AppShell() {
     setRetrievalPreview(null)
     setPipelineDebug(null)
     setPipelineResult(null)
+    setPipelineRunStartedAt(null)
+    setPipelineTraceTick(0)
     setUseContinuationPipeline(false)
     setIsDiagnosticsDialogOpen(false)
     setActiveDiagnosticsTab('risk')
@@ -938,6 +1079,10 @@ export function AppShell() {
         content: '',
       },
     ])
+    setPipelineResult(null)
+    setPipelineDebug(null)
+    setPipelineRunStartedAt(useContinuationPipeline ? Date.now() : null)
+    setPipelineTraceTick(Date.now())
     setAIState((prev) => ({ ...prev, result: '', isGenerating: true, requestId }))
     writeEditorAIPreviewContext({
       projectId,
@@ -983,6 +1128,7 @@ export function AppShell() {
             isGenerating: false,
           }
         })
+        setPipelineRunStartedAt(null)
         if (result.warnings.length > 0) {
           toast.message(`Pipeline 风险提示：${result.warnings[0]}`)
         }
@@ -1033,9 +1179,11 @@ export function AppShell() {
         })
       }
       setAIState((prev) => (prev.requestId === requestId ? { ...prev, isGenerating: false } : prev))
+      setPipelineRunStartedAt(null)
     } catch (error) {
       const normalizedError = normalizeAIError(error)
       setAIState((prev) => (prev.requestId === requestId ? { ...prev, isGenerating: false } : prev))
+      setPipelineRunStartedAt(null)
       if (isAbortError(normalizedError)) {
         setAIMessages((prev) => prev.filter((message) => message.id !== assistantMessageId || message.content.trim()))
         toast.message('已停止本次 AI 续写')
@@ -1105,6 +1253,7 @@ export function AppShell() {
     })
     writeEditorAIPreviewContext(null)
     setAIState((prev) => ({ ...prev, result: '', isGenerating: false }))
+    setPipelineRunStartedAt(null)
   }
 
   function openDiagnosticsDialog(tab: AIDiagnosticsTab) {
@@ -1137,7 +1286,7 @@ export function AppShell() {
     { key: 'risk' as const, label: '风险提示', visible: Boolean(pipelineResult) },
     { key: 'context' as const, label: '上下文', visible: Boolean(contextPreview) },
     { key: 'retrieval' as const, label: '检索', visible: Boolean(retrievalPreview) },
-    { key: 'pipeline' as const, label: 'Pipeline 调试', visible: Boolean(pipelineDebug) },
+    { key: 'pipeline' as const, label: '链路追踪', visible: Boolean(pipelineDebug || pipelineResult?.trace?.length) },
   ].filter((item) => item.visible)
 
   function closeUtilityDrawer() {
@@ -1198,6 +1347,68 @@ export function AppShell() {
                 </div>
               </div>
             </div>
+            {useContinuationPipeline && (aiState.isGenerating || pipelineStepTrace.length > 0) ? (
+              <div className="mt-4 rounded-2xl border border-[#e5e7eb] bg-white px-3 py-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="text-[11px] uppercase tracking-[0.18em] text-[#9ca3af]">Pipeline 进度</div>
+                  {diagnosticsTrace.length > 0 ? (
+                    <button
+                      type="button"
+                      onClick={() => openDiagnosticsDialog('pipeline')}
+                      className="inline-flex h-7 items-center rounded-full border border-[#d1d5db] bg-white px-3 text-[11px] text-[#4b5563] transition hover:border-[#9ca3af] hover:text-[#111827]"
+                    >
+                      查看链路
+                    </button>
+                  ) : null}
+                </div>
+                <div className="mt-2 flex items-center justify-between gap-3">
+                  <div className="text-sm font-medium text-[#111827]">
+                    {aiState.isGenerating
+                      ? activePipelineStep
+                        ? `${activePipelineStep.label}中`
+                        : '正在准备 Pipeline'
+                      : pipelineStepTrace[pipelineStepTrace.length - 1]?.status === 'completed'
+                        ? 'Pipeline 已完成'
+                        : 'Pipeline 已结束'}
+                  </div>
+                  {diagnosticsTrace.length > 0 ? (
+                    <div className="text-xs text-[#9ca3af]">总耗时 {formatTraceDuration(pipelineTraceTotalDurationMs)}</div>
+                  ) : null}
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {pipelineStepTrace.map((step, index) => (
+                    <div
+                      key={step.step_key}
+                      className={clsx(
+                        'inline-flex min-h-[34px] items-center gap-2 rounded-full border px-3 py-1.5 text-xs transition',
+                        getTraceStatusTone(step.status),
+                      )}
+                    >
+                      <span className="inline-flex size-4 items-center justify-center rounded-full bg-black/5 text-[10px] font-medium">
+                        {step.status === 'completed' ? <Check className="size-3" /> : step.status === 'running' ? <LoaderCircle className="size-3 animate-spin" /> : index + 1}
+                      </span>
+                      <span>{step.label}</span>
+                    </div>
+                  ))}
+                </div>
+                {diagnosticsTrace.length > 0 ? (
+                  <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
+                    <div className="rounded-xl bg-[#f8fafc] px-3 py-2 text-[#4b5563]">
+                      <div className="text-[10px] uppercase tracking-[0.16em] text-[#9ca3af]">告警</div>
+                      <div className="mt-1 text-sm font-medium text-[#111827]">{pipelineResult?.warnings.length ?? pipelineDebug?.warnings.length ?? 0}</div>
+                    </div>
+                    <div className="rounded-xl bg-[#f8fafc] px-3 py-2 text-[#4b5563]">
+                      <div className="text-[10px] uppercase tracking-[0.16em] text-[#9ca3af]">Fallback</div>
+                      <div className="mt-1 text-sm font-medium text-[#111827]">{pipelineResult?.fallbacks.length ?? pipelineDebug?.fallbacks.length ?? 0}</div>
+                    </div>
+                    <div className="rounded-xl bg-[#f8fafc] px-3 py-2 text-[#4b5563]">
+                      <div className="text-[10px] uppercase tracking-[0.16em] text-[#9ca3af]">步骤</div>
+                      <div className="mt-1 text-sm font-medium text-[#111827]">{diagnosticsTrace.length}</div>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
           </div>
 
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4">
@@ -1557,19 +1768,86 @@ export function AppShell() {
             </div>
           ) : null}
 
-          {activeDiagnosticsTab === 'pipeline' && pipelineDebug ? (
+          {activeDiagnosticsTab === 'pipeline' && (pipelineDebug || diagnosticsTrace.length > 0) ? (
             <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-3 text-xs text-muted-foreground">
-                <div>planner: {String(pipelineDebug.metadata?.planner_used ?? false)}</div>
-                <div>retriever: {String(pipelineDebug.metadata?.retriever_used ?? false)}</div>
-                <div>checker: {String(pipelineDebug.metadata?.checker_used ?? false)}</div>
-                <div>warnings: {pipelineDebug.warnings.length}</div>
+              <div className="grid gap-3 md:grid-cols-4">
+                <div className="rounded-2xl border border-border bg-background px-4 py-3">
+                  <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">步骤数</div>
+                  <div className="mt-1 text-lg font-semibold text-foreground">{diagnosticsTrace.length}</div>
+                </div>
+                <div className="rounded-2xl border border-border bg-background px-4 py-3">
+                  <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">总耗时</div>
+                  <div className="mt-1 text-lg font-semibold text-foreground">{formatTraceDuration(pipelineTraceTotalDurationMs)}</div>
+                </div>
+                <div className="rounded-2xl border border-border bg-background px-4 py-3">
+                  <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Fallback</div>
+                  <div className="mt-1 text-lg font-semibold text-foreground">{(pipelineDebug?.fallbacks ?? pipelineResult?.fallbacks ?? []).length}</div>
+                </div>
+                <div className="rounded-2xl border border-border bg-background px-4 py-3">
+                  <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">告警</div>
+                  <div className="mt-1 text-lg font-semibold text-foreground">{(pipelineDebug?.warnings ?? pipelineResult?.warnings ?? []).length}</div>
+                </div>
               </div>
-              {pipelineDebug.fallbacks.length > 0 ? (
+              {diagnosticsTrace.length > 0 ? (
+                <div className="space-y-3">
+                  {diagnosticsTrace.map((step) => (
+                    <div key={step.step_key} className="rounded-2xl border border-border bg-background px-4 py-4">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">{step.step_key}</div>
+                          <div className="mt-1 text-sm font-medium text-foreground">{step.label}</div>
+                          {summarizeTraceStep(step) ? (
+                            <div className="mt-1 text-xs leading-5 text-muted-foreground">{summarizeTraceStep(step)}</div>
+                          ) : null}
+                        </div>
+                        <div className={clsx('rounded-full border px-3 py-1 text-xs', getTraceStatusTone(step.status))}>
+                          {getTraceStatusLabel(step.status)}
+                        </div>
+                      </div>
+                      <div className="mt-3 grid gap-2 text-xs text-muted-foreground sm:grid-cols-3">
+                        <div>耗时: {formatTraceDuration(step.duration_ms)}</div>
+                        <div>warnings: {step.warnings.length}</div>
+                        <div>fallbacks: {step.fallbacks.length}</div>
+                      </div>
+                      {step.input_summary && Object.keys(step.input_summary).length > 0 ? (
+                        <div className="mt-3 rounded-xl bg-muted/25 px-3 py-3">
+                          <div className="mb-2 text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Input Summary</div>
+                          <pre className="whitespace-pre-wrap break-words text-xs leading-6 text-foreground">{JSON.stringify(step.input_summary, null, 2)}</pre>
+                        </div>
+                      ) : null}
+                      {step.output_summary && Object.keys(step.output_summary).length > 0 ? (
+                        <div className="mt-3 rounded-xl bg-muted/25 px-3 py-3">
+                          <div className="mb-2 text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Output Summary</div>
+                          <pre className="whitespace-pre-wrap break-words text-xs leading-6 text-foreground">{JSON.stringify(step.output_summary, null, 2)}</pre>
+                        </div>
+                      ) : null}
+                      {step.warnings.length > 0 ? (
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {step.warnings.map((item) => (
+                            <span key={`${step.step_key}-warning-${item}`} className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs text-amber-700">
+                              {item}
+                            </span>
+                          ))}
+                        </div>
+                      ) : null}
+                      {step.fallbacks.length > 0 ? (
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {step.fallbacks.map((item) => (
+                            <span key={`${step.step_key}-fallback-${item}`} className="rounded-full border border-border bg-muted/20 px-3 py-1 text-xs text-foreground/75">
+                              {item}
+                            </span>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+              {(pipelineDebug?.fallbacks ?? pipelineResult?.fallbacks ?? []).length > 0 ? (
                 <div className="rounded-2xl border border-border bg-background px-4 py-4">
                   <div className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground">Fallbacks</div>
                   <div className="flex flex-wrap gap-2">
-                    {pipelineDebug.fallbacks.map((item) => (
+                    {(pipelineDebug?.fallbacks ?? pipelineResult?.fallbacks ?? []).map((item) => (
                       <span key={item} className="rounded-full border border-border bg-muted/20 px-3 py-1 text-xs text-foreground/75">
                         {item}
                       </span>
@@ -1577,18 +1855,22 @@ export function AppShell() {
                   </div>
                 </div>
               ) : null}
-              <div className="rounded-2xl border border-border bg-background px-4 py-4">
-                <div className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground">Plan</div>
-                <pre className="whitespace-pre-wrap break-words text-sm leading-7 text-foreground">{JSON.stringify(pipelineDebug.plan, null, 2)}</pre>
-              </div>
-              <div className="rounded-2xl border border-border bg-background px-4 py-4">
-                <div className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground">Continuity Report</div>
-                <pre className="whitespace-pre-wrap break-words text-sm leading-7 text-foreground">{JSON.stringify(pipelineDebug.continuity_report, null, 2)}</pre>
-              </div>
-              <div className="rounded-2xl border border-border bg-muted/25 px-4 py-4">
-                <div className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground">Pipeline Output</div>
-                <pre className="whitespace-pre-wrap break-words text-sm leading-7 text-foreground">{pipelineDebug.final_content}</pre>
-              </div>
+              {pipelineDebug ? (
+                <>
+                  <div className="rounded-2xl border border-border bg-background px-4 py-4">
+                    <div className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground">Plan</div>
+                    <pre className="whitespace-pre-wrap break-words text-sm leading-7 text-foreground">{JSON.stringify(pipelineDebug.plan, null, 2)}</pre>
+                  </div>
+                  <div className="rounded-2xl border border-border bg-background px-4 py-4">
+                    <div className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground">Continuity Report</div>
+                    <pre className="whitespace-pre-wrap break-words text-sm leading-7 text-foreground">{JSON.stringify(pipelineDebug.continuity_report, null, 2)}</pre>
+                  </div>
+                  <div className="rounded-2xl border border-border bg-muted/25 px-4 py-4">
+                    <div className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground">Pipeline Output</div>
+                    <pre className="whitespace-pre-wrap break-words text-sm leading-7 text-foreground">{pipelineDebug.final_content}</pre>
+                  </div>
+                </>
+              ) : null}
             </div>
           ) : null}
         </div>

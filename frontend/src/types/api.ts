@@ -337,6 +337,7 @@ export interface AIContinuationGenerateResponse {
   continuity_report: AIContinuationReport
   warnings: string[]
   fallbacks: string[]
+  trace: AIContinuationTraceStep[]
   metadata: Record<string, unknown>
 }
 
@@ -344,6 +345,20 @@ export interface AIContinuationDebugResponse extends AIContinuationGenerateRespo
   plan: Record<string, unknown>
   context_bundle: Record<string, unknown>
   draft: Record<string, unknown>
+}
+
+export interface AIContinuationTraceStep {
+  step_key: string
+  label: string
+  status: 'pending' | 'running' | 'completed' | 'skipped' | 'failed' | string
+  started_at?: string | null
+  finished_at?: string | null
+  duration_ms?: number | null
+  input_summary?: Record<string, unknown>
+  output_summary?: Record<string, unknown>
+  warnings: string[]
+  fallbacks: string[]
+  payload_ref?: string | null
 }
 
 // ---------------------------------------------------------------------------
