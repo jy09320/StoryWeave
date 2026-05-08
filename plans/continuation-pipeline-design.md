@@ -610,6 +610,62 @@ async def run_continuation_pipeline(request):
 
 这会显著降低后续调试成本。
 
+## 8.4 Trace / Observability
+
+在 Pipeline 主链路已经稳定可用之后，下一阶段不应继续把“过程信息”散落在若干调试卡片和 JSON 里，而应正式引入统一 Trace 结构。
+
+目标分为两层：
+
+1. **用户层**
+   - 只展示轻量步骤状态，不暴露内部 JSON
+   - 让用户明确知道当前处于：
+     - 分析承接点
+     - 检索相关剧情
+     - 整理角色与伏笔
+     - 生成正文
+     - 检查连续性
+     - 完成
+
+2. **开发者层**
+   - 展示完整 Trace 时间线与阶段摘要
+   - 用于定位：
+     - 哪一步最慢
+     - 哪一步被跳过
+     - 哪一步发生 fallback
+     - 哪一步没有拿到有效上下文
+
+建议每个 Trace Step 统一包含：
+
+```json
+{
+  "step_key": "planner",
+  "label": "分析承接点",
+  "status": "completed",
+  "started_at": "",
+  "finished_at": "",
+  "duration_ms": 0,
+  "input_summary": {},
+  "output_summary": {},
+  "warnings": [],
+  "fallbacks": [],
+  "payload_ref": ""
+}
+```
+
+第一版至少覆盖以下节点：
+- `planner`
+- `retriever`
+- `context_bundle`
+- `writer`
+- `checker`
+- `fallback_decision`
+- `final_output`
+
+接口层建议：
+- `debug mode` 返回完整 trace
+- `production mode` 可选返回精简 trace summary，供前端展示轻量步骤条
+- Trace 结构由 `continuation_pipeline_service` 统一产出，避免前端自己猜测阶段顺序
+
 ## 九、与现有 API 的衔接建议
 
 ## 9.1 第一阶段：内部替换，不改前端接口

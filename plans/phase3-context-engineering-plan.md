@@ -424,6 +424,136 @@ Phase 3 目标架构由五个子系统组成：
 
 2~3 周
 
+## Phase 3A：Pipeline Trace 可视化与开发者诊断
+
+### 目标
+
+把当前已经可用的 continuation pipeline，从“内部可跑”升级为“过程可感知、问题可定位、开发可观测”的链路系统。
+
+这一阶段不追求继续提高模型生成质量，而是优先解决两个问题：
+
+1. 普通用户无法感知 AI 正在经历哪些阶段，只能看到等待和最终结果
+2. 开发者只能通过日志、debug JSON 和 benchmark 报告理解链路，缺少前端可视化 trace
+
+### 为什么现在做
+
+当前 StoryWeave 已经具备：
+
+- Planner -> Retriever -> Writer -> Checker -> Fallback 的完整流水线
+- `pipeline-debug` 调试接口
+- `context_bundle` / `continuity_report` / benchmark 回放能力
+
+但产品层仍然主要表现为“点击生成 -> 转圈 -> 出结果”，这会带来三个问题：
+
+1. 用户无法理解为什么慢，也无法形成“系统正在认真处理剧情”的感知
+2. 开发者难以快速定位是哪一步过慢、被跳过、质量异常
+3. 后续继续推进 graph RAG、relation 约束、benchmark 对比时，效果很难在前端直接观察
+
+因此，Trace 可视化应作为下一阶段优先事项，而不是 Phase 3 的附属调试按钮。
+
+### 交付物
+
+1. 统一的 pipeline trace 数据结构
+2. Pipeline 每阶段的 trace event 记录机制
+3. 面向用户的轻量步骤状态条
+4. 面向开发者的完整链路时间线 / 诊断面板
+5. `pipeline-debug` 返回 trace 数据
+6. 普通 pipeline 结果可选返回精简 trace 摘要
+
+### 展示分层
+
+#### 1. 用户层：轻量过程感知
+
+目标：让用户知道“系统正在做什么”，而不是暴露内部 JSON。
+
+建议展示步骤：
+
+1. 分析承接点
+2. 检索相关剧情
+3. 整理角色与伏笔
+4. 生成正文
+5. 检查连续性
+6. 完成
+
+每一步只展示：
+
+- 未开始
+- 进行中
+- 已完成
+- 失败 / 跳过（如有）
+
+#### 2. 开发者层：完整 Trace 诊断
+
+目标：让开发者能在前端直接看到整条链路的顺序、耗时、输入摘要和输出摘要。
+
+每个 trace step 建议包含：
+
+- `step_key`
+- `label`
+- `status`
+- `started_at`
+- `finished_at`
+- `duration_ms`
+- `input_summary`
+- `output_summary`
+- `warnings`
+- `fallbacks`
+- `payload_ref` 或精简对象
+
+建议最少覆盖以下节点：
+
+1. planner
+2. retriever
+3. context_bundle
+4. writer
+5. checker
+6. fallback_decision
+7. final_output
+
+### 后端任务拆解
+
+1. 在 `continuation_pipeline_service` 中定义统一 trace 容器
+2. 在每个阶段前后写入 trace step
+3. 为 step 记录耗时、状态、跳过原因、fallback 原因
+4. 将 `plan / retrieval / graph_evidence / checker_report` 摘要化后挂到 trace
+5. 在 `/api/ai/continuation/debug` 中直接返回完整 trace
+6. 在 `/api/ai/continuation/generate` 中评估是否返回精简 trace summary
+
+### 前端任务拆解
+
+1. 在 AI 生成区顶部增加“步骤状态条”
+2. 把当前分散的 debug 信息收口到单独的 Trace / Diagnostics 空间
+3. 新增链路时间线视图：
+   - 顺序显示每个节点
+   - 可展开查看摘要
+   - 展示耗时、跳过、fallback、warning
+4. 区分普通用户视图与开发者视图：
+   - 用户默认只看轻量步骤
+   - 开发者可进入完整 trace 面板
+5. 保持 trace UI 不挤压主写作区和发送入口
+
+### 验收标准
+
+达到以下标准即可视为这一阶段完成：
+
+1. 一次 pipeline 运行后，前端能按顺序展示完整 step 列表
+2. 用户在生成过程中能看到当前运行到哪一步
+3. 开发者能在前端看到每一步的耗时、状态、fallback 和核心中间产物摘要
+4. Checker 被跳过、Retriever 为空、Planner fallback 等情况能在 trace 中直观看到
+5. Trace 面板不再依赖零散卡片和重复入口，而是单独成为统一诊断空间
+
+### 与后续阶段的关系
+
+这一阶段完成后，会直接增强后续工作的可见性：
+
+1. Graph RAG 升级时，可以观察 graph_evidence 是否真的参与
+2. Relation / open loop 约束增强时，可以观察 planner 和 checker 是否真正消费这些结构信号
+3. Benchmark 回放时，可以把 trace 与评分结果一起对照分析
+
+### 预计周期
+
+1 周
+
 ## Phase 4：自动评测与优化闭环
 
 ### 目标

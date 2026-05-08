@@ -12,6 +12,7 @@ Phase 3 目标架构的五个子系统完成情况：
 | 剧情图谱系统 | ❌ 未实装 | 数据模型预留，服务层未实现 |
 | 上下文装配与混合检索 | ✅ 已完成 | 向量检索 + 上下文包装配可用，图谱部分预留 |
 | 多 Agent 续写流水线 | ✅ 已完成 | Planner / Retriever / Writer / Checker 全部落地 |
+| Pipeline Trace 可视化与开发者诊断 | 🟡 计划已立项 | 已写入 Phase 3 计划文档，尚未进入实现 |
 | 评测与回归系统 | 🟡 部分完成 | 目录与脚本骨架已建立，数据集待补充 |
 
 ---
@@ -114,18 +115,55 @@ Fallback 策略（已实现）：
 
 ---
 
+### 6. Pipeline Trace 可视化与开发者诊断
+
+**状态：已进入计划，待实现（对应 Phase 3A 阶段目标）**
+
+已明确的方向：
+- 已在 [`phase3-context-engineering-plan.md`](./phase3-context-engineering-plan.md) 中新增 `Phase 3A：Pipeline Trace 可视化与开发者诊断`
+- 明确采用“两层可视化”：
+  - 用户层：轻量步骤状态条，回答“现在跑到哪一步了”
+  - 开发者层：完整 Trace 时间线，回答“哪一步慢、哪一步被跳过、哪一步发生 fallback”
+- 最小 Trace 节点已确定：
+  - `planner`
+  - `retriever`
+  - `context_bundle`
+  - `writer`
+  - `checker`
+  - `fallback_decision`
+  - `final_output`
+
+待实现交付物：
+- 后端统一 `pipeline trace` 数据结构
+- Pipeline 各阶段 trace 事件记录与耗时统计
+- `/api/ai/continuation/debug` 返回完整 trace
+- 常规生成接口可选返回精简 trace 摘要
+- 前端顶部步骤状态条
+- 独立 Trace / Diagnostics 面板，替代当前零散调试卡片
+
+为什么当前优先做它：
+- 现有 Pipeline 已可用，但用户仍只能感知“转圈 -> 出结果”
+- 开发者只能依赖日志和 JSON 排障，链路顺序与耗时不直观
+- 后续推进 graph RAG、关系约束、benchmark 对比时，缺少一个前端可观测载体
+
+---
+
 ## 当前主要风险
 
 1. **旧链路未退出**：`/api/ai/generate` 和 `/api/ai/generate-once` 仍保留，与 Pipeline 链路并存，前端已切换但旧链路维护成本仍存在
 2. **图谱缺失导致 Retriever 能力上限**：当前仅向量检索，跨章节剧情结构关系无法被检索命中
 3. **benchmark 数据集为空**：无法用量化指标衡量 Pipeline 相对旧链路的实际提升
 4. **token budget 无自动裁剪**：当前上下文包大小依赖各字段硬编码的字符 limit，缺乏统一裁剪策略
+5. **链路可观测性不足**：用户无法区分“检索慢 / 写作慢 / Checker 被跳过”，开发者也难以前端直观看到完整执行顺序
 
 ---
 
 ## 下一步建议优先级
 
-1. 补充 benchmark 数据集（5 个高价值样本即可启动轻回归）
-2. 落地 `memory_evidence_links` 表，完成证据追溯能力
-3. 评估是否正式废弃旧链路或保留为 fallback
-4. 开始剧情图谱最小实现（`story_entities` + `story_events` 表 + 简单图谱检索）
+1. 实现 `Phase 3A：Pipeline Trace 可视化与开发者诊断`
+   - 后端补齐统一 trace 结构、阶段耗时、skip / fallback 记录
+   - 前端补齐步骤状态条与独立 Trace / Diagnostics 面板
+2. 补充 benchmark 数据集（5 个高价值样本即可启动轻回归）
+3. 落地 `memory_evidence_links` 表，完成证据追溯能力
+4. 评估是否正式废弃旧链路或保留为 fallback
+5. 开始剧情图谱最小实现（`story_entities` + `story_events` 表 + 简单图谱检索）
