@@ -10,7 +10,8 @@
       "Bash(xargs grep *)",
       "Bash(echo \"Exit: $?\")",
       "Bash(python -c ' *)",
-      "Bash(git commit -m ' *)"
+      "Bash(git commit -m ' *)",
+      "Bash(python3 -c ' *)"
     ],
     "additionalDirectories": [
       "C:\\Users\\30799"
