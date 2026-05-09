@@ -1,59 +1,80 @@
-# StoryWeave 生产部署
+# StoryWeave Production Deployment
 
-这套部署目录用于 Linux 服务器公网部署，基于：
+This directory contains the single-host production deployment for StoryWeave.
+
+It uses:
 
 - Docker Compose
-- Caddy 自动签发和续期 HTTPS 证书
+- Caddy for reverse proxy and automatic HTTPS certificates
 - PostgreSQL
-- 现有前后端镜像构建流程
+- The existing frontend and backend Docker builds
 
-## 1. 前置条件
+## Prerequisites
 
-部署前需要满足：
+Before deploying, make sure you have:
 
-- 服务器已安装 Docker 和 Docker Compose
-- 域名 `A` 记录已指向服务器公网 IP
-- 服务器安全组/防火墙已放行 `80` 和 `443`
+- A Linux server with Docker and Docker Compose installed
+- A domain or free subdomain pointing to the server's public IP
+- Ports `80` and `443` open on the server firewall / security group
 
-如果 `80/443` 没放开，Caddy 无法完成 Let's Encrypt 验证，HTTPS 不会签发成功。
+If port `80` or `443` is blocked, Caddy cannot complete the ACME challenge and
+HTTPS certificate issuance will fail.
 
-## 2. 初始化环境变量
+## Recommended domain setup
 
-在仓库根目录执行：
+This deployment works well with a free subdomain such as
+`storyweave.is-a.dev`.
+
+Point the subdomain to your server with an `A` record:
+
+- Host: `storyweave`
+- Value: `YOUR_SERVER_PUBLIC_IP`
+
+If you are using Cloudflare DNS, start with the record set to `DNS only` until
+certificate issuance succeeds.
+
+## Initialize environment variables
+
+From the repository root:
 
 ```bash
 chmod +x deploy/production/scripts/*.sh
 ./deploy/production/scripts/init-env.sh
 ```
 
-然后编辑：
+Then edit [deploy/production/.env](/E:/Projects/story-weave/deploy/production/.env).
 
-[`deploy/production/.env`](D:/Project/StoryWeave/deploy/production/.env)
+At minimum, update:
 
-至少要改这些值：
+- `APP_DOMAIN=storyweave.is-a.dev`
+- `ACME_EMAIL=your-email@example.com`
+- `OPENAI_API_KEY=...` or `ANTHROPIC_API_KEY=...`
+- `BACKEND_CORS_ORIGINS=https://storyweave.is-a.dev`
 
-- `APP_DOMAIN=你的域名`
-- `ACME_EMAIL=你的邮箱`
-- `OPENAI_API_KEY=...` 或 `ANTHROPIC_API_KEY=...`
-- `BACKEND_CORS_ORIGINS=https://你的域名`
+`init-env.sh` will also generate fresh values for:
 
-## 3. 启动部署
+- `JWT_SECRET_KEY`
+- `POSTGRES_PASSWORD`
 
-```bash
-./deploy/production/scripts/deploy.sh
-```
-
-首次启动时，Caddy 会自动申请证书。DNS、生效时间和防火墙正常的情况下，几分钟内即可完成。
-
-## 4. 常用命令
-
-启动或更新：
+## Deploy
 
 ```bash
 ./deploy/production/scripts/deploy.sh
 ```
 
-查看日志：
+On first startup, Caddy will request the HTTPS certificate automatically. If DNS
+is correct and ports `80/443` are reachable, the site should become available
+within a few minutes.
+
+## Common commands
+
+Deploy or update:
+
+```bash
+./deploy/production/scripts/deploy.sh
+```
+
+View logs:
 
 ```bash
 ./deploy/production/scripts/logs.sh
@@ -61,52 +82,52 @@ chmod +x deploy/production/scripts/*.sh
 ./deploy/production/scripts/logs.sh backend
 ```
 
-停止服务：
+Stop services:
 
 ```bash
 ./deploy/production/scripts/down.sh
 ```
 
-备份数据库：
+Backup the database:
 
 ```bash
 ./deploy/production/scripts/backup-db.sh
 ```
 
-## 5. 服务结构
+## Service layout
 
-- `caddy`：公网入口，处理 HTTPS 和反向代理
-- `frontend`：静态前端
-- `backend`：FastAPI
-- `db`：PostgreSQL
+- `caddy`: public entrypoint, HTTPS termination, reverse proxy
+- `frontend`: static frontend container
+- `backend`: FastAPI application
+- `db`: PostgreSQL
 
-公网只暴露：
+Only these ports are exposed publicly:
 
 - `80`
 - `443`
 
-数据库不对公网开放。
+The database is not exposed publicly.
 
-## 6. SSL 方案说明
+## HTTPS behavior
 
-这里没有用手工证书脚本，而是用 Caddy 自动处理：
+Caddy handles certificate management automatically:
 
-- 自动申请 Let's Encrypt 证书
-- 自动续期
-- 自动处理 HTTP 到 HTTPS
+- Requests a Let's Encrypt certificate
+- Renews the certificate automatically
+- Redirects HTTP to HTTPS
 
-这比手工 `certbot + nginx` 更省事，尤其适合你这种 Docker 单机部署。
+This keeps the deployment simpler than a manual `certbot + nginx` setup.
 
-## 7. 故障排查
+## Troubleshooting
 
-如果 HTTPS 没签下来，优先检查：
+If HTTPS is not issued, check these first:
 
-1. 域名是否已经正确解析到服务器 IP
-2. `80/443` 是否已放行
-3. 域名是否被 CDN 或其他代理拦住了验证
-4. `APP_DOMAIN` 和 `BACKEND_CORS_ORIGINS` 是否写对
+1. The domain resolves to the correct public IP
+2. Ports `80` and `443` are open
+3. The DNS record is not hidden behind a proxy during the first certificate request
+4. `APP_DOMAIN` and `BACKEND_CORS_ORIGINS` match the actual domain
 
-看 Caddy 日志：
+Then inspect the Caddy logs:
 
 ```bash
 ./deploy/production/scripts/logs.sh caddy
