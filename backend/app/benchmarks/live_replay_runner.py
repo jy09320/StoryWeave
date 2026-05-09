@@ -365,7 +365,7 @@ def build_open_loop_metrics(sample: dict[str, Any], generated_text: str, generat
         "静悄悄",
     )
     suspense_hits = [cue for cue in suspense_cues if cue in generated_text]
-    progressed = loop_hits > 0 or len(suspense_hits) >= 2
+    progressed = loop_hits > 0
     return {
         "progressed": progressed,
         "loop_hits": loop_hits,

@@ -50,6 +50,12 @@ class AIService:
             return normalized
         return f"{normalized[:limit].rstrip()}..."
 
+    def _safe_text(self, value: object) -> str | None:
+        if not isinstance(value, str):
+            return None
+        normalized = " ".join(value.split()).strip()
+        return normalized or None
+
     def _detect_generation_intent(self, instruction: str, text: str) -> str:
         signal = f"{instruction}\n{text}".lower()
 
@@ -202,6 +208,23 @@ class AIService:
         excerpt = tail[-1800:]
         return f"当前章节已写尾部（{chapter.title}）：\n{excerpt}"
 
+    def _select_effective_story_memory(
+        self,
+        story_memory: ProjectStoryMemory | None,
+        *,
+        chapter: Chapter | None,
+        previous_chapter: Chapter | None,
+    ) -> ProjectStoryMemory | None:
+        if story_memory is None or chapter is None:
+            return story_memory
+        updated_from = self._safe_text(getattr(story_memory, "updated_from_chapter_id", None))
+        if not updated_from:
+            return story_memory
+        allowed = {chapter.id}
+        if previous_chapter is not None:
+            allowed.add(previous_chapter.id)
+        return story_memory if updated_from in allowed else None
+
     def _build_tail_focus_section(self, tail: str | None, *, label: str) -> str | None:
         if not tail:
             return None
@@ -340,6 +363,7 @@ class AIService:
         chapter: Chapter | None = None
         previous_chapter: Chapter | None = None
         recent_memories: list[ChapterMemory] = []
+        story_memory: ProjectStoryMemory | None = project.story_memory
         if chapter_id:
             chapter_result = await db.execute(
                 select(Chapter).where(Chapter.id == chapter_id, Chapter.project_id == project_id)
@@ -365,13 +389,18 @@ class AIService:
                     .limit(3)
                 )
                 recent_memories = memory_result.scalars().all()
+                story_memory = self._select_effective_story_memory(
+                    project.story_memory,
+                    chapter=chapter,
+                    previous_chapter=previous_chapter,
+                )
 
         return {
             "project": project,
             "chapter": chapter,
             "previous_chapter": previous_chapter,
             "recent_memories": recent_memories,
-            "story_memory": project.story_memory,
+            "story_memory": story_memory,
         }
 
     async def load_generation_context(

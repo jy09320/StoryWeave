@@ -152,6 +152,7 @@ class ContinuationPipelineService:
             request=request,
             loaded_context=loaded_context,
             retrieval=retrieval,
+            plan=plan,
         )
         trace.append(
             self._build_trace_step(
@@ -403,14 +404,20 @@ class ContinuationPipelineService:
         request: dict[str, Any],
         loaded_context: dict[str, Any],
         retrieval: dict[str, Any],
+        plan: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         project: Project = loaded_context["project"]
         chapter = loaded_context.get("chapter")
         previous_chapter = loaded_context.get("previous_chapter")
         recent_memories: list[ChapterMemory] = loaded_context.get("recent_memories") or []
-        story_memory: ProjectStoryMemory | None = loaded_context.get("story_memory")
+        story_memory: ProjectStoryMemory | None = self._select_effective_story_memory(
+            loaded_context.get("story_memory"),
+            chapter=chapter,
+            previous_chapter=previous_chapter,
+        )
 
         current_chapter_tail = self._build_current_chapter_tail(chapter)
+        current_chapter_summary = self._build_current_chapter_summary(chapter)
         previous_chapter_tail_raw = (
             self._clip_text(previous_chapter.plain_text[-1500:], limit=1500)
             if previous_chapter and previous_chapter.plain_text
@@ -418,6 +425,18 @@ class ContinuationPipelineService:
         )
         previous_reader_only_tail = self._extract_reader_only_tail(previous_chapter_tail_raw)
         previous_chapter_tail = self._strip_reader_only_tail(previous_chapter_tail_raw)
+        planner_metadata = (plan or {}).get("metadata") or {}
+        current_tail_drifted = self._should_demote_current_tail(
+            user_instruction=self._safe_text(request.get("user_instruction")),
+            user_text=self._safe_text(request.get("user_text")),
+            current_chapter_tail=current_chapter_tail,
+            previous_chapter_tail=previous_chapter_tail,
+        )
+        if planner_metadata.get("current_tail_drifted"):
+            current_tail_drifted = True
+        if current_tail_drifted:
+            current_chapter_tail = None
+            current_chapter_summary = None
         current_tail_focus = self._build_tail_focus_excerpt(current_chapter_tail, limit=180)
         previous_tail_focus = self._build_tail_focus_excerpt(previous_chapter_tail, limit=180)
         preferred_anchor = self._choose_preferred_anchor(
@@ -434,7 +453,7 @@ class ContinuationPipelineService:
         bundle = {
             "project_summary": self._build_project_summary(project),
             "story_memory_summary": self._safe_text(story_memory.global_plot_summary) if story_memory else None,
-            "current_chapter_summary": self._build_current_chapter_summary(chapter),
+            "current_chapter_summary": current_chapter_summary,
             "current_chapter_tail": current_chapter_tail,
             "current_tail_focus": current_tail_focus,
             "previous_chapter_tail": None if current_chapter_tail else previous_chapter_tail,
@@ -449,7 +468,7 @@ class ContinuationPipelineService:
             "token_budget_report": self._build_token_budget_report(
                 project_summary=self._build_project_summary(project),
                 story_memory_summary=self._safe_text(story_memory.global_plot_summary) if story_memory else None,
-                current_chapter_summary=self._build_current_chapter_summary(chapter),
+                current_chapter_summary=current_chapter_summary,
                 current_chapter_tail=current_tail_focus or current_chapter_tail,
                 previous_chapter_tail=previous_tail_focus or previous_chapter_tail,
                 recent_memories=recent_memories,
@@ -458,6 +477,9 @@ class ContinuationPipelineService:
             "metadata": {
                 **(retrieval.get("metadata", {}) or {}),
                 "previous_reader_only_tail": previous_reader_only_tail,
+                "current_tail_drifted": current_tail_drifted,
+                "current_tail_demoted_by_planner": bool(planner_metadata.get("current_tail_drifted")),
+                "story_memory_suppressed": loaded_context.get("story_memory") is not None and story_memory is None,
             },
         }
         return bundle
@@ -557,6 +579,8 @@ class ContinuationPipelineService:
         parts.append("信息来源硬约束：不要写云缨“听见了后堂对话”“看见了窗后黑影”“认出了暗处盯梢者”这类她并未亲历获得的信息；如果要表现危险临近，只能写她的直觉、异样感、可疑动静或现场可见线索。")
         if previous_reader_only_tail:
             parts.append(f"读者专属暗线信息（禁止改写成云缨已知）：{previous_reader_only_tail}")
+        if (context_bundle.get("metadata") or {}).get("current_tail_drifted"):
+            parts.append("警告：当前章节已写尾部疑似漂移到更后面的剧情阶段，本次不要沿用这段漂移尾部做开头锚点，优先承接上一章结尾或用户明确指定的承接点。")
         if context_bundle.get("current_chapter_tail"):
             parts.append("首段结构硬约束：先写当前尾句之后立刻发生的动作、反应或观察，再推进到下一步线索。不要把视角拉回当前尾句之前的街头对话、铺内盘问或人物重新出场。")
         elif context_bundle.get("previous_tail_focus"):
@@ -635,10 +659,14 @@ class ContinuationPipelineService:
         summary = self._safe_text(memory.summary_short or memory.summary_long)
         if summary:
             lines.append(summary)
-        for item in memory.open_loops[:2]:
-            description = self._safe_text(item.get("description") or item.get("label"))
-            if description:
-                lines.append(f"伏笔：{description}")
+        for item in memory.key_events[:1]:
+            description = self._safe_text(item.get("summary") or item.get("title"))
+            if description and description not in lines:
+                lines.append(f"已发生：{description}")
+        for item in memory.character_state_changes[:1]:
+            state = self._safe_text(item.get("after") or item.get("reason"))
+            if state and state not in lines:
+                lines.append(f"角色变化：{state}")
         return " | ".join(lines[:3])
 
     def _serialize_character_context(self, project: Project) -> list[str]:
@@ -767,6 +795,59 @@ class ContinuationPipelineService:
             if index >= 0:
                 return value[index:].strip()
         return None
+
+    def _select_effective_story_memory(
+        self,
+        story_memory: ProjectStoryMemory | None,
+        *,
+        chapter: Any,
+        previous_chapter: Any,
+    ) -> ProjectStoryMemory | None:
+        if story_memory is None or chapter is None:
+            return story_memory
+        updated_from = self._safe_text(getattr(story_memory, "updated_from_chapter_id", None))
+        if not updated_from:
+            return story_memory
+        allowed = {getattr(chapter, "id", None)}
+        previous_id = getattr(previous_chapter, "id", None)
+        if previous_id:
+            allowed.add(previous_id)
+        return story_memory if updated_from in allowed else None
+
+    def _should_demote_current_tail(
+        self,
+        *,
+        user_instruction: str | None,
+        user_text: str | None,
+        current_chapter_tail: str | None,
+        previous_chapter_tail: str | None,
+    ) -> bool:
+        current_tail = self._safe_text(current_chapter_tail)
+        previous_tail = self._safe_text(previous_chapter_tail)
+        if not current_tail or not previous_tail:
+            return False
+
+        request_text = " ".join(part for part in [user_instruction or "", user_text or ""] if part).strip()
+        if not request_text:
+            return False
+
+        opening_markers = ("开头", "起笔", "承接", "上一章", "这一刻", "刚刚", "紧接", "继续这一段")
+        if not any(marker in request_text for marker in opening_markers):
+            return False
+
+        request_terms = self._extract_terms(request_text)
+        current_terms = self._extract_terms(current_tail)
+        previous_terms = self._extract_terms(previous_tail)
+        current_overlap = len(request_terms & current_terms)
+        previous_overlap = len(request_terms & previous_terms)
+        future_shift_markers = ("回府", "回到", "翻墙", "伤口", "包扎", "小院", "屋里", "床沿", "三更", "灯焰", "昨夜", "今夜")
+        future_shift_hits = sum(1 for marker in future_shift_markers if marker in current_tail)
+
+        if previous_overlap >= current_overlap + 2 and future_shift_hits >= 2:
+            return True
+        if current_overlap == 0 and previous_overlap >= 2 and future_shift_hits >= 1:
+            return True
+        return False
 
     def _build_token_budget_report(
         self,

@@ -88,19 +88,32 @@ class ContinuationPlannerService:
         chapter: Chapter | None = loaded_context.get("chapter")
         previous_chapter: Chapter | None = loaded_context.get("previous_chapter")
         recent_memories: list[ChapterMemory] = loaded_context.get("recent_memories") or []
-        story_memory: ProjectStoryMemory | None = loaded_context.get("story_memory")
+        story_memory: ProjectStoryMemory | None = self._select_effective_story_memory(
+            loaded_context.get("story_memory"),
+            chapter=chapter,
+            previous_chapter=previous_chapter,
+        )
 
         user_instruction = self._clip_text(request.get("user_instruction"), limit=240) or "继续写下去"
         user_text = self._clip_text(request.get("user_text"), limit=240)
         chapter_title = self._safe_text(chapter.title if chapter else None)
         chapter_completion_requested = self._is_chapter_completion_request(user_instruction)
+        previous_chapter_tail = self._extract_chapter_tail(previous_chapter, source_limit=600, clip_limit=300)
         current_chapter_tail = self._extract_chapter_tail(chapter, source_limit=600, clip_limit=300)
+        current_tail_drifted = self._should_demote_current_tail(
+            user_instruction=user_instruction,
+            user_text=user_text,
+            current_chapter_tail=current_chapter_tail,
+            previous_chapter_tail=previous_chapter_tail,
+        )
+        if current_tail_drifted:
+            current_chapter_tail = None
 
         continuation_point = self._clip_text(
             self._pick_text(
                 current_chapter_tail,
                 user_text,
-                previous_chapter.plain_text[-400:] if previous_chapter and previous_chapter.plain_text else None,
+                previous_chapter_tail,
                 chapter.summary if chapter else None,
                 chapter.title if chapter else None,
             ),
@@ -115,12 +128,14 @@ class ContinuationPlannerService:
         if chapter_completion_requested:
             must_include.append("本次续写要形成明确的本章收束，而不是只写一小段过渡")
 
+        memory_open_loop_candidates: list[str] = []
+        story_open_loop_candidates: list[str] = []
+
         for memory in recent_memories[:2]:
             for item in memory.open_loops[:2]:
                 description = self._clip_text(self._pick_from_dict(item, "description", "label"), limit=80)
-                if self._is_useful_hint(description) and description not in relevant_open_loops:
-                    relevant_open_loops.append(description)
-                    must_include.append(f"处理或延续：{description}")
+                if self._is_useful_hint(description) and description not in memory_open_loop_candidates:
+                    memory_open_loop_candidates.append(description)
 
             for item in memory.character_state_changes[:2]:
                 description = self._clip_text(
@@ -150,8 +165,8 @@ class ContinuationPlannerService:
         if story_memory is not None:
             for item in story_memory.active_conflicts[:3]:
                 description = self._clip_text(self._pick_from_dict(item, "description", "label"), limit=80)
-                if self._is_useful_hint(description) and description not in relevant_open_loops:
-                    relevant_open_loops.append(description)
+                if self._is_useful_hint(description) and description not in story_open_loop_candidates:
+                    story_open_loop_candidates.append(description)
 
             if not current_chapter_tail:
                 for item in story_memory.timeline_constraints[:3]:
@@ -169,6 +184,19 @@ class ContinuationPlannerService:
                     )
                     if self._is_useful_hint(description) and description not in timeline_constraints:
                         timeline_constraints.append(description)
+
+        relevant_open_loops = self._select_open_loop_focus(
+            user_text=user_text,
+            user_instruction=user_instruction,
+            current_chapter_tail=current_chapter_tail,
+            candidates=[*memory_open_loop_candidates, *story_open_loop_candidates],
+            limit=1 if current_chapter_tail else 5,
+        )
+        if not current_chapter_tail:
+            for description in relevant_open_loops:
+                item = f"处理或延续：{description}"
+                if item not in must_include:
+                    must_include.append(item)
 
         must_avoid = [
             "无铺垫跳时间线",
@@ -217,11 +245,11 @@ class ContinuationPlannerService:
                 "chapter_completion_requested": chapter_completion_requested,
                 "used_current_chapter_tail": bool(current_chapter_tail),
                 "used_previous_chapter_tail": bool(not current_chapter_tail and previous_chapter and previous_chapter.plain_text),
+                "current_tail_drifted": current_tail_drifted,
+                "story_memory_suppressed": loaded_context.get("story_memory") is not None and story_memory is None,
                 "anchor_text": current_chapter_tail
                 or user_text
-                or self._clip_text(previous_chapter.plain_text[-400:], limit=220)
-                if previous_chapter and previous_chapter.plain_text
-                else None,
+                or previous_chapter_tail,
             },
         }
 
@@ -235,7 +263,12 @@ class ContinuationPlannerService:
         project: Project | None = loaded_context.get("project")
         chapter: Chapter | None = loaded_context.get("chapter")
         recent_memories: list[ChapterMemory] = loaded_context.get("recent_memories") or []
-        story_memory: ProjectStoryMemory | None = loaded_context.get("story_memory")
+        previous_chapter: Chapter | None = loaded_context.get("previous_chapter")
+        story_memory: ProjectStoryMemory | None = self._select_effective_story_memory(
+            loaded_context.get("story_memory"),
+            chapter=chapter,
+            previous_chapter=previous_chapter,
+        )
 
         parts = [
             f"项目标题：{project.title}" if project else "",
@@ -298,6 +331,39 @@ class ContinuationPlannerService:
             **(plan.get("metadata") or {}),
         }
         return merged
+
+    def _select_open_loop_focus(
+        self,
+        *,
+        user_text: str | None,
+        user_instruction: str | None,
+        current_chapter_tail: str | None,
+        candidates: list[str],
+        limit: int,
+    ) -> list[str]:
+        anchor = " ".join(
+            piece
+            for piece in [user_instruction or "", user_text or "", current_chapter_tail or ""]
+            if piece
+        )
+        anchor_terms = self._extract_terms(anchor) if anchor else set()
+        scored: list[tuple[int, int, str]] = []
+        seen: set[str] = set()
+        for index, item in enumerate(candidates):
+            cleaned = self._safe_text(item)
+            if not cleaned or cleaned in seen:
+                continue
+            seen.add(cleaned)
+            overlap = len(anchor_terms & self._extract_terms(cleaned)) if anchor_terms else 0
+            if current_chapter_tail and overlap == 0:
+                continue
+            scored.append((overlap, -index, cleaned))
+
+        if not scored and not current_chapter_tail:
+            return [item for item in candidates if self._safe_text(item)][:limit]
+
+        scored.sort(reverse=True)
+        return [item for _overlap, _index, item in scored[:limit]]
 
     def _extract_json_payload(self, raw: object) -> dict[str, Any]:
         if not isinstance(raw, str):
@@ -410,6 +476,58 @@ class ContinuationPlannerService:
             return None
         return self._clip_text(source[-source_limit:], limit=clip_limit)
 
+    def _select_effective_story_memory(
+        self,
+        story_memory: ProjectStoryMemory | None,
+        *,
+        chapter: Chapter | None,
+        previous_chapter: Chapter | None,
+    ) -> ProjectStoryMemory | None:
+        if story_memory is None or chapter is None:
+            return story_memory
+        updated_from = self._safe_text(getattr(story_memory, "updated_from_chapter_id", None))
+        if not updated_from:
+            return story_memory
+        allowed = {chapter.id}
+        if previous_chapter is not None:
+            allowed.add(previous_chapter.id)
+        return story_memory if updated_from in allowed else None
+
+    def _should_demote_current_tail(
+        self,
+        *,
+        user_instruction: str | None,
+        user_text: str | None,
+        current_chapter_tail: str | None,
+        previous_chapter_tail: str | None,
+    ) -> bool:
+        current_tail = self._safe_text(current_chapter_tail)
+        previous_tail = self._safe_text(previous_chapter_tail)
+        if not current_tail or not previous_tail:
+            return False
+
+        request_text = " ".join(part for part in [user_instruction or "", user_text or ""] if part).strip()
+        if not request_text:
+            return False
+
+        opening_markers = ("开头", "起笔", "承接", "上一章", "这一刻", "刚刚", "紧接", "继续这一段")
+        if not any(marker in request_text for marker in opening_markers):
+            return False
+
+        request_terms = self._extract_terms(request_text)
+        current_terms = self._extract_terms(current_tail)
+        previous_terms = self._extract_terms(previous_tail)
+        current_overlap = len(request_terms & current_terms)
+        previous_overlap = len(request_terms & previous_terms)
+        future_shift_markers = ("回府", "回到", "翻墙", "伤口", "包扎", "小院", "屋里", "床沿", "三更", "灯焰", "昨夜", "今夜")
+        future_shift_hits = sum(1 for marker in future_shift_markers if marker in current_tail)
+
+        if previous_overlap >= current_overlap + 2 and future_shift_hits >= 2:
+            return True
+        if current_overlap == 0 and previous_overlap >= 2 and future_shift_hits >= 1:
+            return True
+        return False
+
     def _safe_text(self, value: object) -> str | None:
         if not isinstance(value, str):
             return None
@@ -417,8 +535,21 @@ class ContinuationPlannerService:
         return cleaned or None
 
     def _extract_terms(self, value: str) -> set[str]:
-        normalized = "".join(ch if ch.isalnum() else " " for ch in value)
-        return {item for item in normalized.split() if len(item) >= 2}
+        terms: set[str] = set()
+        for token in re.findall(r"[\u4e00-\u9fff]+|[A-Za-z0-9]+", value.lower()):
+            if re.fullmatch(r"[A-Za-z0-9]+", token):
+                if len(token) >= 2:
+                    terms.add(token)
+                continue
+            if len(token) == 1:
+                terms.add(token)
+                continue
+            for size in (2, 3):
+                if len(token) < size:
+                    continue
+                for index in range(len(token) - size + 1):
+                    terms.add(token[index : index + size])
+        return terms
 
     def _strip_html(self, value: object) -> str | None:
         if not isinstance(value, str):

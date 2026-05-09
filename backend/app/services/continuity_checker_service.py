@@ -159,6 +159,16 @@ class ContinuityCheckerService:
                 }
             )
 
+        if preferred_anchor and first_paragraph and self._looks_like_suspense_loop_stall(first_paragraph):
+            report["open_loop_misalignment"].append(
+                {
+                    "issue": "伏笔推进空转成悬念复盘",
+                    "reason": "候选正文主要在重复不安、怀疑或未解之谜，缺少新的动作、观察或交互增量，读感会像主角在原地分析悬念。",
+                    "evidence": self._clip_text(first_paragraph, limit=140) or "",
+                    "suggestion": "补一个新的现场观察、试探、遭遇或线索反馈，让悬念产生实质推进，而不是只保留情绪和猜测。",
+                }
+            )
+
         last_sentence = self._get_last_sentence(draft_content)
         if last_sentence and self._ends_with_fragment_connector(last_sentence):
             report["timeline_conflicts"].append(
@@ -329,9 +339,58 @@ class ContinuityCheckerService:
             merged[key] = [*base_report.get(key, []), *llm_report.get(key, [])]
 
         merged["severity"] = self._compute_severity(merged, fallback=llm_report.get("severity"))
-        merged["summary"] = llm_report.get("summary") or base_report.get("summary") or ""
+        merged["summary"] = self._compose_summary(
+            report=merged,
+            llm_summary=llm_report.get("summary"),
+            base_summary=base_report.get("summary"),
+        )
         merged["check_status"] = "completed"
         return merged
+
+    def _compose_summary(
+        self,
+        *,
+        report: dict[str, Any],
+        llm_summary: object,
+        base_summary: object,
+    ) -> str:
+        severity = self._normalize_severity(report.get("severity"))
+        if severity == "low":
+            return self._safe_text(llm_summary) or self._safe_text(base_summary) or "未发现明显的规则级连续性冲突。"
+
+        labels: list[str] = []
+        if report.get("timeline_conflicts"):
+            labels.append("承接/时间线")
+        if report.get("character_conflicts"):
+            labels.append("角色一致性")
+        if report.get("world_rule_conflicts"):
+            labels.append("世界规则")
+        if report.get("knowledge_boundary_conflicts"):
+            labels.append("知识边界")
+        if report.get("open_loop_misalignment"):
+            labels.append("伏笔推进")
+
+        lead_issue = None
+        for key in (
+            "timeline_conflicts",
+            "knowledge_boundary_conflicts",
+            "world_rule_conflicts",
+            "character_conflicts",
+            "open_loop_misalignment",
+        ):
+            items = report.get(key) or []
+            if not items:
+                continue
+            first = items[0]
+            if isinstance(first, dict):
+                lead_issue = self._safe_text(first.get("issue"))
+            if lead_issue:
+                break
+
+        label_text = "、".join(labels[:3]) or "连续性"
+        if severity == "high":
+            return f"发现较高连续性风险，主要集中在{label_text}；首要问题：{lead_issue or '需要人工复核'}。"
+        return f"发现一些连续性风险，主要集中在{label_text}；首要问题：{lead_issue or '需要人工复核'}。"
 
     def _normalize_issue_list(self, value: object) -> list[dict[str, str]]:
         if not isinstance(value, list):
@@ -566,6 +625,16 @@ class ContinuityCheckerService:
         reasoning_hits = sum(1 for item in reasoning_markers if item in cleaned)
         scene_hits = sum(1 for item in scene_markers if item in cleaned)
         return reasoning_hits >= 2 and scene_hits <= 1
+
+    def _looks_like_suspense_loop_stall(self, paragraph: str) -> bool:
+        cleaned = self._safe_text(paragraph) or ""
+        if len(cleaned) < 60:
+            return False
+        reasoning_markers = ("为什么", "为何", "到底", "究竟", "会不会", "难道", "不安", "预感", "疑惑", "不解", "猜测", "谜团")
+        action_markers = ("走", "跑", "停", "看", "听", "推", "拉", "敲", "问", "答", "翻", "摸", "躲", "追", "跃", "拐", "进", "出")
+        reasoning_hits = sum(1 for item in reasoning_markers if item in cleaned)
+        action_hits = sum(1 for item in action_markers if item in cleaned)
+        return reasoning_hits >= 3 and action_hits <= 2
 
     def _extract_terms(self, value: str) -> set[str]:
         normalized = "".join(ch if ch.isalnum() else " " for ch in value)
