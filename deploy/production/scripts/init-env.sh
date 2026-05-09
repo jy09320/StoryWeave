@@ -7,7 +7,7 @@ ENV_FILE="${DEPLOY_DIR}/.env"
 EXAMPLE_FILE="${DEPLOY_DIR}/.env.example"
 
 if [[ -f "${ENV_FILE}" ]]; then
-  echo "${ENV_FILE} 已存在，跳过初始化。"
+  echo "${ENV_FILE} already exists, skipping initialization."
   exit 0
 fi
 
@@ -32,5 +32,5 @@ PY
   fi
 fi
 
-echo "已生成 ${ENV_FILE}"
-echo "下一步请至少填写 APP_DOMAIN、ACME_EMAIL 和 AI Key。"
+echo "Created ${ENV_FILE}"
+echo "Next, fill in at least APP_DOMAIN, ACME_EMAIL, and one AI API key."
