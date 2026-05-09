@@ -8,6 +8,7 @@ import {
   Heart,
   Layers3,
   PenTool,
+  Quote,
   Sparkles,
   Users2,
 } from 'lucide-react'
@@ -90,7 +91,7 @@ export function HomePage() {
   return (
     <div className="min-h-screen text-foreground">
       <section className="relative overflow-hidden border-b border-border/70">
-        <div className="absolute inset-x-0 top-0 h-[440px] bg-[radial-gradient(circle_at_16%_18%,rgba(16,185,129,0.14),transparent_28%),radial-gradient(circle_at_82%_14%,rgba(14,165,233,0.08),transparent_22%),linear-gradient(180deg,rgba(255,253,248,0.84)_0%,rgba(248,245,237,0.66)_55%,rgba(242,241,234,0)_100%)]" />
+        <div className="absolute inset-x-0 top-0 h-140 bg-[radial-gradient(ellipse_at_18%_20%,rgba(16,185,129,0.22),transparent_38%),radial-gradient(ellipse_at_80%_10%,rgba(14,165,233,0.14),transparent_32%),radial-gradient(ellipse_at_50%_60%,rgba(251,191,36,0.07),transparent_40%),linear-gradient(180deg,rgba(255,253,248,0.92)_0%,rgba(248,245,237,0.72)_55%,rgba(242,241,234,0)_100%)]" />
 
         <div className="relative mx-auto flex min-h-screen w-full max-w-7xl flex-col px-6 pb-12 pt-6 lg:px-10">
           <header className="flex items-center justify-between gap-4">
@@ -149,14 +150,18 @@ export function HomePage() {
                 写作是一件值得被好好对待的事
               </div>
 
-              <h1 className="mt-6 max-w-5xl text-4xl font-semibold leading-tight text-foreground sm:text-5xl lg:text-6xl">
+              <h1 className="mt-6 max-w-5xl text-4xl font-bold leading-tight tracking-tight text-foreground sm:text-5xl lg:text-[3.75rem]">
                 你的故事
                 <br />
-                一直都在等你回来
+                <span className="bg-linear-to-r from-emerald-600 via-emerald-500 to-sky-500 bg-clip-text text-transparent">
+                  一直都在等你回来
+                </span>
               </h1>
 
               <p className="mt-6 max-w-2xl text-base leading-8 text-muted-foreground sm:text-lg">
-                章节、角色、设定与 AI 都在这里。每次打开，就是接着上次离开的地方继续。
+                AI 真的读过你的每一章。角色、世界观、上下文——它都记得。
+                <br className="hidden sm:block" />
+                每次打开，就是接着上次离开的地方继续。
               </p>
 
               <div className="mt-8 flex flex-wrap gap-3">
@@ -280,8 +285,10 @@ export function HomePage() {
 
           <div className="mt-12 grid gap-6 lg:grid-cols-3">
             {resonanceCards.map((card) => (
-              <div key={card.quote} className="rounded-md border border-border bg-card/95 p-6 shadow-[0_12px_30px_rgba(148,163,184,0.1)]">
-                <p className="text-base font-medium leading-7 text-foreground before:mr-0.5 before:text-primary before:content-['“'] after:ml-0.5 after:text-primary after:content-['”']">
+              <div key={card.quote} className="relative overflow-hidden rounded-xl border border-border bg-card/95 p-6 shadow-[0_12px_30px_rgba(148,163,184,0.1)]">
+                <div className="absolute inset-y-0 left-0 w-0.5 bg-linear-to-b from-primary/50 to-sky-400/30" />
+                <Quote className="size-8 text-primary/20" />
+                <p className="mt-1 text-base font-medium leading-7 text-foreground">
                   {card.quote}
                 </p>
                 <p className="mt-4 text-sm leading-6 text-muted-foreground">{card.note}</p>
@@ -298,19 +305,20 @@ export function HomePage() {
       <section id="product" className="border-b border-border/70">
         <div className="mx-auto w-full max-w-7xl px-6 py-16 lg:px-10">
           <div className="max-w-2xl">
-            <div className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">它能帮你做的事</div>
-            <h2 className="mt-3 text-3xl font-semibold text-foreground">让写作少一些摩擦，多一点流动</h2>
+            <div className="text-[11px] uppercase tracking-[0.22em] text-primary/60">它能帮你做的事</div>
+            <h2 className="mt-3 text-3xl font-bold tracking-tight text-foreground">让写作少一些摩擦，多一点流动</h2>
           </div>
 
           <div className="mt-12 grid gap-6 lg:grid-cols-3">
             {featureGroups.map((feature) => {
               const Icon = feature.icon
               return (
-                <article key={feature.title} className="rounded-md border border-border bg-card/95 p-6 shadow-[0_12px_30px_rgba(148,163,184,0.12)]">
-                  <div className="flex size-11 items-center justify-center rounded-md border border-primary/18 bg-primary/10 text-primary">
-                    <Icon className="size-5" />
+                <article key={feature.title} className="group relative overflow-hidden rounded-xl border border-border bg-card/95 p-6 shadow-[0_12px_30px_rgba(148,163,184,0.12)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_20px_40px_rgba(16,185,129,0.12)]">
+                  <div className="absolute inset-y-0 left-0 w-0.5 bg-linear-to-b from-primary/60 to-primary/20" />
+                  <div className="flex size-12 items-center justify-center rounded-xl border border-primary/20 bg-primary/10 text-primary transition-colors group-hover:border-primary/35 group-hover:bg-primary/15">
+                    <Icon className="size-6" />
                   </div>
-                  <h3 className="mt-6 text-xl font-medium text-foreground">{feature.title}</h3>
+                  <h3 className="mt-5 text-lg font-semibold text-foreground">{feature.title}</h3>
                   <p className="mt-3 text-sm leading-7 text-muted-foreground">{feature.description}</p>
                 </article>
               )
@@ -322,11 +330,11 @@ export function HomePage() {
       <section id="workflow" className="border-b border-border/70">
         <div className="mx-auto grid w-full max-w-7xl gap-12 px-6 py-16 lg:grid-cols-[minmax(0,0.72fr)_minmax(0,1.28fr)] lg:px-10">
           <div>
-            <div className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">开始的方式</div>
-            <h2 className="mt-3 text-3xl font-semibold text-foreground">三步，把你的故事安顿好</h2>
+            <div className="text-[11px] uppercase tracking-[0.22em] text-primary/60">开始的方式</div>
+            <h2 className="mt-3 text-3xl font-bold tracking-tight text-foreground">三步，把你的故事安顿好</h2>
           </div>
 
-          <div className="grid gap-0 rounded-md border border-border bg-card/90">
+          <div className="grid gap-0 rounded-xl border border-border bg-card/90">
             {workflowSteps.map((step, idx) => (
               <div
                 key={step.index}
@@ -346,44 +354,54 @@ export function HomePage() {
         </div>
       </section>
 
-      <section id="launch">
-        <div className="mx-auto grid w-full max-w-7xl gap-12 px-6 py-16 lg:grid-cols-[minmax(0,1fr)_360px] lg:px-10">
+      <section id="launch" className="relative overflow-hidden">
+        <div className="absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-primary/30 to-transparent" />
+        <div className="mx-auto grid w-full max-w-7xl gap-12 px-6 py-20 lg:grid-cols-[minmax(0,1fr)_380px] lg:px-10">
           <div>
-            <div className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">开始写作</div>
-            <h2 className="mt-3 text-3xl font-semibold text-foreground">你的下一个故事，从这里开始</h2>
-            <p className="mt-4 max-w-2xl text-sm leading-7 text-muted-foreground">已经有故事在等你？直接打开工作台继续。</p>
+            <div className="text-[11px] uppercase tracking-[0.22em] text-primary/60">开始写作</div>
+            <h2 className="mt-3 text-4xl font-bold tracking-tight text-foreground">
+              你的下一个故事，
+              <br />
+              <span className="bg-linear-to-r from-emerald-600 to-sky-500 bg-clip-text text-transparent">从这里开始</span>
+            </h2>
+            <p className="mt-4 max-w-2xl text-sm leading-7 text-muted-foreground">
+              AI 知道你的世界观、你的角色、你写到哪里了。打开工作台，它已经准备好了。
+            </p>
 
             <div className="mt-8 flex flex-wrap gap-3">
               <Link
                 to="/workspace"
-                className="inline-flex h-11 items-center justify-center rounded-md bg-primary px-5 text-sm font-medium text-primary-foreground transition hover:opacity-90"
+                className="inline-flex h-11 items-center justify-center rounded-xl bg-primary px-6 text-sm font-semibold text-primary-foreground shadow-[0_4px_14px_rgba(16,185,129,0.35)] transition hover:opacity-90 hover:shadow-[0_6px_20px_rgba(16,185,129,0.45)]"
               >
                 进入工作台
               </Link>
               <Link
                 to="/ai-toolbox"
-                className="inline-flex h-11 items-center justify-center rounded-md border border-border bg-background/90 px-5 text-sm text-foreground transition hover:bg-muted"
+                className="inline-flex h-11 items-center justify-center rounded-xl border border-border bg-background/90 px-6 text-sm text-foreground transition hover:bg-muted"
               >
                 试用 AI 工具箱
               </Link>
             </div>
           </div>
 
-          <div className="rounded-md border border-border bg-card/95 p-6 shadow-[0_12px_30px_rgba(148,163,184,0.12)]">
-            <div className="text-sm font-medium text-foreground">继续你的故事</div>
+          <div className="rounded-xl border border-border bg-card/95 p-6 shadow-[0_20px_50px_rgba(16,185,129,0.08)]">
+            <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+              <Sparkles className="size-4 text-primary" />
+              继续你的故事
+            </div>
 
             <div className="mt-5 space-y-3">
               {(recentProjects.length > 0 ? recentProjects : fallbackProjects).map((project) => (
                 <Link
                   key={project.id}
                   to="/workspace"
-                  className="flex items-center justify-between gap-3 rounded-md border border-border bg-background/90 px-4 py-4 transition hover:bg-muted/35"
+                  className="group flex items-center justify-between gap-3 rounded-lg border border-border bg-background/90 px-4 py-4 transition hover:border-primary/30 hover:bg-primary/5"
                 >
                   <div className="min-w-0">
                     <div className="truncate text-sm font-medium text-foreground">{project.title}</div>
                     <div className="mt-1 text-xs text-muted-foreground">{formatProjectDate(project.updated_at)}</div>
                   </div>
-                  <ArrowRight className="size-4 shrink-0 text-muted-foreground" />
+                  <ArrowRight className="size-4 shrink-0 text-muted-foreground transition group-hover:translate-x-0.5 group-hover:text-primary" />
                 </Link>
               ))}
             </div>
