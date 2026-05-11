@@ -220,6 +220,34 @@ export function normalizeAIError(error: unknown) {
   return error instanceof Error ? error : new Error('AI 生成失败')
 }
 
+export function getReadableAIErrorMessage(error: unknown, options?: { pipeline?: boolean; debug?: boolean }) {
+  if (isAbortError(error) || isStreamAbortedError(error)) {
+    return options?.pipeline ? '已停止本次 Pipeline 续写' : '已停止本次 AI 续写'
+  }
+
+  const message = error instanceof Error ? error.message : ''
+  if (/NoneType|attribute 'find'|Pipeline 请求失败/i.test(message)) {
+    if (options?.debug) {
+      return 'Pipeline 调试失败：上下文数据不完整，请先检查上一章或当前章节正文。'
+    }
+    if (options?.pipeline) {
+      return 'Pipeline 生成失败：上下文数据不完整，请重试或切回旧链路。'
+    }
+  }
+
+  if (message && !/NoneType|attribute 'find'/i.test(message)) {
+    return message
+  }
+
+  if (options?.debug) {
+    return 'Pipeline 调试失败'
+  }
+  if (options?.pipeline) {
+    return 'Pipeline 生成失败'
+  }
+  return 'AI 续写失败'
+}
+
 async function generateTextOnce(payload: AIGeneratePayload, signal?: AbortSignal) {
   const response = await fetch(`${apiClient.defaults.baseURL}/ai/generate-once`, {
     method: 'POST',

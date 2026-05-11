@@ -239,7 +239,9 @@ class AIService:
             excerpt = excerpt[-220:]
         return f"{label}：\n{excerpt}"
 
-    def _strip_reader_only_tail(self, value: str) -> str:
+    def _strip_reader_only_tail(self, value: str | None) -> str | None:
+        if not value:
+            return None
         markers = ("而她不知道的是", "她不知道的是", "而他不知道的是", "他不知道的是")
         for marker in markers:
             index = value.find(marker)

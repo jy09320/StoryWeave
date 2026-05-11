@@ -41,7 +41,7 @@ import {
   type EditorUtilityContext,
 } from '@/lib/editor-utility-context'
 import { formatDate } from '@/lib/format'
-import { debugContinuationPipeline, getAIContextPreview, getAIRetrievalPreview, getAIRuntimeSettings, isAbortError, listAIRuntimeModels, normalizeAIError, streamContinuationPipeline, streamGenerate, type AIModelOption } from '@/services/ai'
+import { debugContinuationPipeline, getAIContextPreview, getAIRetrievalPreview, getAIRuntimeSettings, getReadableAIErrorMessage, isAbortError, listAIRuntimeModels, normalizeAIError, streamContinuationPipeline, streamGenerate, type AIModelOption } from '@/services/ai'
 import { getProject } from '@/services/projects'
 import type { AIGeneratePayload, AIContextPreviewResponse, AIContinuationDebugResponse, AIContinuationGenerateResponse, AIContinuationTraceStep, AIRetrievalPreviewResponse, ProjectDetail } from '@/types/api'
 import { useAuth } from '@/contexts/auth-context'
@@ -1310,6 +1310,7 @@ export function AppShell() {
       setAIState((prev) => (prev.requestId === requestId ? { ...prev, result: accumulatedResult, isGenerating: false } : prev))
     } catch (error) {
       const normalizedError = normalizeAIError(error)
+      const readableErrorMessage = getReadableAIErrorMessage(normalizedError, { pipeline: useContinuationPipeline })
       setAIState((prev) => (prev.requestId === requestId ? { ...prev, isGenerating: false } : prev))
       if (isAbortError(normalizedError)) {
         setAIMessages((prev) => prev.filter((message) => message.id !== assistantMessageId || message.content.trim()))
@@ -1318,11 +1319,11 @@ export function AppShell() {
         setAIMessages((prev) =>
           prev.map((message) =>
             message.id === assistantMessageId && !message.content.trim()
-              ? { ...message, content: normalizedError instanceof Error ? normalizedError.message : 'AI 续写失败' }
+              ? { ...message, content: readableErrorMessage }
               : message,
           ),
         )
-        toast.error(normalizedError instanceof Error ? normalizedError.message : 'AI 续写失败')
+        toast.error(readableErrorMessage)
       }
     } finally {
       if (generationAbortRef.current === abortController) {
@@ -1358,7 +1359,7 @@ export function AppShell() {
       setIsDiagnosticsDialogOpen(true)
       toast.success('已生成 pipeline 调试结果')
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Pipeline 调试失败'
+      const message = getReadableAIErrorMessage(error, { pipeline: true, debug: true })
       toast.error(message.includes('timeout') ? 'Pipeline 调试超时：这条链路会串行调用 Planner、Writer、Checker，当前模型响应过慢或卡住了。' : message)
     } finally {
       setIsPipelineDebugLoading(false)
