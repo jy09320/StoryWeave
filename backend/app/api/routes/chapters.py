@@ -48,7 +48,12 @@ async def _require_chapter(chapter_id: str, user_id: str, db: AsyncSession) -> C
     return chapter
 
 
-async def _refresh_story_memory_for_chapter(db: AsyncSession, chapter: Chapter) -> None:
+async def _refresh_story_memory_for_chapter(
+    db: AsyncSession,
+    chapter: Chapter,
+    *,
+    raise_on_error: bool = False,
+) -> None:
     try:
         await chapter_chunk_service.refresh_for_chapter(db, chapter_id=chapter.id)
         memory = await chapter_memory_service.refresh_for_chapter(db, chapter_id=chapter.id)
@@ -59,8 +64,11 @@ async def _refresh_story_memory_for_chapter(db: AsyncSession, chapter: Chapter) 
         )
         await story_graph_service.refresh_for_project(db, project_id=chapter.project_id)
     except Exception:
+        await db.rollback()
         # Context refresh is best-effort in Phase 2 and should not block chapter writes.
         logger.exception("Context refresh failed for chapter=%s", chapter.id)
+        if raise_on_error:
+            raise
         return
 
 
@@ -237,6 +245,7 @@ async def update_chapter_memory(
         )
         await story_graph_service.refresh_for_project(db, project_id=chapter.project_id)
     except Exception:
+        await db.rollback()
         logger.exception("Story memory refresh failed after manual memory update for chapter=%s", chapter_id)
     return memory
 
@@ -248,7 +257,10 @@ async def refresh_chapter_memory(
     current_user: User = Depends(get_current_user),
 ):
     chapter = await _require_chapter(chapter_id, current_user.id, db)
-    await _refresh_story_memory_for_chapter(db, chapter)
+    try:
+        await _refresh_story_memory_for_chapter(db, chapter, raise_on_error=True)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail="Failed to refresh chapter memory") from exc
     result = await db.execute(select(ChapterMemory).where(ChapterMemory.chapter_id == chapter_id))
     memory = result.scalar_one_or_none()
     if not memory:
