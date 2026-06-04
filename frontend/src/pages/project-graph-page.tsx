@@ -658,6 +658,12 @@ export function ProjectGraphPage() {
     const el = containerRef.current
     if (!el) return
 
+    // 立即读一次当前尺寸，避免 ResizeObserver 首次不触发
+    setDimensions({
+      width: Math.floor(el.getBoundingClientRect().width),
+      height: Math.floor(el.getBoundingClientRect().height),
+    })
+
     const observer = new ResizeObserver(entries => {
       for (const entry of entries) {
         setDimensions({
@@ -668,7 +674,7 @@ export function ProjectGraphPage() {
     })
     observer.observe(el)
     return () => observer.disconnect()
-  }, [])
+  })
 
   const hasData = graph && (graph.entities.length > 0 || graph.events.length > 0 || graph.relations.length > 0)
 
