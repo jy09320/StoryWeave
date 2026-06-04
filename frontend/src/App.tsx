@@ -17,6 +17,7 @@ import { ProjectEditorPage } from '@/pages/project-editor-page'
 import { ProjectAIWorkspacePage } from '@/pages/project-ai-workspace-page'
 import { ProjectSettingsPage } from '@/pages/project-settings-page'
 import { ProjectWorldPage } from '@/pages/project-world-page'
+import { ProjectGraphPage } from '@/pages/project-graph-page'
 import { ProjectWorkspacePage } from '@/pages/project-workspace-page'
 import { RegisterPage } from '@/pages/register-page'
 import { SettingsPage } from '@/pages/settings-page'
@@ -69,6 +70,10 @@ const router = createBrowserRouter([
       {
         path: 'projects/:projectId/world',
         element: <ProjectWorldPage />,
+      },
+      {
+        path: 'projects/:projectId/graph',
+        element: <ProjectGraphPage />,
       },
       {
         path: 'projects/:projectId/ai-workspace',

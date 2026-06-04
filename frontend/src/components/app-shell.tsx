@@ -798,6 +798,14 @@ export function AppShell() {
       }
     }
 
+    if (isProjectScoped && location.pathname.endsWith('/graph')) {
+      return {
+        eyebrow: project?.title ?? '知识图谱',
+        title: '知识图谱',
+        description: '角色、事件与伏笔的关系网络',
+      }
+    }
+
     if (isProjectScoped) {
       return {
         eyebrow: 'Workspace',
@@ -2144,6 +2152,11 @@ export function AppShell() {
                 label="世界观设定"
                 active={location.pathname === `/projects/${projectId}/world`}
               />
+              <ProjectTreeLink
+                to={`/projects/${projectId}/graph`}
+                label="知识图谱"
+                active={location.pathname === `/projects/${projectId}/graph`}
+              />
             </div>
 
             <div className="mt-6 space-y-1">
@@ -2287,7 +2300,9 @@ export function AppShell() {
           <main
             className={clsx(
               'min-h-0 flex-1 px-4 md:px-5',
-              isAIWorkspaceRoute ? 'overflow-hidden py-4' : 'overflow-y-auto py-5',
+              isAIWorkspaceRoute || location.pathname.endsWith('/graph')
+                ? 'flex flex-col overflow-hidden py-4'
+                : 'overflow-y-auto py-5',
             )}
           >
             <Outlet />
@@ -2462,6 +2477,12 @@ export function AppShell() {
                   to={`/projects/${projectId}/world`}
                   label="世界观设定"
                   active={location.pathname === `/projects/${projectId}/world`}
+                  onNavigate={() => setIsProjectTreeOpen(false)}
+                />
+                <ProjectTreeLink
+                  to={`/projects/${projectId}/graph`}
+                  label="知识图谱"
+                  active={location.pathname === `/projects/${projectId}/graph`}
                   onNavigate={() => setIsProjectTreeOpen(false)}
                 />
               </div>
