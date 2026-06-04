@@ -392,10 +392,11 @@ export function DashboardPage() {
   return (
     <div className="space-y-6 pb-10">
       <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
-        <div className="rounded-md border border-border bg-card/95 p-5 shadow-[0_16px_36px_rgba(148,163,184,0.16)]">
-          <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+        <div className="relative overflow-hidden rounded-2xl border border-primary/10 bg-linear-to-br from-primary/6 via-card to-emerald-500/4 p-6 shadow-sm">
+          <div className="pointer-events-none absolute -right-12 -top-12 size-48 rounded-full bg-primary/4 blur-3xl" />
+          <div className="relative flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
             <div className="space-y-3">
-              <div className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">Project Focus</div>
+              <div className="text-[11px] uppercase tracking-[0.22em] text-primary/70">Project Focus</div>
               {featuredProject ? (
                 <>
                   <div className="space-y-2">
@@ -451,7 +452,7 @@ export function DashboardPage() {
         <RecentActivityHeatmap days={heatmapDays} compact stats={stats} />
       </section>
 
-      <section className="rounded-md border border-border bg-card/95">
+      <section className="rounded-2xl border border-border bg-card">
         <div className="flex items-center justify-between border-b border-border/70 px-5 py-4">
           <div className="text-sm font-medium text-foreground">项目列表</div>
           <Button variant="outline" size="sm" onClick={() => setIsCreateOpen(true)}>
@@ -476,7 +477,7 @@ export function DashboardPage() {
         ) : (
           <div className="divide-y divide-border/70">
             {projects.map((project) => (
-              <div key={project.id} className="grid gap-4 px-5 py-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+              <div key={project.id} className="group grid gap-4 px-5 py-4 transition-colors hover:bg-muted/30 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
                 <div className="min-w-0 space-y-2">
                   <div className="flex flex-wrap items-center gap-2">
                     <div className="truncate text-base font-medium text-foreground">{project.title}</div>
@@ -514,7 +515,7 @@ export function DashboardPage() {
                   </Button>
                   <Link
                     to={`/projects/${project.id}`}
-                    className="inline-flex h-9 items-center justify-center rounded-md bg-amber-500 px-3 text-sm font-medium text-black transition hover:opacity-90"
+                    className="inline-flex h-9 items-center justify-center rounded-md bg-amber-500 px-3 text-sm font-medium text-black transition-all hover:bg-amber-600 hover:shadow-sm"
                   >
                     打开项目
                   </Link>
@@ -588,7 +589,7 @@ function RecentActivityHeatmap({
   const monthLabels = columns.map((column) => column[0]?.date.toLocaleDateString('zh-CN', { month: 'short' }) ?? '')
 
   return (
-    <div className="rounded-md border border-border bg-card/95 p-5">
+    <div className="rounded-2xl border border-border bg-card p-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="space-y-1">
           <div className="text-sm font-medium text-foreground">最近活跃热力板</div>
@@ -604,9 +605,9 @@ function RecentActivityHeatmap({
 
       {compact && stats ? (
         <div className="mt-4 grid grid-cols-3 gap-2">
-          <MiniMetric label="项目" value={stats.total} />
-          <MiniMetric label="进行中" value={stats.active} />
-          <MiniMetric label="完成" value={stats.completed} />
+          <MiniMetric label="项目" value={stats.total} color="primary" />
+          <MiniMetric label="进行中" value={stats.active} color="amber" />
+          <MiniMetric label="完成" value={stats.completed} color="emerald" />
         </div>
       ) : null}
 
@@ -665,11 +666,18 @@ function RecentActivityHeatmap({
   )
 }
 
-function MiniMetric({ label, value }: { label: string; value: number }) {
+const metricColorMap: Record<string, { bg: string; border: string; accent: string }> = {
+  primary: { bg: 'bg-primary/5', border: 'border-primary/15', accent: 'text-primary' },
+  amber: { bg: 'bg-amber-500/5', border: 'border-amber-500/15', accent: 'text-amber-600' },
+  emerald: { bg: 'bg-emerald-500/5', border: 'border-emerald-500/15', accent: 'text-emerald-600' },
+}
+
+function MiniMetric({ label, value, color = 'primary' }: { label: string; value: number; color?: string }) {
+  const c = metricColorMap[color] ?? metricColorMap.primary
   return (
-    <div className="rounded-md border border-border/70 bg-background px-3 py-2">
+    <div className={`rounded-xl border ${c.border} ${c.bg} px-3 py-2.5 transition-colors`}>
       <div className="text-[10px] text-muted-foreground">{label}</div>
-      <div className="mt-1 text-lg font-semibold text-foreground">{value}</div>
+      <div className={`mt-1 text-lg font-semibold ${c.accent}`}>{value}</div>
     </div>
   )
 }
