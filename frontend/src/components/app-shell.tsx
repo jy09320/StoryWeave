@@ -152,7 +152,7 @@ function getTraceStatusTone(status: string) {
   if (status === 'failed') {
     return 'border-rose-200 bg-rose-50 text-rose-700'
   }
-  return 'border-[#e5e7eb] bg-white text-[#6b7280]'
+  return 'border-border bg-white text-muted-foreground'
 }
 
 function getTraceStatusLabel(status: string) {
@@ -1460,15 +1460,15 @@ export function AppShell() {
     const primaryLabel = scopedEditorUtilityContext?.action === 'expand' ? '选区扩写' : '章节续写'
     const resultApplyLabel = scopedEditorUtilityContext?.action === 'expand' ? '插入到选区后' : '追加到正文'
     return (
-      <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-[#fcfcfd]">
-        <div className="flex items-center justify-between border-b border-[#eef0f3] px-4 py-3">
+      <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-card">
+        <div className="flex items-center justify-between border-b border-border px-4 py-3">
           <SectionLabel>AI 侧栏</SectionLabel>
           <div className="flex items-center gap-2">
             {hasAIPanelHistory ? (
               <button
                 type="button"
                 onClick={handleClearCurrentAIPanelHistory}
-                className="inline-flex h-8 items-center justify-center rounded-full border border-[#d1d5db] bg-white px-3 text-[11px] text-[#4b5563] transition hover:border-[#9ca3af] hover:text-[#111827]"
+                className="inline-flex h-8 items-center justify-center rounded-full border border-border bg-white px-3 text-[11px] text-muted-foreground transition hover:border-border hover:text-foreground"
               >
                 清空记录
               </button>
@@ -1476,7 +1476,7 @@ export function AppShell() {
             <button
               type="button"
               onClick={() => onClose?.()}
-              className="inline-flex h-8 items-center justify-center rounded-full border border-[#d1d5db] bg-white px-3 text-[11px] text-[#4b5563] transition hover:border-[#9ca3af] hover:text-[#111827]"
+              className="inline-flex h-8 items-center justify-center rounded-full border border-border bg-white px-3 text-[11px] text-muted-foreground transition hover:border-border hover:text-foreground"
             >
               收起
             </button>
@@ -1484,14 +1484,14 @@ export function AppShell() {
         </div>
 
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-          <div className="border-b border-[#eef0f3] px-4 py-4">
+          <div className="border-b border-border px-4 py-4">
             <div className="flex items-start gap-3">
               <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
                 <Bot className="size-4" />
               </div>
               <div className="min-w-0">
-                <div className="text-sm font-semibold text-[#111827]">{primaryLabel}</div>
-                <div className="mt-1 text-xs leading-5 text-[#6b7280]">
+                <div className="text-sm font-semibold text-foreground">{primaryLabel}</div>
+                <div className="mt-1 text-xs leading-5 text-muted-foreground">
                   {!hasSavedRuntimeKey
                     ? '请先在设置中心保存 API Key 后再开始生成。'
                     : '补充续写目标、情绪和限制条件后即可开始生成。'}
@@ -1508,7 +1508,7 @@ export function AppShell() {
                     <div className="mb-1 text-[11px] uppercase tracking-[0.18em] text-amber-700">
                       {actionLabelMap[scopedEditorUtilityContext.action]}
                     </div>
-                    <div className="text-sm leading-6 text-[#4b5563]">{scopedEditorUtilityContext.selectedText}</div>
+                    <div className="text-sm leading-6 text-muted-foreground">{scopedEditorUtilityContext.selectedText}</div>
                   </div>
                 ) : null}
 
@@ -1517,8 +1517,8 @@ export function AppShell() {
                     <div className="mb-4 flex size-12 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
                       <Bot className="size-6" />
                     </div>
-                    <div className="text-sm font-medium text-[#111827]">AI 助手已就绪</div>
-                    <div className="mt-2 max-w-[240px] text-xs leading-5 text-[#6b7280]">
+                    <div className="text-sm font-medium text-foreground">AI 助手已就绪</div>
+                    <div className="mt-2 max-w-[240px] text-xs leading-5 text-muted-foreground">
                       直接输入这次续写的目标、情绪推进、禁用内容或文风限制。
                     </div>
                     <div className="mt-6 flex flex-col gap-2 w-full max-w-[240px]">
@@ -1527,14 +1527,14 @@ export function AppShell() {
                           <button
                             type="button"
                             onClick={() => setAIState(prev => ({ ...prev, instruction: '续写完本章，推进到本章的自然收束点。' }))}
-                            className="rounded-xl border border-[#e5e7eb] bg-white px-3 py-2 text-left text-xs text-[#4b5563] transition hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700"
+                            className="rounded-xl border border-border bg-white px-3 py-2 text-left text-xs text-muted-foreground transition hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700"
                           >
                             续写完本章
                           </button>
                           <button
                             type="button"
                             onClick={() => setAIState(prev => ({ ...prev, instruction: '继续写下去，保持当前节奏和视角，自然承接上一段。' }))}
-                            className="rounded-xl border border-[#e5e7eb] bg-white px-3 py-2 text-left text-xs text-[#4b5563] transition hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700"
+                            className="rounded-xl border border-border bg-white px-3 py-2 text-left text-xs text-muted-foreground transition hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700"
                           >
                             继续写下去
                           </button>
@@ -1544,14 +1544,14 @@ export function AppShell() {
                           <button
                             type="button"
                             onClick={() => setAIState(prev => ({ ...prev, instruction: '让这一段继续推进冲突，语气克制一点，不要重复上一段信息。' }))}
-                            className="rounded-xl border border-[#e5e7eb] bg-white px-3 py-2 text-left text-xs text-[#4b5563] transition hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700"
+                            className="rounded-xl border border-border bg-white px-3 py-2 text-left text-xs text-muted-foreground transition hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700"
                           >
                             推进冲突，语气克制
                           </button>
                           <button
                             type="button"
                             onClick={() => setAIState(prev => ({ ...prev, instruction: '详细描写一下周围的环境和氛围，烘托出紧张感。' }))}
-                            className="rounded-xl border border-[#e5e7eb] bg-white px-3 py-2 text-left text-xs text-[#4b5563] transition hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700"
+                            className="rounded-xl border border-border bg-white px-3 py-2 text-left text-xs text-muted-foreground transition hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700"
                           >
                             描写环境，烘托紧张感
                           </button>
@@ -1568,14 +1568,14 @@ export function AppShell() {
                       const { warnings, fallbacks, durationMs } = message.pipelineMeta
                       return (
                         <div key={message.id} className="flex justify-start">
-                          <div className="inline-flex max-w-[92%] items-center gap-2 rounded-2xl border border-[#e5e7eb] bg-white px-4 py-2 text-xs text-[#9ca3af]">
+                          <div className="inline-flex max-w-[92%] items-center gap-2 rounded-2xl border border-border bg-white px-4 py-2 text-xs text-muted-foreground/70">
                             <Check className="size-3 shrink-0 text-emerald-500" />
                             <span>Pipeline 已完成 · {steps.length} 步 · {formatTraceDuration(durationMs)}{warnings > 0 ? ` · ⚠ ${warnings}` : ''}{fallbacks > 0 ? ` · fallback ${fallbacks}` : ''}</span>
                             {diagnosticsTrace.length > 0 ? (
                               <button
                                 type="button"
                                 onClick={() => openDiagnosticsDialog('pipeline')}
-                                className="ml-1 shrink-0 text-[#6b7280] underline underline-offset-2 hover:text-[#111827]"
+                                className="ml-1 shrink-0 text-muted-foreground underline underline-offset-2 hover:text-foreground"
                               >
                                 查看链路
                               </button>
@@ -1586,12 +1586,12 @@ export function AppShell() {
                     }
                     return (
                       <div key={message.id} className="flex justify-start">
-                        <div className="inline-flex max-w-[92%] flex-wrap items-center gap-x-3 gap-y-1.5 rounded-2xl border border-[#e5e7eb] bg-white px-4 py-2.5">
+                        <div className="inline-flex max-w-[92%] flex-wrap items-center gap-x-3 gap-y-1.5 rounded-2xl border border-border bg-white px-4 py-2.5">
                           {steps.length === 0 ? (
-                            <span className="text-xs text-[#9ca3af]">正在准备 Pipeline…</span>
+                            <span className="text-xs text-muted-foreground/70">正在准备 Pipeline…</span>
                           ) : (
                             steps.map((step) => (
-                              <span key={step.step_key} className={clsx('inline-flex items-center gap-1 text-xs', step.status === 'completed' ? 'text-emerald-600' : step.status === 'running' ? 'text-[#374151]' : 'text-[#9ca3af]')}>
+                              <span key={step.step_key} className={clsx('inline-flex items-center gap-1 text-xs', step.status === 'completed' ? 'text-emerald-600' : step.status === 'running' ? 'text-foreground' : 'text-muted-foreground/70')}>
                                 {step.status === 'completed' ? (
                                   <Check className="size-3" />
                                 ) : step.status === 'running' ? (
@@ -1613,8 +1613,8 @@ export function AppShell() {
                         className={clsx(
                           'max-w-[92%] rounded-2xl px-4 py-3 text-sm leading-6',
                           message.role === 'user'
-                            ? 'bg-[#111827] text-white'
-                            : 'border border-[#e5e7eb] bg-white text-[#374151]',
+                            ? 'bg-foreground text-white'
+                            : 'border border-border bg-white text-foreground',
                         )}
                       >
                         {message.content.trim() || (message.role === 'assistant' && aiState.isGenerating ? '正在生成...' : '')}
@@ -1626,7 +1626,7 @@ export function AppShell() {
             </div>
           </div>
 
-          <div className="border-t border-[#eef0f3] bg-white px-4 py-3">
+          <div className="border-t border-border bg-white px-4 py-3">
             <div className="flex flex-col gap-2">
               <div className="flex flex-wrap items-center gap-2">
                 <DropdownMenu>
@@ -1634,7 +1634,7 @@ export function AppShell() {
                     <button
                       type="button"
                       disabled={!hasSavedRuntimeKey || runtimeSettingsQuery.isLoading}
-                      className="inline-flex h-7 max-w-[120px] items-center justify-between rounded-md bg-[#f3f4f6] px-2 text-[11px] text-[#4b5563] transition hover:bg-[#e5e7eb] hover:text-[#111827] disabled:cursor-not-allowed disabled:opacity-50"
+                      className="inline-flex h-7 max-w-[120px] items-center justify-between rounded-md bg-muted px-2 text-[11px] text-muted-foreground transition hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       <span className="truncate">{isLoadingModels && !selectedModelId ? '加载中...' : selectedModelId || '选择模型'}</span>
                       <ChevronDown className="ml-1 size-3 shrink-0 transition" />
@@ -1647,7 +1647,7 @@ export function AppShell() {
                         type="button"
                         onClick={(e) => { e.preventDefault(); void handleLoadModels() }}
                         disabled={isLoadingModels || !hasSavedRuntimeKey}
-                        className="inline-flex size-6 items-center justify-center rounded-lg text-[#9ca3af] transition hover:bg-[#f3f4f6] hover:text-[#374151] disabled:cursor-not-allowed disabled:opacity-40"
+                        className="inline-flex size-6 items-center justify-center rounded-lg text-muted-foreground/70 transition hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
                       >
                         {isLoadingModels ? <LoaderCircle className="size-3 animate-spin" /> : <RefreshCw className="size-3" />}
                       </button>
@@ -1655,7 +1655,7 @@ export function AppShell() {
                     <DropdownMenuSeparator />
                     <div className="max-h-[320px] overflow-y-auto">
                       {availableModels.length === 0 ? (
-                        <div className="px-2 py-3 text-xs leading-5 text-[#9ca3af]">
+                        <div className="px-2 py-3 text-xs leading-5 text-muted-foreground/70">
                           {hasSavedRuntimeKey ? '暂无模型，点击右上角刷新按钮加载' : '请先在设置中心配置 API Key'}
                         </div>
                       ) : (
@@ -1683,7 +1683,7 @@ export function AppShell() {
                   onValueChange={(value) => handleSelectContinuationChain(value === 'pipeline')}
                   disabled={aiState.isGenerating}
                 >
-                  <SelectTrigger className="h-7 w-[90px] rounded-md border-none bg-[#f3f4f6] px-2 text-[11px] text-[#4b5563] shadow-none hover:bg-[#e5e7eb] hover:text-[#111827]">
+                  <SelectTrigger className="h-7 w-[90px] rounded-md border-none bg-muted px-2 text-[11px] text-muted-foreground shadow-none hover:bg-muted hover:text-foreground">
                     <SelectValue placeholder="选择链路" />
                   </SelectTrigger>
                   <SelectContent>
@@ -1695,14 +1695,14 @@ export function AppShell() {
                   type="button"
                   onClick={() => void handleOpenDiagnosticsCenter()}
                   disabled={isContextPreviewLoading || isRetrievalPreviewLoading || aiState.isGenerating}
-                  className="inline-flex h-7 items-center gap-1.5 rounded-md bg-[#f3f4f6] px-2 text-[11px] text-[#4b5563] transition hover:bg-[#e5e7eb] hover:text-[#111827] disabled:cursor-not-allowed disabled:opacity-50"
+                  className="inline-flex h-7 items-center gap-1.5 rounded-md bg-muted px-2 text-[11px] text-muted-foreground transition hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {isContextPreviewLoading || isRetrievalPreviewLoading ? <LoaderCircle className="size-3 animate-spin" /> : <BookCopy className="size-3" />}
                   诊断中心
                 </button>
               </div>
 
-              <div className="relative rounded-xl border border-[#e5e7eb] bg-[#f9fafb] focus-within:border-emerald-500 focus-within:bg-white focus-within:ring-1 focus-within:ring-emerald-500 transition-all">
+              <div className="relative rounded-xl border border-border bg-muted/40 focus-within:border-emerald-500 focus-within:bg-white focus-within:ring-1 focus-within:ring-emerald-500 transition-all">
                 <textarea
                   value={aiState.instruction}
                   onChange={(event) => setAIState((prev) => ({ ...prev, result: '', instruction: event.target.value }))}
@@ -1715,7 +1715,7 @@ export function AppShell() {
                     }
                   }}
                   rows={2}
-                  className="min-h-[60px] w-full resize-none border-none bg-transparent px-3 py-2.5 pr-10 text-sm leading-6 text-[#111827] outline-none placeholder:text-[#9ca3af]"
+                  className="min-h-[60px] w-full resize-none border-none bg-transparent px-3 py-2.5 pr-10 text-sm leading-6 text-foreground outline-none placeholder:text-muted-foreground/70"
                   placeholder={getAIInstructionPlaceholder(scopedEditorUtilityContext)}
                 />
                 <button
@@ -1729,7 +1729,7 @@ export function AppShell() {
                   }}
                   className={clsx(
                     'absolute bottom-2 right-2 inline-flex size-7 items-center justify-center rounded-lg text-white transition',
-                    aiState.isGenerating ? 'bg-[#f59e0b] hover:bg-[#d97706]' : 'bg-emerald-500 hover:bg-emerald-600',
+                    aiState.isGenerating ? 'bg-amber-500 hover:bg-amber-600' : 'bg-emerald-500 hover:bg-emerald-600',
                   )}
                 >
                   {aiState.isGenerating ? <LoaderCircle className="size-3.5 animate-spin" /> : <SendHorizontal className="size-3.5" />}
@@ -1741,14 +1741,14 @@ export function AppShell() {
                   <button
                     type="button"
                     onClick={handleDiscardGeneratedText}
-                    className="inline-flex h-8 w-full items-center justify-center rounded-lg border border-[#d1d5db] bg-white px-3 text-xs font-medium text-[#4b5563] transition hover:border-[#9ca3af] hover:text-[#111827]"
+                    className="inline-flex h-8 w-full items-center justify-center rounded-lg border border-border bg-white px-3 text-xs font-medium text-muted-foreground transition hover:border-border hover:text-foreground"
                   >
                     丢弃结果
                   </button>
                   <button
                     type="button"
                     onClick={handleApplyGeneratedText}
-                    className="inline-flex h-8 w-full items-center justify-center rounded-lg bg-[#111827] px-3 text-xs font-medium text-white transition hover:bg-[#1f2937]"
+                    className="inline-flex h-8 w-full items-center justify-center rounded-lg bg-foreground px-3 text-xs font-medium text-white transition hover:bg-foreground/80"
                   >
                     {resultApplyLabel}
                   </button>
@@ -1788,7 +1788,7 @@ export function AppShell() {
                 className={clsx(
                   'inline-flex h-8 items-center rounded-full border px-3 text-xs transition',
                   activeDiagnosticsTab === tab.key
-                    ? 'border-[#111827] bg-[#111827] text-white'
+                    ? 'border-foreground bg-foreground text-white'
                     : 'border-border bg-background text-muted-foreground hover:text-foreground',
                 )}
               >
@@ -2071,7 +2071,7 @@ export function AppShell() {
   return (
     <div className="flex h-screen bg-background text-foreground selection:bg-primary/15 selection:text-foreground">
       {diagnosticsDialog}
-      <aside className="flex w-[88px] shrink-0 flex-col items-center border-r border-border bg-[#f6f1e8] px-3 py-5">
+      <aside className="flex w-[88px] shrink-0 flex-col items-center border-r border-border bg-sidebar px-3 py-5">
         <div className="flex size-14 items-center justify-center rounded-2xl border border-primary/15 bg-primary/10 shadow-[0_12px_30px_rgba(16,185,129,0.08)] overflow-hidden">
           <img src={logoUrl} alt="偶记" className="size-12 object-contain" />
         </div>
@@ -2221,7 +2221,7 @@ export function AppShell() {
                       <>
                         <Link
                           to={`/projects/${projectId}`}
-                          className="inline-flex h-10 items-center gap-2 rounded-xl border border-[#e5e7eb] bg-white px-4 text-sm text-[#4b5563] transition hover:border-[#d1d5db] hover:text-[#111827]"
+                          className="inline-flex h-10 items-center gap-2 rounded-xl border border-border bg-white px-4 text-sm text-muted-foreground transition hover:border-border hover:text-foreground"
                         >
                           <ArrowLeft className="size-4" />
                           返回写作台
@@ -2271,14 +2271,14 @@ export function AppShell() {
                         ) : null}
                         <button
                           type="button"
-                          className="inline-flex size-10 items-center justify-center rounded-xl border border-[#e5e7eb] bg-white text-[#6b7280] transition hover:border-[#d1d5db] hover:text-[#111827] md:hidden"
+                          className="inline-flex size-10 items-center justify-center rounded-xl border border-border bg-white text-muted-foreground transition hover:border-border hover:text-foreground md:hidden"
                           onClick={() => setIsZenMode((prev) => !prev)}
                         >
                           {isZenMode ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
                         </button>
                         <button
                           type="button"
-                          className="hidden h-10 items-center gap-2 rounded-xl border border-[#e5e7eb] bg-white px-4 text-sm text-[#4b5563] transition hover:border-[#d1d5db] hover:text-[#111827] md:inline-flex"
+                          className="hidden h-10 items-center gap-2 rounded-xl border border-border bg-white px-4 text-sm text-muted-foreground transition hover:border-border hover:text-foreground md:inline-flex"
                           onClick={() => setIsZenMode((prev) => !prev)}
                         >
                           {isZenMode ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
@@ -2338,16 +2338,16 @@ export function AppShell() {
                   <SidebarHint>{chapterContextHint}</SidebarHint>
                   {contextualCharacters.length > 0 ? (
                     contextualCharacters.slice(0, 6).map(({ item, matches, score }) => (
-                      <div key={item.id} className="rounded-2xl border border-[#e5e7eb] bg-white p-4">
+                      <div key={item.id} className="rounded-2xl border border-border bg-white p-4">
                         <div className="flex flex-wrap items-center gap-2">
-                          <div className="text-sm font-medium text-[#111827]">{item.character.name}</div>
+                          <div className="text-sm font-medium text-foreground">{item.character.name}</div>
                           {score > 0 ? (
                             <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] text-amber-700">
                               当前章命中
                             </span>
                           ) : null}
                         </div>
-                        <div className="mt-1 text-xs text-[#6b7280]">
+                        <div className="mt-1 text-xs text-muted-foreground">
                           {item.role_label || item.summary || item.character.personality || '暂无项目摘要'}
                         </div>
                         {matches.length > 0 ? (
@@ -2355,7 +2355,7 @@ export function AppShell() {
                             {matches.map((keyword) => (
                               <span
                                 key={`${item.id}-${keyword}`}
-                                className="rounded-full border border-[#d1d5db] bg-[#f9fafb] px-2 py-0.5 text-[11px] text-[#6b7280]"
+                                className="rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[11px] text-muted-foreground"
                               >
                                 {keyword}
                               </span>
@@ -2419,7 +2419,7 @@ export function AppShell() {
               }}
             />
             <aside
-              className="ml-3 flex h-full flex-col border-l border-border bg-[#fcfcfd]"
+              className="ml-3 flex h-full flex-col border-l border-border bg-card"
               style={{ width: aiPanelWidth - 12 }}
             >
               <div className="min-h-0 flex-1">{renderAIPanel(closeAIPanel)}</div>
@@ -2435,17 +2435,17 @@ export function AppShell() {
           aria-hidden="true"
         >
           <aside
-            className="flex h-full w-[min(84vw,320px)] flex-col border-r border-[#e5e7eb] bg-[#fafaf9] shadow-2xl shadow-black/10"
+            className="flex h-full w-[min(84vw,320px)] flex-col border-r border-border bg-card shadow-2xl shadow-black/10"
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="flex items-center justify-between border-b border-[#ececec] px-5 py-5">
+            <div className="flex items-center justify-between border-b border-border px-5 py-5">
               <div>
-                <div className="text-[11px] uppercase tracking-[0.22em] text-[#9ca3af]">Project</div>
-                <div className="mt-2 text-sm font-semibold text-[#111827]">{project?.title ?? '加载中...'}</div>
+                <div className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground/70">Project</div>
+                <div className="mt-2 text-sm font-semibold text-foreground">{project?.title ?? '加载中...'}</div>
               </div>
               <button
                 type="button"
-                className="inline-flex size-10 items-center justify-center rounded-xl border border-[#e5e7eb] bg-white text-[#6b7280] transition hover:text-[#111827]"
+                className="inline-flex size-10 items-center justify-center rounded-xl border border-border bg-white text-muted-foreground transition hover:text-foreground"
                 onClick={() => setIsProjectTreeOpen(false)}
               >
                 <PanelLeftClose className="size-4" />
@@ -2523,11 +2523,11 @@ export function AppShell() {
           aria-hidden="true"
         >
           <aside
-            className="ml-auto flex h-full w-[min(88vw,380px)] flex-col border-l border-[#e5e7eb] bg-white shadow-2xl shadow-black/10"
+            className="ml-auto flex h-full w-[min(88vw,380px)] flex-col border-l border-border bg-white shadow-2xl shadow-black/10"
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="flex items-center justify-between border-b border-[#ececec] px-5 py-4">
-              <div className="grid flex-1 grid-cols-2 rounded-2xl bg-[#f3f4f6] p-1">
+            <div className="flex items-center justify-between border-b border-border px-5 py-4">
+              <div className="grid flex-1 grid-cols-2 rounded-2xl bg-muted p-1">
                 {utilityTabs.map((tab) => (
                   <button
                     key={tab.key}
@@ -2536,8 +2536,8 @@ export function AppShell() {
                     className={clsx(
                       'rounded-xl px-3 py-2 text-sm font-medium transition',
                       activeUtilityTab === tab.key
-                        ? 'bg-white text-[#111827] shadow-sm'
-                        : 'text-[#6b7280] hover:text-[#111827]',
+                        ? 'bg-white text-foreground shadow-sm'
+                        : 'text-muted-foreground hover:text-foreground',
                     )}
                   >
                     {tab.label}
@@ -2546,7 +2546,7 @@ export function AppShell() {
               </div>
               <button
                 type="button"
-                className="ml-3 inline-flex size-10 items-center justify-center rounded-xl border border-[#e5e7eb] bg-white text-[#6b7280] transition hover:text-[#111827]"
+                className="ml-3 inline-flex size-10 items-center justify-center rounded-xl border border-border bg-white text-muted-foreground transition hover:text-foreground"
                 onClick={closeUtilityDrawer}
               >
                 <PanelRightClose className="size-4" />
@@ -2560,16 +2560,16 @@ export function AppShell() {
                   <SidebarHint>{chapterContextHint}</SidebarHint>
                   {contextualCharacters.length > 0 ? (
                     contextualCharacters.slice(0, 6).map(({ item, matches, score }) => (
-                      <div key={item.id} className="rounded-2xl border border-[#e5e7eb] bg-white p-4">
+                      <div key={item.id} className="rounded-2xl border border-border bg-white p-4">
                         <div className="flex flex-wrap items-center gap-2">
-                          <div className="text-sm font-medium text-[#111827]">{item.character.name}</div>
+                          <div className="text-sm font-medium text-foreground">{item.character.name}</div>
                           {score > 0 ? (
                             <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] text-amber-700">
                               当前章命中
                             </span>
                           ) : null}
                         </div>
-                        <div className="mt-1 text-xs text-[#6b7280]">
+                        <div className="mt-1 text-xs text-muted-foreground">
                           {item.role_label || item.summary || item.character.personality || '暂无项目摘要'}
                         </div>
                         {matches.length > 0 ? (
@@ -2577,7 +2577,7 @@ export function AppShell() {
                             {matches.map((keyword) => (
                               <span
                                 key={`${item.id}-${keyword}`}
-                                className="rounded-full border border-[#d1d5db] bg-[#f9fafb] px-2 py-0.5 text-[11px] text-[#6b7280]"
+                                className="rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[11px] text-muted-foreground"
                               >
                                 {keyword}
                               </span>
@@ -2634,7 +2634,7 @@ export function AppShell() {
           aria-hidden="true"
         >
           <aside
-            className="ml-auto flex h-full w-[min(92vw,440px)] flex-col border-l border-[#e5e7eb] bg-[#fcfcfd] shadow-2xl shadow-black/10"
+            className="ml-auto flex h-full w-[min(92vw,440px)] flex-col border-l border-border bg-card shadow-2xl shadow-black/10"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="min-h-0 flex-1">{renderAIPanel(closeAIPanel)}</div>
@@ -2672,7 +2672,7 @@ function HeaderIconButton({
           'inline-flex size-10 items-center justify-center rounded-xl border bg-white transition',
           active
             ? 'border-primary/35 bg-primary/10 text-primary'
-            : 'border-[#e5e7eb] text-[#6b7280] hover:border-[#d1d5db] hover:text-[#111827]',
+            : 'border-border text-muted-foreground hover:border-border hover:text-foreground',
         )}
       >
         <Icon className="size-4" />

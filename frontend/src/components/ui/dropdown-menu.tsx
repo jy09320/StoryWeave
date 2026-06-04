@@ -16,7 +16,7 @@ function DropdownMenuContent({
         sideOffset={sideOffset}
         collisionPadding={collisionPadding}
         className={[
-          'z-50 min-w-[8rem] overflow-hidden rounded-2xl border border-[#e5e7eb] bg-white shadow-lg shadow-black/10',
+          'z-50 min-w-[8rem] overflow-hidden rounded-2xl border border-border bg-popover shadow-lg shadow-black/10',
           'data-[state=open]:animate-in data-[state=closed]:animate-out',
           'data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
           'data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95',
@@ -38,8 +38,8 @@ function DropdownMenuItem({
   return (
     <DropdownMenuPrimitive.Item
       className={[
-        'relative flex cursor-pointer select-none items-center rounded-xl px-3 py-2 text-sm text-[#374151] outline-none transition',
-        'focus:bg-[#f3f4f6] focus:text-[#111827]',
+        'relative flex cursor-pointer select-none items-center rounded-xl px-3 py-2 text-sm text-popover-foreground outline-none transition',
+        'focus:bg-accent focus:text-accent-foreground',
         'data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
         className,
       ]
@@ -56,7 +56,7 @@ function DropdownMenuSeparator({
 }: React.ComponentProps<typeof DropdownMenuPrimitive.Separator>) {
   return (
     <DropdownMenuPrimitive.Separator
-      className={['mx-2 my-1 h-px bg-[#f3f4f6]', className].filter(Boolean).join(' ')}
+      className={['mx-2 my-1 h-px bg-border', className].filter(Boolean).join(' ')}
       {...props}
     />
   )
@@ -68,7 +68,7 @@ function DropdownMenuLabel({
 }: React.ComponentProps<typeof DropdownMenuPrimitive.Label>) {
   return (
     <DropdownMenuPrimitive.Label
-      className={['px-3 py-1.5 text-[10px] font-medium uppercase tracking-[0.18em] text-[#9ca3af]', className]
+      className={['px-3 py-1.5 text-[10px] font-medium uppercase tracking-[0.18em] text-muted-foreground', className]
         .filter(Boolean)
         .join(' ')}
       {...props}

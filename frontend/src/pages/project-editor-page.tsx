@@ -1179,7 +1179,7 @@ ${nextText}` : nextText
                   navigate(`/ai-toolbox?task=${task}&projectId=${projectId}&chapterId=${chapterId}`)
                 }}
                 onChange={handleEditorChange}
-                className="bg-[#fffdfa] shadow-[0_1px_2px_rgba(16,34,53,0.04)]"
+                className="bg-card shadow-sm"
                 placeholder="从这里开始写正文。右侧 AI 面板和参考抽屉作为辅助层存在，不再挤占主写作空间。"
               />
             </section>

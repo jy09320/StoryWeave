@@ -350,7 +350,7 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
   const loadingFallback = !isEditorReady ? (
     <div
         className={cn(
-          'min-h-[560px] rounded-[24px] border border-border/90 bg-[#fffdfa] px-8 py-8 text-sm text-muted-foreground shadow-[0_1px_2px_rgba(16,34,53,0.04)]',
+          'min-h-[560px] rounded-[24px] border border-border/90 bg-card px-8 py-8 text-sm text-muted-foreground shadow-sm',
           className,
         )}
       >
@@ -493,7 +493,7 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
     <div
       ref={containerRef}
       className={cn(
-        'relative rounded-[24px] border border-[#e6ded2] bg-[#fffdfa] shadow-[0_1px_2px_rgba(16,34,53,0.04)] transition-[border-color,box-shadow] duration-200 focus-within:border-[#d8cdbd] focus-within:shadow-[0_0_0_3px_rgba(196,174,138,0.12),0_2px_6px_rgba(16,34,53,0.06)]',
+        'relative rounded-[24px] border border-border bg-card shadow-sm transition-[border-color,box-shadow] duration-200 focus-within:border-primary/30 focus-within:shadow-[0_0_0_3px_rgba(16,185,129,0.08),0_2px_6px_rgba(16,34,53,0.06)]',
         className,
       )}
       onMouseMove={(event) => {
