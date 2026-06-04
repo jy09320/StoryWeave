@@ -217,7 +217,7 @@ export function HomePage() {
       >
         <div className="mx-auto flex h-16 w-full max-w-7xl items-center justify-between gap-4 px-6 lg:px-10">
           <div className="flex items-center gap-2.5">
-            <img src={logoUrl} alt="偶记" className="h-18 w-auto object-contain" />
+            <img src={logoUrl} alt="偶记" className="h-20 w-auto object-contain" />
           </div>
 
           <nav className="hidden items-center gap-8 text-sm font-medium text-[#1D1D1F] md:flex">

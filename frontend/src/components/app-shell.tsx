@@ -2072,8 +2072,8 @@ export function AppShell() {
     <div className="flex h-screen bg-background text-foreground selection:bg-primary/15 selection:text-foreground">
       {diagnosticsDialog}
       <aside className="flex w-[88px] shrink-0 flex-col items-center border-r border-border bg-[#f6f1e8] px-3 py-5">
-        <div className="flex size-12 items-center justify-center rounded-2xl border border-primary/15 bg-primary/10 shadow-[0_12px_30px_rgba(16,185,129,0.08)] overflow-hidden">
-          <img src={logoUrl} alt="偶记" className="size-10 object-contain" />
+        <div className="flex size-14 items-center justify-center rounded-2xl border border-primary/15 bg-primary/10 shadow-[0_12px_30px_rgba(16,185,129,0.08)] overflow-hidden">
+          <img src={logoUrl} alt="偶记" className="size-12 object-contain" />
         </div>
 
         <nav className="mt-8 flex flex-1 flex-col items-stretch gap-2">
