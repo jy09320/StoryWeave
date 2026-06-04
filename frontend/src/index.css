@@ -189,20 +189,8 @@
 /* Global smooth transitions for interactive elements */
 @layer base {
   a, button, input, textarea, select {
-    transition-property: color, background-color, border-color, box-shadow, opacity, transform;
+    transition-property: color, background-color, border-color, box-shadow, opacity;
     transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
     transition-duration: 150ms;
-  }
-
-  /* Subtle hover lift for cards and elevated surfaces */
-  [data-slot="card"]:hover {
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04), 0 1px 3px rgba(0, 0, 0, 0.03);
-  }
-
-  /* Focus ring animation */
-  *:focus-visible {
-    outline: 2px solid oklch(0.63 0.13 168 / 50%);
-    outline-offset: 2px;
-    transition: outline-offset 150ms ease;
   }
 }

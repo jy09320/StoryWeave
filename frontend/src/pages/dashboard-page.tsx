@@ -392,11 +392,10 @@ export function DashboardPage() {
   return (
     <div className="space-y-6 pb-10">
       <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
-        <div className="relative overflow-hidden rounded-2xl border border-primary/10 bg-linear-to-br from-primary/6 via-card to-emerald-500/4 p-6 shadow-sm">
-          <div className="pointer-events-none absolute -right-12 -top-12 size-48 rounded-full bg-primary/4 blur-3xl" />
-          <div className="relative flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+        <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
+          <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
             <div className="space-y-3">
-              <div className="text-[11px] uppercase tracking-[0.22em] text-primary/70">Project Focus</div>
+              <div className="text-[11px] uppercase tracking-[0.22em] text-primary/80">Project Focus</div>
               {featuredProject ? (
                 <>
                   <div className="space-y-2">
@@ -605,9 +604,9 @@ function RecentActivityHeatmap({
 
       {compact && stats ? (
         <div className="mt-4 grid grid-cols-3 gap-2">
-          <MiniMetric label="项目" value={stats.total} color="primary" />
-          <MiniMetric label="进行中" value={stats.active} color="amber" />
-          <MiniMetric label="完成" value={stats.completed} color="emerald" />
+          <MiniMetric label="项目" value={stats.total} />
+          <MiniMetric label="进行中" value={stats.active} />
+          <MiniMetric label="完成" value={stats.completed} />
         </div>
       ) : null}
 
@@ -666,18 +665,11 @@ function RecentActivityHeatmap({
   )
 }
 
-const metricColorMap: Record<string, { bg: string; border: string; accent: string }> = {
-  primary: { bg: 'bg-primary/5', border: 'border-primary/15', accent: 'text-primary' },
-  amber: { bg: 'bg-amber-500/5', border: 'border-amber-500/15', accent: 'text-amber-600' },
-  emerald: { bg: 'bg-emerald-500/5', border: 'border-emerald-500/15', accent: 'text-emerald-600' },
-}
-
-function MiniMetric({ label, value, color = 'primary' }: { label: string; value: number; color?: string }) {
-  const c = metricColorMap[color] ?? metricColorMap.primary
+function MiniMetric({ label, value }: { label: string; value: number }) {
   return (
-    <div className={`rounded-xl border ${c.border} ${c.bg} px-3 py-2.5 transition-colors`}>
+    <div className="rounded-xl border border-border/60 bg-muted/30 px-3 py-2.5">
       <div className="text-[10px] text-muted-foreground">{label}</div>
-      <div className={`mt-1 text-lg font-semibold ${c.accent}`}>{value}</div>
+      <div className="mt-1 text-lg font-semibold text-foreground">{value}</div>
     </div>
   )
 }
