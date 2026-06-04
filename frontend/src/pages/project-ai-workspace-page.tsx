@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useParams } from 'react-router-dom'
 import {
@@ -41,7 +41,7 @@ import {
   applyWorldSettingPatch,
   uploadProjectAssetFile,
 } from '@/services/project-asset-ai'
-import { getAIRuntimeSettings, askStoryQA } from '@/services/ai'
+import { getAIRuntimeSettings, listAIRuntimeModels, askStoryQA, type AIModelOption } from '@/services/ai'
 import { getProject } from '@/services/projects'
 import type {
   AssetChatSSEDraftReadyEvent,
@@ -193,6 +193,24 @@ export function ProjectAIWorkspacePage() {
     staleTime: 60_000,
   })
 
+  const [availableModels, setAvailableModels] = useState<AIModelOption[]>([])
+  const [isLoadingModels, setIsLoadingModels] = useState(false)
+  const hasSavedRuntimeKey = Boolean(runtimeSettingsQuery.data?.api_key_masked)
+
+  async function handleLoadModels() {
+    if (isLoadingModels) return
+    try {
+      setIsLoadingModels(true)
+      const response = await listAIRuntimeModels()
+      setAvailableModels(response.models ?? [])
+      toast.success(`已加载 ${response.models?.length ?? 0} 个模型`)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '模型列表加载失败')
+    } finally {
+      setIsLoadingModels(false)
+    }
+  }
+
   const activeSession = useMemo(
     () => sessions.find((item) => item.id === activeSessionId) ?? sessions[0] ?? null,
     [activeSessionId, sessions],
@@ -305,12 +323,14 @@ export function ProjectAIWorkspacePage() {
     }))
 
     let accumulatedText = ''
+    const selectedModelId = currentState.modelId.trim() || runtimeSettingsQuery.data?.model_id || null
 
     try {
       if (session.assetType === 'story_qa') {
         const response = await askStoryQA({
           project_id: projectId,
           question: text,
+          model_id: selectedModelId,
         })
 
         accumulatedText = response.answer
@@ -341,6 +361,7 @@ export function ProjectAIWorkspacePage() {
           message: text,
           guidance: currentState.guidance.trim() || null,
           file_ids: currentState.fileIds,
+          model_id: selectedModelId,
         })
 
         handleDraftReady(session.id, {
@@ -363,6 +384,7 @@ export function ProjectAIWorkspacePage() {
           message: text,
           guidance: currentState.guidance.trim() || null,
           file_ids: currentState.fileIds,
+          model_id: selectedModelId,
         })
 
         handleDraftReady(session.id, {
@@ -570,6 +592,12 @@ export function ProjectAIWorkspacePage() {
                         projectId={project.id}
                         assetType={session.assetType}
                         sessionId={session.id}
+                        modelId={state.modelId || runtimeSettingsQuery.data?.model_id || null}
+                        availableModels={availableModels}
+                        isLoadingModels={isLoadingModels}
+                        hasSavedRuntimeKey={hasSavedRuntimeKey}
+                        onModelChange={(modelId) => updateSessionState(session.id, (prev) => ({ ...prev, modelId }))}
+                        onLoadModels={() => void handleLoadModels()}
                         controlledState={panelState}
                         onControlledStateChange={(updater) => {
                           updateSessionState(session.id, (prev) => {

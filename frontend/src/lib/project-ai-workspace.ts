@@ -23,6 +23,7 @@ export interface ProjectAIWorkspaceSessionState {
   streamingText: string | null
   inputText: string
   guidance: string
+  modelId: string
   latestWorldPatch: WorldSettingPatch | null
   latestCharacterActions: CharacterActionItem[] | null
   latestQASources: StoryQASourceRef[]
@@ -90,6 +91,7 @@ function createEmptySessionState(assetType: ProjectAssetAIType): ProjectAIWorksp
     streamingText: null,
     inputText: '',
     guidance: '',
+    modelId: '',
     latestWorldPatch: null,
     latestCharacterActions: null,
     latestQASources: [],

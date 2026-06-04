@@ -419,6 +419,7 @@ export interface WorldSettingAnalyzeRequest {
   command?: string | null
   guidance?: string | null
   file_ids?: string[]
+  model_id?: string | null
 }
 
 export interface WorldSettingAnalyzeResponse {
@@ -457,6 +458,7 @@ export interface CharacterAnalyzeRequest {
   command?: string | null
   guidance?: string | null
   file_ids?: string[]
+  model_id?: string | null
 }
 
 export interface CharacterAnalyzeResponse {
@@ -483,6 +485,7 @@ export interface AssetChatRequest {
   asset_type: 'world_setting' | 'project_character'
   session_id: string
   file_ids?: string[]
+  model_id?: string | null
 }
 
 export type AssetChatSSEEventType = 'text' | 'tool_call' | 'draft_ready' | 'error' | 'done'

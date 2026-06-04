@@ -9,15 +9,25 @@ import {
   Wrench,
   BrainCircuit,
   TriangleAlert,
+  ChevronDown,
+  RefreshCw,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useQuery } from '@tanstack/react-query'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { Textarea } from '@/components/ui/textarea'
 import { getCapabilityStatusMeta, matchAIRuntimeCapabilitySnapshot } from '@/lib/ai-runtime-capabilities'
-import { getAIRuntimeSettings } from '@/services/ai'
+import { getAIRuntimeSettings, type AIModelOption } from '@/services/ai'
 import { analyzeCharacters, analyzeWorldSetting, streamAssetChat } from '@/services/project-asset-ai'
 import type {
   AssetChatSSEDraftReadyEvent,
@@ -31,6 +41,12 @@ export interface ProjectAssetAIPanelProps {
   projectId: string
   assetType: ProjectAssetAIType
   sessionId: string
+  modelId?: string | null
+  availableModels?: AIModelOption[]
+  isLoadingModels?: boolean
+  hasSavedRuntimeKey?: boolean
+  onModelChange?: (modelId: string) => void
+  onLoadModels?: () => void
   controlledState?: ProjectAssetAIPanelState
   onControlledStateChange?: (
     updater: (prev: ProjectAssetAIPanelState) => ProjectAssetAIPanelState,
@@ -265,6 +281,12 @@ export function ProjectAssetAIPanel({
   projectId,
   assetType,
   sessionId,
+  modelId,
+  availableModels = [],
+  isLoadingModels = false,
+  hasSavedRuntimeKey = true,
+  onModelChange,
+  onLoadModels,
   controlledState,
   onControlledStateChange,
   latestWorldPatch = null,
@@ -452,6 +474,7 @@ export function ProjectAssetAIPanel({
           message: text,
           guidance: guidance.trim() || null,
           file_ids: fileIds,
+          model_id: modelId || null,
         })
 
         onDraftReady?.({
@@ -484,6 +507,7 @@ export function ProjectAssetAIPanel({
           message: text,
           guidance: guidance.trim() || null,
           file_ids: fileIds,
+          model_id: modelId || null,
         })
 
         onDraftReady?.({
@@ -507,6 +531,7 @@ export function ProjectAssetAIPanel({
           asset_type: assetType as 'world_setting' | 'project_character',
           session_id: sessionId,
           file_ids: fileIds,
+          model_id: modelId || null,
         },
         (event) => {
           if (aborted) return
@@ -588,7 +613,7 @@ export function ProjectAssetAIPanel({
             </Badge>
           )}
         </div>
-        <div className="flex flex-wrap gap-1.5">
+        <div className="flex flex-wrap items-center gap-1.5">
           {meta.quickPrompts.slice(0, 2).map((prompt) => (
             <button
               key={prompt}
@@ -599,6 +624,57 @@ export function ProjectAssetAIPanel({
               {prompt}
             </button>
           ))}
+          {onModelChange ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  disabled={!hasSavedRuntimeKey}
+                  className="inline-flex h-6 max-w-[140px] items-center justify-between rounded-full border border-border bg-muted/50 px-2 text-[10px] text-muted-foreground transition hover:border-primary/30 hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <span className="truncate">{modelId || '默认模型'}</span>
+                  <ChevronDown className="ml-0.5 size-2.5 shrink-0" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent side="bottom" align="end" className="w-[280px] p-2">
+                <div className="flex items-center justify-between px-1 pb-1.5">
+                  <DropdownMenuLabel className="px-0 py-0">可用模型</DropdownMenuLabel>
+                  <button
+                    type="button"
+                    onClick={(e) => { e.preventDefault(); onLoadModels?.() }}
+                    disabled={isLoadingModels || !hasSavedRuntimeKey}
+                    className="inline-flex size-6 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    {isLoadingModels ? <RefreshCw className="size-3 animate-spin" /> : <RefreshCw className="size-3" />}
+                  </button>
+                </div>
+                <DropdownMenuSeparator />
+                <div className="max-h-[320px] overflow-y-auto">
+                  {availableModels.length === 0 ? (
+                    <div className="px-2 py-3 text-xs leading-5 text-muted-foreground">
+                      {hasSavedRuntimeKey ? '暂无模型，点击右上角刷新按钮加载' : '请先在设置中心配置 API Key'}
+                    </div>
+                  ) : (
+                    <div className="space-y-0.5">
+                      {availableModels.map((model) => {
+                        const isSelected = model.id === modelId
+                        return (
+                          <DropdownMenuItem
+                            key={model.id}
+                            onSelect={() => onModelChange(model.id)}
+                            className={isSelected ? 'bg-primary/10 text-primary focus:bg-primary/10 focus:text-primary' : ''}
+                          >
+                            <span className="truncate">{model.id}</span>
+                            {isSelected && <CheckCircle2 className="ml-auto size-3.5 shrink-0" />}
+                          </DropdownMenuItem>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : null}
         </div>
       </div>
 
