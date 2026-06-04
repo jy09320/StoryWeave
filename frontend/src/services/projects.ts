@@ -21,6 +21,7 @@ import type {
   ProjectPayload,
   ProjectWorldAutoCompletePayload,
   ProjectWorldAutoCompleteResult,
+  StoryGraph,
   WorldSetting,
   WorldSettingPayload,
 } from '@/types/api'
@@ -167,5 +168,10 @@ export async function importProjectKnowledge(projectId: string, payload: Project
 
 export async function autocompleteProjectWorldSetting(projectId: string, payload: ProjectWorldAutoCompletePayload) {
   const { data } = await apiClient.post<ProjectWorldAutoCompleteResult>(`/projects/${projectId}/world-setting/autocomplete`, payload)
+  return data
+}
+
+export async function getStoryGraph(projectId: string) {
+  const { data } = await apiClient.get<StoryGraph>(`/projects/${projectId}/story-graph`)
   return data
 }

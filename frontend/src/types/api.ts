@@ -522,3 +522,67 @@ export type AssetChatSSEEvent =
   | AssetChatSSEDraftReadyEvent
   | AssetChatSSEErrorEvent
   | AssetChatSSEDoneEvent
+
+// ---------------------------------------------------------------------------
+// Story Graph
+// ---------------------------------------------------------------------------
+
+export type StoryEntityType = 'character' | 'object' | 'location' | 'concept'
+export type StoryEventType = 'scene' | 'discovery' | 'conflict' | 'decision'
+export type StoryLoopPriority = 'high' | 'medium' | 'low'
+export type StoryLoopStatus = 'open' | 'resolved'
+
+export interface StoryEntity {
+  id: string
+  project_id: string
+  entity_type: StoryEntityType | string
+  canonical_name: string
+  aliases: string[]
+  description: string | null
+  tags: string[]
+  first_seen_chapter_order: number
+  last_seen_chapter_order: number
+  mention_count: number
+}
+
+export interface StoryEvent {
+  id: string
+  project_id: string
+  chapter_order: number
+  title: string
+  summary: string | null
+  event_type: StoryEventType | string
+  location: string | null
+  participants: string[]
+  tags: string[]
+}
+
+export interface StoryRelation {
+  id: string
+  project_id: string
+  source_entity_name: string
+  target_entity_name: string
+  relation_type: string
+  status_after: string | null
+  chapter_order: number
+}
+
+export interface StoryOpenLoop {
+  id: string
+  project_id: string
+  label: string
+  description: string | null
+  priority: StoryLoopPriority | string
+  status: StoryLoopStatus | string
+  related_entities: string[]
+  first_seen_chapter_order: number
+  last_seen_chapter_order: number
+  mention_count: number
+}
+
+export interface StoryGraph {
+  entities: StoryEntity[]
+  events: StoryEvent[]
+  relations: StoryRelation[]
+  open_loops: StoryOpenLoop[]
+}
