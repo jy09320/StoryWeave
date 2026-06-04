@@ -25,6 +25,34 @@ export interface AIRuntimeSettingsPayload {
   api_key?: string | null
 }
 
+export interface AIRuntimeConfig {
+  id: string
+  name: string
+  provider: string
+  model_id: string
+  base_url: string | null
+  api_key_masked: string | null
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface AIRuntimeConfigCreatePayload {
+  name: string
+  provider: string
+  model_id: string
+  base_url?: string | null
+  api_key?: string | null
+}
+
+export interface AIRuntimeConfigPatchPayload {
+  name?: string | null
+  provider?: string | null
+  model_id?: string | null
+  base_url?: string | null
+  api_key?: string | null
+}
+
 export interface AIModelOption {
   id: string
   owned_by: string | null
@@ -164,13 +192,38 @@ export async function updateAIRuntimeSettings(payload: AIRuntimeSettingsPayload)
   return data
 }
 
-export async function listAIRuntimeModels() {
-  const { data } = await apiClient.get<AIModelListResponse>('/ai/runtime-settings/models')
+export async function listAIRuntimeModels(configId?: string) {
+  const params = configId ? { config_id: configId } : undefined
+  const { data } = await apiClient.get<AIModelListResponse>('/ai/runtime-settings/models', { params })
   return data
 }
 
 export async function checkAIRuntimeCapabilities(payload?: { provider?: string | null; model_id?: string | null }) {
   const { data } = await apiClient.post<AIRuntimeCapabilityCheckResponse>('/ai/runtime-settings/capabilities/check', payload ?? {})
+  return data
+}
+
+export async function listAIRuntimeConfigs() {
+  const { data } = await apiClient.get<{ configs: AIRuntimeConfig[] }>('/ai/runtime-settings/configs')
+  return data.configs
+}
+
+export async function createAIRuntimeConfig(payload: AIRuntimeConfigCreatePayload) {
+  const { data } = await apiClient.post<AIRuntimeConfig>('/ai/runtime-settings/configs', payload)
+  return data
+}
+
+export async function updateAIRuntimeConfig(configId: string, payload: AIRuntimeConfigPatchPayload) {
+  const { data } = await apiClient.put<AIRuntimeConfig>(`/ai/runtime-settings/configs/${configId}`, payload)
+  return data
+}
+
+export async function deleteAIRuntimeConfig(configId: string) {
+  await apiClient.delete(`/ai/runtime-settings/configs/${configId}`)
+}
+
+export async function activateAIRuntimeConfig(configId: string) {
+  const { data } = await apiClient.post<AIRuntimeConfig>(`/ai/runtime-settings/configs/${configId}/activate`)
   return data
 }
 

@@ -3,11 +3,13 @@ import type { AIModelOption } from '@/services/ai'
 export const MODEL_PROVIDER_OPTIONS = [
   { label: 'OpenAI', value: 'openai' },
   { label: 'Anthropic', value: 'anthropic' },
+  { label: 'OpenAI 兼容', value: 'openai_compatible' },
 ] as const
 
 export const FALLBACK_MODEL_BY_PROVIDER: Record<string, string> = {
   openai: 'gpt-4o',
   anthropic: 'claude-3-5-sonnet-latest',
+  openai_compatible: 'gpt-4o',
 }
 
 export function buildRuntimeModelOptions(params: {
