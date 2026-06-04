@@ -12,6 +12,10 @@ from app.schemas.project import (
     AIRuntimeCapabilityCheckRequest,
     AIRuntimeCapabilityCheckResponse,
     AIRuntimeCapabilityItemResponse,
+    AIRuntimeConfigListResponse,
+    AIRuntimeConfigResponse,
+    AIRuntimeSettingCreate,
+    AIRuntimeSettingPatch,
     AIRuntimeSettingResponse,
     AIRuntimeSettingUpdate,
     AIModelListResponse,
@@ -33,6 +37,20 @@ def _capability_failed(summary: str, detail: str | None = None) -> AIRuntimeCapa
 
 def _capability_unsupported(summary: str, detail: str | None = None) -> AIRuntimeCapabilityItemResponse:
     return AIRuntimeCapabilityItemResponse(status="unsupported", summary=summary, detail=detail)
+
+
+def _config_to_response(config) -> AIRuntimeConfigResponse:
+    return AIRuntimeConfigResponse(
+        id=config.id,
+        name=config.name,
+        provider=config.provider,
+        model_id=config.model_id,
+        base_url=config.base_url,
+        api_key_masked=mask_api_key(config.api_key),
+        is_active=config.is_active,
+        created_at=config.created_at,
+        updated_at=config.updated_at,
+    )
 
 
 @router.get("/runtime-settings", response_model=AIRuntimeSettingResponse)
@@ -75,17 +93,105 @@ async def update_ai_runtime_settings(
     )
 
 
-@router.get("/runtime-settings/models", response_model=AIModelListResponse)
-async def list_ai_runtime_models(
+@router.get("/runtime-settings/configs", response_model=AIRuntimeConfigListResponse)
+async def list_ai_runtime_configs(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    config = await runtime_ai_config_service.get_effective_config(db, current_user.id)
-    provider = str(config["provider"] or "openai")
-    base_url = config["base_url"]
-    api_key = config["api_key"]
+    configs = await runtime_ai_config_service.list_configs(db, current_user.id)
+    return AIRuntimeConfigListResponse(
+        configs=[_config_to_response(c) for c in configs],
+    )
 
-    if provider != "openai":
+
+@router.post("/runtime-settings/configs", response_model=AIRuntimeConfigResponse)
+async def create_ai_runtime_config(
+    data: AIRuntimeSettingCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    config = await runtime_ai_config_service.create_config(
+        db,
+        owner_id=current_user.id,
+        name=data.name,
+        provider=data.provider,
+        model_id=data.model_id,
+        base_url=data.base_url,
+        api_key=data.api_key,
+    )
+    return _config_to_response(config)
+
+
+@router.put("/runtime-settings/configs/{config_id}", response_model=AIRuntimeConfigResponse)
+async def update_ai_runtime_config(
+    config_id: str,
+    data: AIRuntimeSettingPatch,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    config = await runtime_ai_config_service.update_config(
+        db,
+        config_id=config_id,
+        owner_id=current_user.id,
+        name=data.name,
+        provider=data.provider,
+        model_id=data.model_id,
+        base_url=data.base_url,
+        api_key=data.api_key,
+    )
+    if not config:
+        raise HTTPException(status_code=404, detail="Config not found")
+    return _config_to_response(config)
+
+
+@router.delete("/runtime-settings/configs/{config_id}")
+async def delete_ai_runtime_config(
+    config_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    deleted = await runtime_ai_config_service.delete_config(
+        db, config_id=config_id, owner_id=current_user.id,
+    )
+    if not deleted:
+        raise HTTPException(status_code=400, detail="Cannot delete config (not found or is active)")
+    return {"ok": True}
+
+
+@router.post("/runtime-settings/configs/{config_id}/activate", response_model=AIRuntimeConfigResponse)
+async def activate_ai_runtime_config(
+    config_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    config = await runtime_ai_config_service.set_active(
+        db, config_id=config_id, owner_id=current_user.id,
+    )
+    if not config:
+        raise HTTPException(status_code=404, detail="Config not found")
+    return _config_to_response(config)
+
+
+@router.get("/runtime-settings/models", response_model=AIModelListResponse)
+async def list_ai_runtime_models(
+    config_id: str | None = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if config_id:
+        config_obj = await runtime_ai_config_service.get_config_by_id(db, config_id, current_user.id)
+        if not config_obj:
+            raise HTTPException(status_code=404, detail="Config not found")
+        provider = config_obj.provider
+        base_url = config_obj.base_url
+        api_key = config_obj.api_key
+    else:
+        config = await runtime_ai_config_service.get_effective_config(db, current_user.id)
+        provider = str(config["provider"] or "openai")
+        base_url = config["base_url"]
+        api_key = config["api_key"]
+
+    if provider not in ("openai", "openai_compatible"):
         raise HTTPException(status_code=400, detail="Only OpenAI-compatible provider supports automatic model discovery")
 
     if not api_key:
@@ -107,6 +213,7 @@ async def list_ai_runtime_models(
 @router.post("/runtime-settings/capabilities/check", response_model=AIRuntimeCapabilityCheckResponse)
 async def check_ai_runtime_capabilities(
     payload: AIRuntimeCapabilityCheckRequest,
+    config_id: str | None = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):

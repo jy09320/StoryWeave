@@ -32,6 +32,21 @@ class RuntimeAIConfigService:
         )
         return result.scalar_one_or_none()
 
+    async def get_config_by_id(self, db: AsyncSession, config_id: str, owner_id: str) -> AIRuntimeSetting | None:
+        result = await db.execute(
+            select(AIRuntimeSetting)
+            .where(AIRuntimeSetting.id == config_id, AIRuntimeSetting.owner_id == owner_id)
+        )
+        return result.scalar_one_or_none()
+
+    async def list_configs(self, db: AsyncSession, owner_id: str) -> list[AIRuntimeSetting]:
+        result = await db.execute(
+            select(AIRuntimeSetting)
+            .where(AIRuntimeSetting.owner_id == owner_id)
+            .order_by(AIRuntimeSetting.is_active.desc(), AIRuntimeSetting.updated_at.desc())
+        )
+        return list(result.scalars().all())
+
     async def get_effective_config(self, db: AsyncSession, owner_id: str) -> dict[str, str | None]:
         active = await self.get_active_setting(db, owner_id)
         latest_saved_api_key = await self.get_latest_saved_api_key(db, owner_id)
@@ -56,6 +71,92 @@ class RuntimeAIConfigService:
             "source": "environment",
             "updated_at": None,
         }
+
+    async def create_config(
+        self,
+        db: AsyncSession,
+        *,
+        owner_id: str,
+        name: str,
+        provider: str,
+        model_id: str,
+        base_url: str | None,
+        api_key: str | None,
+    ) -> AIRuntimeSetting:
+        existing_configs = await self.list_configs(db, owner_id)
+        is_first = len(existing_configs) == 0
+
+        new_config = AIRuntimeSetting(
+            owner_id=owner_id,
+            name=name,
+            provider=provider,
+            model_id=model_id,
+            base_url=base_url,
+            api_key=api_key,
+            is_active=is_first,
+        )
+        db.add(new_config)
+        await db.commit()
+        await db.refresh(new_config)
+        return new_config
+
+    async def update_config(
+        self,
+        db: AsyncSession,
+        *,
+        config_id: str,
+        owner_id: str,
+        name: str | None = None,
+        provider: str | None = None,
+        model_id: str | None = None,
+        base_url: str | None = None,
+        api_key: str | None = None,
+    ) -> AIRuntimeSetting | None:
+        config = await self.get_config_by_id(db, config_id, owner_id)
+        if not config:
+            return None
+
+        if name is not None:
+            config.name = name
+        if provider is not None:
+            config.provider = provider
+        if model_id is not None:
+            config.model_id = model_id
+        if base_url is not None:
+            config.base_url = base_url
+        if api_key is not None:
+            config.api_key = api_key
+
+        await db.commit()
+        await db.refresh(config)
+        return config
+
+    async def delete_config(self, db: AsyncSession, *, config_id: str, owner_id: str) -> bool:
+        config = await self.get_config_by_id(db, config_id, owner_id)
+        if not config:
+            return False
+        if config.is_active:
+            return False
+
+        await db.delete(config)
+        await db.commit()
+        return True
+
+    async def set_active(self, db: AsyncSession, *, config_id: str, owner_id: str) -> AIRuntimeSetting | None:
+        config = await self.get_config_by_id(db, config_id, owner_id)
+        if not config:
+            return None
+
+        await db.execute(
+            update(AIRuntimeSetting)
+            .where(AIRuntimeSetting.owner_id == owner_id, AIRuntimeSetting.is_active.is_(True))
+            .values(is_active=False)
+        )
+
+        config.is_active = True
+        await db.commit()
+        await db.refresh(config)
+        return config
 
     async def save_active_setting(
         self,
