@@ -1185,16 +1185,19 @@ ${nextText}` : nextText
             </section>
 
             <section className="border-t border-border px-6 py-6">
-              <label className="mb-2 block text-sm font-medium text-foreground/85" htmlFor="chapter-notes">
+              <label className="mb-1 block text-sm font-medium text-foreground/85" htmlFor="chapter-notes">
                 章节备注
               </label>
+              <p className="mb-3 text-xs leading-5 text-muted-foreground">
+                会作为「作者意图」注入 AI 续写和记忆检索，影响生成方向。适合写节奏要求、伏笔提醒、本章目标等。
+              </p>
               <Textarea
                 id="chapter-notes"
                 value={activeForm.notes}
                 onChange={handleNotesChange}
                 rows={5}
                 className="min-h-[132px] rounded-2xl border-border bg-background text-foreground placeholder:text-muted-foreground"
-                placeholder="记录当前章节目标、伏笔提醒或 AI 指令草稿。"
+                placeholder="例如：这章节奏放慢，重点写两人之间的试探；回收第 3 章密信伏笔。"
               />
             </section>
 
