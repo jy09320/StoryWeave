@@ -49,7 +49,6 @@ import type {
   ProjectAssetAIType,
   ProjectDetail,
   CharacterActionItem,
-  StoryQASourceRef,
   WorldSettingPatch,
 } from '@/types/api'
 

@@ -88,6 +88,21 @@ const assetMeta: Record<
     uploadHint: '当前版本先保留文件入口与消息流外壳，后续会对接角色资料分析、角色绑定、角色更新与关系整理工具链。',
     quickPrompts: ['识别主要角色', '提炼角色关系', '补全项目内定位'],
   },
+  story_qa: {
+    title: '故事问答',
+    description: '向 AI 提问关于你故事的任何问题。',
+    icon: Globe2,
+    accentClassName: 'text-primary',
+    sourceLabel: '问题',
+    sourcePlaceholder: '',
+    commandLabel: '',
+    commandPlaceholder: '',
+    guidancePlaceholder: '',
+    submitLabel: '提问',
+    pendingLabel: '查询中...',
+    uploadHint: '',
+    quickPrompts: [],
+  },
 }
 
 const modeOptions: Array<{ value: ProjectWorldAutoCompleteMode; label: string }> = [

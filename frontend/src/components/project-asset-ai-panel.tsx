@@ -86,6 +86,15 @@ const assetMeta: Record<
     quickPrompts: ['识别主要角色', '提炼角色关系', '补全项目内定位'],
     welcomeContent: '你好！我是角色 AI 助手，可以帮你从资料中识别角色、整理角色设定和关系。\n\n可以直接和我对话，描述你的角色，上传人物资料文档，我会生成结构化的角色建议供你确认。',
   },
+  story_qa: {
+    title: '故事问答',
+    icon: Globe2,
+    accentClassName: 'text-primary',
+    placeholder: '输入你的问题',
+    guidancePlaceholder: '',
+    quickPrompts: [],
+    welcomeContent: '向 AI 提问关于你故事的任何问题。',
+  },
 }
 
 function buildWelcomeMessage(assetType: ProjectAssetAIType): ProjectAssetAIMessage {
@@ -495,7 +504,7 @@ export function ProjectAssetAIPanel({
         projectId,
         {
           message: text,
-          asset_type: assetType,
+          asset_type: assetType as 'world_setting' | 'project_character',
           session_id: sessionId,
           file_ids: fileIds,
         },
