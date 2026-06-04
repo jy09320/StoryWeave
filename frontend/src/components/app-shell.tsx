@@ -50,7 +50,7 @@ import { useAuth } from '@/contexts/auth-context'
 const primaryNavItems = [
   { to: '/workspace', label: '首页', icon: Home, end: true },
   { to: '/characters', label: '角色库', icon: Users2, end: false },
-  { to: '/ai-toolbox', label: 'AI 工具箱', icon: Sparkles, end: false },
+  { to: '/ai-toolbox', label: '模板广场', icon: Sparkles, end: false },
   { to: '/settings', label: '设置', icon: Settings2, end: false },
 ]
 
@@ -766,7 +766,7 @@ export function AppShell() {
 
     if (location.pathname === '/ai-toolbox') {
       return {
-        eyebrow: 'AI Toolbox',
+        eyebrow: '模板广场',
         title: 'AI 任务工作台',
         description: '',
       }
