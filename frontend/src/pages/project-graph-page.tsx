@@ -341,7 +341,19 @@ function ForceGraph({
 }) {
   const svgRef = useRef<SVGSVGElement>(null)
   const simulationRef = useRef<d3.Simulation<GraphNode, GraphLink> | null>(null)
+  const selectedNodeIdRef = useRef(selectedNodeId)
+  const onSelectNodeRef = useRef(onSelectNode)
 
+  // Keep refs up to date without triggering d3 rebuild
+  useEffect(() => {
+    selectedNodeIdRef.current = selectedNodeId
+  }, [selectedNodeId])
+
+  useEffect(() => {
+    onSelectNodeRef.current = onSelectNode
+  }, [onSelectNode])
+
+  // Main d3 setup — only rebuilds when graph data or container size changes
   useEffect(() => {
     if (!svgRef.current || width === 0 || height === 0) return
 
@@ -477,17 +489,11 @@ function ForceGraph({
         .attr('height', bbox.height + pad.y * 2)
     })
 
-    // show label for selected node immediately
-    if (selectedNodeId) {
-      node.filter(d => d.id === selectedNodeId)
-        .select('g')
-        .attr('opacity', 1)
-    }
-
     // Interactions
     node.on('click', (event, d) => {
       event.stopPropagation()
-      onSelectNode(d.id === selectedNodeId ? null : d.id)
+      const current = selectedNodeIdRef.current
+      onSelectNodeRef.current(d.id === current ? null : d.id)
     })
 
     node.on('mouseenter', function (_, d) {
@@ -541,7 +547,7 @@ function ForceGraph({
       // restore: keep selected node label visible
       node.select('g')
         .transition().duration(250)
-        .attr('opacity', (n: unknown) => (n as GraphNode).id === selectedNodeId ? 1 : 0)
+        .attr('opacity', (n: unknown) => (n as GraphNode).id === selectedNodeIdRef.current ? 1 : 0)
 
       link.transition().duration(250)
         .attr('stroke-opacity', 0.3)
@@ -550,7 +556,7 @@ function ForceGraph({
         .attr('opacity', 0)
     })
 
-    svg.on('click', () => onSelectNode(null))
+    svg.on('click', () => onSelectNodeRef.current(null))
 
     // Simulation — stronger repulsion + longer links to spread nodes out
     const simulation = d3.forceSimulation<GraphNode>(nodes)
@@ -582,7 +588,17 @@ function ForceGraph({
     return () => {
       simulation.stop()
     }
-  }, [nodes, links, width, height, onSelectNode, selectedNodeId])
+  }, [nodes, links, width, height])
+
+  // Update label visibility when selection changes — lightweight DOM update, no rebuild
+  useEffect(() => {
+    if (!svgRef.current) return
+    const svg = d3.select(svgRef.current)
+    svg.selectAll('g.nodes > g').each(function(d) {
+      const isSelected = (d as GraphNode).id === selectedNodeId
+      d3.select(this).select('g').attr('opacity', isSelected ? 1 : null)
+    })
+  }, [selectedNodeId])
 
   return (
     <svg
