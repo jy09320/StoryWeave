@@ -1063,5 +1063,160 @@ class AIService:
             "content": content,
         }
 
+    async def story_qa(
+        self,
+        db: AsyncSession,
+        *,
+        project_id: str,
+        question: str,
+        model_provider: str | None = None,
+        model_id: str | None = None,
+        owner_id: str | None = None,
+    ) -> dict[str, Any]:
+        loaded = await self._load_generation_context(
+            db,
+            project_id=project_id,
+            chapter_id=None,
+            owner_id=owner_id,
+        )
+        if not loaded:
+            return {"answer": "未找到对应项目。", "sources": [], "query_terms": []}
+
+        project = loaded["project"]
+        story_memory = loaded["story_memory"]
+
+        retrieval = await context_retrieval_service.retrieve_for_generation(
+            db,
+            project_id=project_id,
+            chapter=None,
+            text=question,
+            instruction=question,
+            recent_memories=[],
+            story_memory=story_memory,
+            limit=6,
+        )
+
+        query_terms: list[str] = retrieval.get("query_terms") or []
+        chunks: list[dict[str, Any]] = retrieval.get("chunks") or []
+        graph_evidence: list[dict[str, Any]] = retrieval.get("graph_evidence") or []
+
+        # --- build context sections ---
+        context_parts: list[str] = []
+
+        project_section = self._build_project_summary_section(project)
+        if project_section:
+            context_parts.append(project_section)
+
+        story_memory_section = self._build_story_memory_section(story_memory)
+        if story_memory_section:
+            context_parts.append(story_memory_section)
+
+        character_section = self._build_character_context_section(project, detail_level="full")
+        if character_section:
+            context_parts.append(character_section)
+
+        world_section = self._build_world_context_section(project, detail_level="full")
+        if world_section:
+            context_parts.append(world_section)
+
+        if chunks:
+            lines = ["相关章节片段（按相关度排序）"]
+            for idx, chunk in enumerate(chunks[:5], start=1):
+                chapter_title = self._clip_text(chunk.get("chapter_title") or chunk.get("scene_label"), 60) or f"章节片段 {idx}"
+                content = self._clip_text(chunk.get("content_short") or chunk.get("content"), 300)
+                chapter_order = chunk.get("chapter_order")
+                order_label = f"第 {chapter_order + 1} 章 · " if isinstance(chapter_order, int) else ""
+                lines.append(f"{idx}. {order_label}{chapter_title}")
+                if content:
+                    lines.append(f"   {content}")
+            context_parts.append("\n".join(lines))
+
+        if graph_evidence:
+            lines = ["图谱证据（实体 / 事件 / 伏笔）"]
+            for item in graph_evidence[:6]:
+                item_type = item.get("type", "")
+                label = self._clip_text(item.get("label"), 60) or ""
+                summary = self._clip_text(item.get("summary"), 120)
+                type_label = {"entity": "实体", "event": "事件", "relation": "关系", "open_loop": "伏笔"}.get(item_type, item_type)
+                line = f"[{type_label}] {label}"
+                if summary:
+                    line += f"：{summary}"
+                lines.append(line)
+            context_parts.append("\n".join(lines))
+
+        context_text = "\n\n".join(context_parts)
+
+        system_prompt = (
+            "你是一个故事知识库助手，专门回答关于这部小说的问题。\n"
+            "请严格根据以下上下文资料回答用户的问题，回答要简洁准确。\n"
+            "如果资料中有明确记载，请在回答中注明来源（如"第 X 章《章节名》"或"角色档案"）。\n"
+            "如果资料中没有相关内容，请明确说明"在已有记录中未找到相关信息"，不要凭空推测。\n\n"
+            f"【故事资料】\n{context_text}"
+        )
+
+        runtime_config = await self.resolve_runtime_config(db, model_provider, model_id, owner_id)
+        provider = str(runtime_config["provider"])
+        resolved_model_id = str(runtime_config["model_id"])
+        api_key = runtime_config["api_key"]
+        base_url = runtime_config["base_url"]
+
+        if provider == "anthropic":
+            answer = await self.generate_text_anthropic(
+                api_key=api_key,
+                base_url=base_url,
+                text=question,
+                instruction=system_prompt,
+                model=resolved_model_id,
+                temperature=0.3,
+                max_tokens=1200,
+            )
+        else:
+            answer = await self._generate_openai_non_stream_text(
+                api_key=api_key,
+                base_url=base_url,
+                text=question,
+                instruction=system_prompt,
+                model=resolved_model_id,
+                temperature=0.3,
+                max_tokens=1200,
+            )
+
+        # --- build source refs from retrieval ---
+        sources: list[dict[str, Any]] = []
+        seen_labels: set[str] = set()
+
+        for chunk in chunks[:5]:
+            chapter_order = chunk.get("chapter_order")
+            scene_label = self._clip_text(chunk.get("chapter_title") or chunk.get("scene_label"), 60)
+            label = scene_label or (f"第 {chapter_order + 1} 章" if isinstance(chapter_order, int) else "章节片段")
+            if label in seen_labels:
+                continue
+            seen_labels.add(label)
+            sources.append({
+                "type": "chapter",
+                "label": label,
+                "chapter_order": chapter_order,
+                "excerpt": self._clip_text(chunk.get("content_short") or chunk.get("content"), 80),
+            })
+
+        for item in graph_evidence[:4]:
+            item_type = item.get("type", "entity")
+            label = self._clip_text(item.get("label"), 60) or ""
+            if not label or label in seen_labels:
+                continue
+            seen_labels.add(label)
+            sources.append({
+                "type": item_type,
+                "label": label,
+                "chapter_order": item.get("chapter_order"),
+                "excerpt": self._clip_text(item.get("summary"), 80),
+            })
+
+        return {
+            "answer": answer,
+            "sources": sources,
+            "query_terms": query_terms,
+        }
+
 
 ai_service = AIService()

@@ -7,7 +7,10 @@ import {
   Clock3,
   Globe2,
   LoaderCircle,
+  MessageCircleQuestion,
   Plus,
+  Search,
+  Sparkles,
   Trash2,
   TriangleAlert,
   Users2,
@@ -38,7 +41,7 @@ import {
   applyWorldSettingPatch,
   uploadProjectAssetFile,
 } from '@/services/project-asset-ai'
-import { getAIRuntimeSettings } from '@/services/ai'
+import { getAIRuntimeSettings, askStoryQA } from '@/services/ai'
 import { getProject } from '@/services/projects'
 import type {
   AssetChatSSEDraftReadyEvent,
@@ -46,6 +49,7 @@ import type {
   ProjectAssetAIType,
   ProjectDetail,
   CharacterActionItem,
+  StoryQASourceRef,
   WorldSettingPatch,
 } from '@/types/api'
 
@@ -58,6 +62,10 @@ const tabOptions: Array<{ key: ProjectAIWorkspaceDetailTab; label: string }> = [
 ]
 
 function displaySessionTitle(session: ProjectAIWorkspaceSession) {
+  if (session.assetType === 'story_qa') {
+    const title = session.title.replace(/^故事问答\s*\/\s*/, '').trim()
+    return !title || title === '默认会话' ? '故事问答' : title
+  }
   const title = session.title.replace(/^角色助手\s*\/\s*/, '').replace(/^世界观助手\s*\/\s*/, '').trim()
 
   if (!title || title === '默认会话') {
@@ -196,6 +204,7 @@ export function ProjectAIWorkspacePage() {
     () => ({
       project_character: sessions.filter((item) => item.assetType === 'project_character'),
       world_setting: sessions.filter((item) => item.assetType === 'world_setting'),
+      story_qa: sessions.filter((item) => item.assetType === 'story_qa'),
     }),
     [sessions],
   )
@@ -270,6 +279,12 @@ export function ProjectAIWorkspacePage() {
       return
     }
 
+    // story_qa 只需要文本，不需要文件
+    if (session.assetType === 'story_qa' && !text) {
+      toast.error('请先输入你的问题')
+      return
+    }
+
     if (currentState.streamingText !== null) {
       return
     }
@@ -293,6 +308,35 @@ export function ProjectAIWorkspacePage() {
     let accumulatedText = ''
 
     try {
+      if (session.assetType === 'story_qa') {
+        const response = await askStoryQA({
+          project_id: projectId,
+          question: text,
+        })
+
+        accumulatedText = response.answer
+
+        updateSessionState(session.id, (prev) => ({
+          ...prev,
+          messages: [
+            ...stripToolMessages(prev.messages),
+            {
+              id: `ai-${Date.now()}`,
+              role: 'result',
+              content: accumulatedText,
+            },
+          ],
+          streamingText: null,
+          taskStatus: 'done',
+          lastError: null,
+          latestQASources: response.sources,
+          latestQAQueryTerms: response.query_terms,
+          updatedAt: new Date().toISOString(),
+        }))
+        actions.setDetailTab('result')
+        return
+      }
+
       if (session.assetType === 'world_setting') {
         const response = await analyzeWorldSetting(projectId, {
           message: text,
@@ -464,6 +508,16 @@ export function ProjectAIWorkspacePage() {
                 onCreate={() => handleCreateSession('world_setting')}
                 onDelete={handleDeleteSession}
               />
+              <SessionGroup
+                title="故事问答"
+                icon={MessageCircleQuestion}
+                sessions={groupedSessions.story_qa}
+                activeSessionId={activeSessionId}
+                sessionStateMap={sessionStateMap}
+                onSelect={(sessionId) => actions.setActiveSessionId(sessionId)}
+                onCreate={() => handleCreateSession('story_qa')}
+                onDelete={handleDeleteSession}
+              />
             </CardContent>
           </Card>
         </aside>
@@ -505,6 +559,13 @@ export function ProjectAIWorkspacePage() {
                     </div>
                   </CardHeader>
                   <CardContent className="min-h-0 flex-1 p-0">
+                    {session.assetType === 'story_qa' ? (
+                      <StoryQAPanel
+                        state={state}
+                        onInputChange={(text) => updateSessionState(session.id, (prev) => ({ ...prev, inputText: text }))}
+                        onSend={() => void handleSendSession(session)}
+                      />
+                    ) : (
                     <div className="h-full min-h-0 [&>div]:rounded-none [&>div]:border-0">
                       <ProjectAssetAIPanel
                         projectId={project.id}
@@ -535,6 +596,7 @@ export function ProjectAIWorkspacePage() {
                         fileIds={state.fileIds}
                       />
                     </div>
+                    )}
                   </CardContent>
                 </Card>
               </div>
@@ -679,6 +741,58 @@ function ResultTab({
     return null
   }
 
+  // story_qa: 展示来源引用
+  if (session.assetType === 'story_qa') {
+    const hasSources = state.latestQASources.length > 0
+    const typeLabel: Record<string, string> = {
+      chapter: '章节',
+      entity: '实体',
+      event: '事件',
+      relation: '关系',
+      open_loop: '伏笔',
+    }
+    return (
+      <div className="space-y-4">
+        <div className="text-sm font-medium text-foreground">引用来源</div>
+        {hasSources ? (
+          <div className="space-y-2">
+            {state.latestQASources.map((src, index) => (
+              <div key={`${src.label}-${index}`} className="rounded-xl border border-border bg-muted/35 p-3">
+                <div className="flex items-center gap-2">
+                  <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+                    {typeLabel[src.type] ?? src.type}
+                  </span>
+                  <span className="text-sm font-medium text-foreground">
+                    {src.chapter_order != null ? `第 ${src.chapter_order + 1} 章 · ` : ''}{src.label}
+                  </span>
+                </div>
+                {src.excerpt ? (
+                  <div className="mt-1.5 text-xs leading-5 text-muted-foreground line-clamp-2">{src.excerpt}</div>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="rounded-xl border border-dashed border-border bg-muted/20 p-4 text-sm leading-6 text-muted-foreground">
+            提问后这里会展示 AI 引用的来源。
+          </div>
+        )}
+        {state.latestQAQueryTerms.length > 0 ? (
+          <div>
+            <div className="mb-2 text-xs text-muted-foreground">检索词</div>
+            <div className="flex flex-wrap gap-1.5">
+              {state.latestQAQueryTerms.map((term) => (
+                <span key={term} className="rounded-full border border-border bg-background px-2 py-0.5 text-xs text-muted-foreground">
+                  {term}
+                </span>
+              ))}
+            </div>
+          </div>
+        ) : null}
+      </div>
+    )
+  }
+
   const hasWorldResult = session.assetType === 'world_setting' && state.latestWorldPatch
   const hasCharacterResult = session.assetType === 'project_character' && state.latestCharacterActions?.length
 
@@ -775,7 +889,7 @@ function TaskTab({
             {meta.label}
           </Badge>
           <Badge variant="outline" className="border-border bg-background text-muted-foreground">
-            {session.assetType === 'project_character' ? '角色助手' : '世界观助手'}
+            {session.assetType === 'project_character' ? '角色助手' : session.assetType === 'story_qa' ? '故事问答' : '世界观助手'}
           </Badge>
         </div>
         <div className="mt-3 text-xs leading-5 text-muted-foreground">
@@ -802,6 +916,94 @@ function ContextBlock({ label, value }: { label: string; value: string }) {
     <div className="rounded-xl border border-border bg-muted/35 p-4">
       <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">{label}</div>
       <div className="mt-2 text-sm leading-6 text-foreground/85">{value}</div>
+    </div>
+  )
+}
+
+function StoryQAPanel({
+  state,
+  onInputChange,
+  onSend,
+}: {
+  state: ProjectAIWorkspaceSessionState
+  onInputChange: (text: string) => void
+  onSend: () => void
+}) {
+  const isLoading = state.taskStatus === 'running'
+
+  return (
+    <div className="flex h-full min-h-0 flex-col">
+      {/* Message list */}
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4">
+        <div className="space-y-4">
+          {state.messages.map((msg) => {
+            if (msg.role === 'system') {
+              return (
+                <div key={msg.id} className="flex items-start gap-3 rounded-2xl border border-border bg-muted/20 p-4">
+                  <Search className="mt-0.5 size-4 shrink-0 text-primary" />
+                  <p className="whitespace-pre-line text-sm leading-6 text-muted-foreground">{msg.content}</p>
+                </div>
+              )
+            }
+            if (msg.role === 'user') {
+              return (
+                <div key={msg.id} className="flex justify-end">
+                  <div className="max-w-[85%] rounded-2xl rounded-br-md bg-foreground/8 px-4 py-2.5 text-sm text-foreground">
+                    {msg.content}
+                  </div>
+                </div>
+              )
+            }
+            return (
+              <div key={msg.id} className="flex justify-start">
+                <div className="max-w-[90%] rounded-2xl rounded-bl-md border border-border bg-card px-4 py-3">
+                  <div className="mb-2 flex items-center gap-1.5">
+                    <Sparkles className="size-3 text-primary" />
+                    <span className="text-[11px] font-medium text-primary/70">偶记</span>
+                  </div>
+                  <p className="whitespace-pre-line text-sm leading-7 text-foreground">{msg.content}</p>
+                </div>
+              </div>
+            )
+          })}
+          {isLoading ? (
+            <div className="flex justify-start">
+              <div className="flex items-center gap-2 rounded-2xl border border-border bg-card px-4 py-3 text-sm text-muted-foreground">
+                <LoaderCircle className="size-3.5 animate-spin text-primary" />
+                正在查询故事记忆…
+              </div>
+            </div>
+          ) : null}
+        </div>
+      </div>
+
+      {/* Input */}
+      <div className="border-t border-border p-4">
+        <div className="relative">
+          <input
+            type="text"
+            value={state.inputText}
+            onChange={(e) => onInputChange(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey && !isLoading) {
+                e.preventDefault()
+                onSend()
+              }
+            }}
+            placeholder="问问你的故事：主角第一次出场在哪章？"
+            disabled={isLoading}
+            className="w-full rounded-xl border border-border bg-background py-2.5 pl-4 pr-12 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary/40 focus:outline-none focus:ring-1 focus:ring-primary/30 disabled:opacity-50"
+          />
+          <button
+            type="button"
+            onClick={onSend}
+            disabled={isLoading || !state.inputText.trim()}
+            className="absolute right-2 top-1/2 -translate-y-1/2 inline-flex size-8 items-center justify-center rounded-lg bg-primary text-white transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground"
+          >
+            {isLoading ? <LoaderCircle className="size-3.5 animate-spin" /> : <Search className="size-3.5" />}
+          </button>
+        </div>
+      </div>
     </div>
   )
 }

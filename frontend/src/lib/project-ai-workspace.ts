@@ -4,6 +4,7 @@ import type {
   CharacterActionItem,
   ProjectAssetAIMessage,
   ProjectAssetAIType,
+  StoryQASourceRef,
   WorldSettingPatch,
 } from '@/types/api'
 
@@ -24,6 +25,8 @@ export interface ProjectAIWorkspaceSessionState {
   guidance: string
   latestWorldPatch: WorldSettingPatch | null
   latestCharacterActions: CharacterActionItem[] | null
+  latestQASources: StoryQASourceRef[]
+  latestQAQueryTerms: string[]
   notes: string[]
   appliedSources: string[]
   uploadedFiles: Array<{ file_id: string; filename: string }>
@@ -62,6 +65,16 @@ function buildWelcomeMessage(assetType: ProjectAssetAIType): ProjectAssetAIMessa
     }
   }
 
+  if (assetType === 'story_qa') {
+    return {
+      id: `${assetType}-welcome`,
+      role: 'system',
+      title: '故事问答',
+      content:
+        '你好！我是故事知识库助手，可以回答关于这部小说的任何问题。\n\n试试问我：\n· 主角第一次出场是在哪一章？\n· 某个道具是什么时候出现的？\n· 当前有哪些未解决的伏笔？',
+    }
+  }
+
   return {
     id: `${assetType}-welcome`,
     role: 'system',
@@ -79,6 +92,8 @@ function createEmptySessionState(assetType: ProjectAssetAIType): ProjectAIWorksp
     guidance: '',
     latestWorldPatch: null,
     latestCharacterActions: null,
+    latestQASources: [],
+    latestQAQueryTerms: [],
     notes: [],
     appliedSources: [],
     uploadedFiles: [],
@@ -103,6 +118,12 @@ export function buildDefaultAISessions(projectId: string): ProjectAIWorkspaceSes
     {
       id: `${projectId}:world_setting:default`,
       assetType: 'world_setting',
+      title: '默认会话',
+      createdAt: now,
+    },
+    {
+      id: `${projectId}:story_qa:default`,
+      assetType: 'story_qa',
       title: '默认会话',
       createdAt: now,
     },

@@ -5,6 +5,7 @@ import type {
   AIContinuationGenerateResponse,
   AIContinuationTraceStep,
   AIRetrievalPreviewResponse,
+  StoryQAResponse,
 } from '@/types/api'
 import { apiClient } from '@/lib/api-client'
 
@@ -202,6 +203,16 @@ function createTimeoutController(timeoutMs: number, externalSignal?: AbortSignal
       }
     },
   }
+}
+
+export async function askStoryQA(payload: {
+  project_id: string
+  question: string
+  model_provider?: string | null
+  model_id?: string | null
+}): Promise<StoryQAResponse> {
+  const { data } = await apiClient.post<StoryQAResponse>('/ai/story-qa', payload, { timeout: 60_000 })
+  return data
 }
 
 export function isAbortError(error: unknown) {

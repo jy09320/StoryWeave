@@ -2,7 +2,7 @@ export type ProjectStatus = 'draft' | 'active' | 'paused' | 'completed'
 export type ProjectType = 'original' | 'fanfiction' | 'acg' | 'tv_movie'
 export type ProjectChannel = 'male' | 'female' | 'general'
 export type ChapterStatus = 'draft' | 'writing' | 'review' | 'done'
-export type ProjectAssetAIType = 'world_setting' | 'project_character'
+export type ProjectAssetAIType = 'world_setting' | 'project_character' | 'story_qa'
 export type ProjectAssetAIMessageRole = 'user' | 'system' | 'tool' | 'preview' | 'result'
 
 export interface ProjectAssetAIMessage {
@@ -585,4 +585,17 @@ export interface StoryGraph {
   events: StoryEvent[]
   relations: StoryRelation[]
   open_loops: StoryOpenLoop[]
+}
+
+export interface StoryQASourceRef {
+  type: string
+  label: string
+  chapter_order?: number | null
+  excerpt?: string | null
+}
+
+export interface StoryQAResponse {
+  answer: string
+  sources: StoryQASourceRef[]
+  query_terms: string[]
 }

@@ -13,6 +13,8 @@ from app.schemas.project import (
     AIContinuationDebugResponse,
     AIContinuationGenerateResponse,
     AIRetrievalPreviewResponse,
+    StoryQARequest,
+    StoryQAResponse,
 )
 from app.services.ai_service import ai_service
 from app.services.continuation_pipeline_service import continuation_pipeline_service
@@ -225,3 +227,20 @@ async def debug_continuation_pipeline(
         debug=True,
     )
     return AIContinuationDebugResponse(**result)
+
+
+@router.post("/story-qa", response_model=StoryQAResponse)
+async def story_qa(
+    req: StoryQARequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    result = await ai_service.story_qa(
+        db,
+        project_id=req.project_id,
+        question=req.question,
+        model_provider=req.model_provider,
+        model_id=req.model_id,
+        owner_id=current_user.id,
+    )
+    return StoryQAResponse(**result)

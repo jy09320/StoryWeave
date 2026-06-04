@@ -799,6 +799,31 @@ class AIContinuationDebugResponse(AIContinuationGenerateResponse):
 
 
 # ---------------------------------------------------------------------------
+# Story QA models
+# ---------------------------------------------------------------------------
+
+
+class StoryQARequest(BaseModel):
+    project_id: str
+    question: str
+    model_provider: str | None = None
+    model_id: str | None = None
+
+
+class StoryQASourceRef(BaseModel):
+    type: str
+    label: str
+    chapter_order: int | None = None
+    excerpt: str | None = None
+
+
+class StoryQAResponse(BaseModel):
+    answer: str
+    sources: list[StoryQASourceRef] = Field(default_factory=list)
+    query_terms: list[str] = Field(default_factory=list)
+
+
+# ---------------------------------------------------------------------------
 # Story Graph response models
 # ---------------------------------------------------------------------------
 
