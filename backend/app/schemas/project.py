@@ -796,3 +796,63 @@ class AIContinuationDebugResponse(AIContinuationGenerateResponse):
     plan: dict[str, Any] = Field(default_factory=dict)
     context_bundle: dict[str, Any] = Field(default_factory=dict)
     draft: dict[str, Any] = Field(default_factory=dict)
+
+
+# ---------------------------------------------------------------------------
+# Story Graph response models
+# ---------------------------------------------------------------------------
+
+
+class StoryEntityResponse(ORMResponseModel):
+    id: str
+    project_id: str
+    entity_type: str
+    canonical_name: str
+    aliases: list[str] = Field(default_factory=list)
+    description: str | None = None
+    tags: list[str] = Field(default_factory=list)
+    first_seen_chapter_order: int = 0
+    last_seen_chapter_order: int = 0
+    mention_count: int = 0
+
+
+class StoryEventResponse(ORMResponseModel):
+    id: str
+    project_id: str
+    chapter_order: int = 0
+    title: str
+    summary: str | None = None
+    event_type: str = "scene"
+    location: str | None = None
+    participants: list[str] = Field(default_factory=list)
+    tags: list[str] = Field(default_factory=list)
+
+
+class StoryRelationResponse(ORMResponseModel):
+    id: str
+    project_id: str
+    source_entity_name: str
+    target_entity_name: str
+    relation_type: str
+    status_after: str | None = None
+    chapter_order: int = 0
+
+
+class StoryOpenLoopResponse(ORMResponseModel):
+    id: str
+    project_id: str
+    label: str
+    description: str | None = None
+    priority: str = "medium"
+    status: str = "open"
+    related_entities: list[str] = Field(default_factory=list)
+    first_seen_chapter_order: int = 0
+    last_seen_chapter_order: int = 0
+    mention_count: int = 0
+
+
+class StoryGraphResponse(BaseModel):
+    entities: list[StoryEntityResponse] = Field(default_factory=list)
+    events: list[StoryEventResponse] = Field(default_factory=list)
+    relations: list[StoryRelationResponse] = Field(default_factory=list)
+    open_loops: list[StoryOpenLoopResponse] = Field(default_factory=list)
