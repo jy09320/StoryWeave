@@ -6,24 +6,24 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --background: oklch(0.984 0.008 98);
-  --foreground: oklch(0.24 0.02 235);
-  --card: oklch(0.992 0.005 95);
-  --card-foreground: oklch(0.24 0.02 235);
-  --popover: oklch(0.995 0.004 95);
-  --popover-foreground: oklch(0.24 0.02 235);
+  --background: oklch(0.965 0.012 95);
+  --foreground: oklch(0.22 0.02 235);
+  --card: oklch(0.995 0.003 95);
+  --card-foreground: oklch(0.22 0.02 235);
+  --popover: oklch(0.997 0.002 95);
+  --popover-foreground: oklch(0.22 0.02 235);
   --primary: oklch(0.63 0.13 168);
   --primary-foreground: oklch(0.988 0.004 95);
-  --secondary: oklch(0.968 0.01 100);
+  --secondary: oklch(0.955 0.012 100);
   --secondary-foreground: oklch(0.3 0.02 235);
-  --muted: oklch(0.958 0.008 100);
-  --muted-foreground: oklch(0.53 0.02 230);
-  --accent: oklch(0.95 0.02 162);
+  --muted: oklch(0.945 0.01 100);
+  --muted-foreground: oklch(0.48 0.02 230);
+  --accent: oklch(0.94 0.02 162);
   --accent-foreground: oklch(0.31 0.03 180);
   --destructive: oklch(0.577 0.245 27.325);
   --destructive-foreground: oklch(0.985 0 0);
-  --border: oklch(0.91 0.01 95);
-  --input: oklch(0.938 0.012 95);
+  --border: oklch(0.895 0.012 95);
+  --input: oklch(0.925 0.012 95);
   --ring: oklch(0.74 0.08 170);
   --radius: 0.625rem;
   --chart-1: oklch(0.79 0.11 168);
@@ -31,13 +31,13 @@
   --chart-3: oklch(0.74 0.09 120);
   --chart-4: oklch(0.77 0.1 80);
   --chart-5: oklch(0.68 0.08 250);
-  --sidebar: oklch(0.975 0.008 96);
-  --sidebar-foreground: oklch(0.24 0.02 235);
+  --sidebar: oklch(0.975 0.012 96);
+  --sidebar-foreground: oklch(0.22 0.02 235);
   --sidebar-primary: oklch(0.63 0.13 168);
   --sidebar-primary-foreground: oklch(0.988 0.004 95);
-  --sidebar-accent: oklch(0.95 0.02 162);
+  --sidebar-accent: oklch(0.94 0.02 162);
   --sidebar-accent-foreground: oklch(0.31 0.03 180);
-  --sidebar-border: oklch(0.91 0.01 95);
+  --sidebar-border: oklch(0.895 0.012 95);
   --sidebar-ring: oklch(0.74 0.08 170);
 }
 
@@ -97,7 +97,7 @@
 
   body {
     @apply min-h-screen antialiased bg-background text-foreground;
-    background: linear-gradient(180deg, #fffdf9 0%, #faf8f3 100%);
+    background: linear-gradient(180deg, oklch(0.97 0.014 95) 0%, oklch(0.95 0.016 92) 100%);
     background-attachment: fixed;
   }
 
