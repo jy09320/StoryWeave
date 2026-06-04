@@ -176,9 +176,11 @@ class WorldSetting(Base):
 
 class AIRuntimeSetting(Base):
     __tablename__ = "ai_runtime_settings"
+    __table_args__ = (UniqueConstraint("owner_id", "name", name="uq_ai_runtime_settings_owner_name"),)
 
     id: Mapped[str] = mapped_column(String(26), primary_key=True, default=generate_ulid)
     owner_id: Mapped[str | None] = mapped_column(String(26), ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True)
+    name: Mapped[str] = mapped_column(String(100), nullable=False, default="默认配置")
     provider: Mapped[str] = mapped_column(String(50), nullable=False, default="openai")
     model_id: Mapped[str] = mapped_column(String(100), nullable=False, default="gpt-4o")
     base_url: Mapped[str | None] = mapped_column(String(500))

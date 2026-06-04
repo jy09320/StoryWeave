@@ -11,7 +11,7 @@ PROJECT_TYPE_VALUES = {"original", "fanfiction", "acg", "tv_movie"}
 PROJECT_STATUS_VALUES = {"draft", "active", "paused", "completed"}
 PROJECT_CHANNEL_VALUES = {"male", "female", "general"}
 CHAPTER_STATUS_VALUES = {"draft", "writing", "review", "done"}
-AI_PROVIDER_VALUES = {"openai", "anthropic"}
+AI_PROVIDER_VALUES = {"openai", "anthropic", "openai_compatible"}
 
 
 def normalize_optional_text(value: str | None) -> str | None:
@@ -692,6 +692,98 @@ class AIRuntimeSettingUpdate(BaseModel):
         return normalize_optional_text(value)
 
 
+class AIRuntimeSettingCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+    provider: str = Field(default="openai", max_length=50)
+    model_id: str = Field(min_length=1, max_length=100)
+    base_url: str | None = Field(default=None, max_length=500)
+    api_key: str | None = None
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("Config name cannot be empty")
+        return stripped
+
+    @field_validator("provider")
+    @classmethod
+    def validate_provider(cls, value: str) -> str:
+        stripped = value.strip()
+        if stripped not in AI_PROVIDER_VALUES:
+            raise ValueError("Invalid AI provider")
+        return stripped
+
+    @field_validator("model_id")
+    @classmethod
+    def validate_model_id(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("Model id cannot be empty")
+        return stripped
+
+    @field_validator("base_url", "api_key", mode="before")
+    @classmethod
+    def normalize_create_fields(cls, value: str | None) -> str | None:
+        return normalize_optional_text(value)
+
+
+class AIRuntimeSettingPatch(BaseModel):
+    name: str | None = Field(default=None, max_length=100)
+    provider: str | None = Field(default=None, max_length=50)
+    model_id: str | None = Field(default=None, max_length=100)
+    base_url: str | None = Field(default=None, max_length=500)
+    api_key: str | None = None
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("Config name cannot be empty")
+        return stripped
+
+    @field_validator("provider")
+    @classmethod
+    def validate_provider(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        stripped = value.strip()
+        if stripped not in AI_PROVIDER_VALUES:
+            raise ValueError("Invalid AI provider")
+        return stripped
+
+    @field_validator("model_id")
+    @classmethod
+    def validate_model_id(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("Model id cannot be empty")
+        return stripped
+
+    @field_validator("base_url", "api_key", mode="before")
+    @classmethod
+    def normalize_patch_fields(cls, value: str | None) -> str | None:
+        return normalize_optional_text(value)
+
+
+class AIRuntimeConfigResponse(ORMResponseModel):
+    id: str
+    name: str
+    provider: str
+    model_id: str
+    base_url: str | None
+    api_key_masked: str | None
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+
+
 class AIRuntimeSettingResponse(ORMResponseModel):
     provider: str
     model_id: str
@@ -699,6 +791,10 @@ class AIRuntimeSettingResponse(ORMResponseModel):
     api_key_masked: str | None
     source: str
     updated_at: datetime | None = None
+
+
+class AIRuntimeConfigListResponse(BaseModel):
+    configs: list[AIRuntimeConfigResponse]
 
 
 class AIModelOptionResponse(BaseModel):
