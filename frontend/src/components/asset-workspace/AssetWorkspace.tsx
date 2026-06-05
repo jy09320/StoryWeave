@@ -70,9 +70,9 @@ export function AssetWorkspace({
   onAddTab,
 }: AssetWorkspaceProps) {
   return (
-    <div className="flex h-full">
+    <div className="flex h-full w-full">
       <ResizablePanelGroup direction="horizontal">
-        <ResizablePanel defaultSize={25} minSize={15} maxSize={35}>
+        <ResizablePanel defaultSize="25%" minSize="15%" maxSize="35%">
           <TreePanel
             nodes={treeNodes}
             selectedNodeId={selectedNodeId}
@@ -89,7 +89,7 @@ export function AssetWorkspace({
           />
         </ResizablePanel>
         <ResizableHandle withHandle />
-        <ResizablePanel defaultSize={75} minSize={50}>
+        <ResizablePanel defaultSize="75%" minSize="50%">
           <div className="flex h-full flex-col">
             {tabs.length > 0 ? (
               <>

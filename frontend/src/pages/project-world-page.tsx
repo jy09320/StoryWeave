@@ -181,7 +181,7 @@ export function ProjectWorldPage() {
   }
 
   return (
-    <div className="flex h-[calc(100vh-120px)] flex-col gap-4">
+    <div className="flex h-full flex-col gap-4">
       {/* Top: navigation and AI draft controls */}
       <div className="shrink-0 space-y-3">
         <div className="flex flex-wrap items-center gap-2">

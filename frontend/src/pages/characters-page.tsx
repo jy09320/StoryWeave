@@ -475,10 +475,10 @@ export function CharactersPage() {
 
   return (
     <>
-      <div ref={topRevealRef} className="space-y-6 pb-8">
+      <div ref={isProjectScoped ? undefined : topRevealRef} className={isProjectScoped ? 'flex h-full flex-col' : 'space-y-6 pb-8'}>
 
         {isProjectScoped ? (
-          <div className="h-[calc(100vh-120px)]">
+          <div className="min-h-0 flex-1">
             <AssetWorkspace
               treeNodes={treeNodes}
               selectedNodeId={activeTabId}

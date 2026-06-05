@@ -42,7 +42,7 @@ export function TreePanel({
   onNodeOpenInNewTab,
 }: TreePanelProps) {
   return (
-    <div className="flex h-full flex-col border-r border-border bg-sidebar">
+    <div className="flex h-full min-w-0 flex-col overflow-hidden border-r border-border bg-sidebar">
       <div className="space-y-2 p-3">
         <TreeSearchBar value={searchValue} onChange={onSearchChange} />
 
