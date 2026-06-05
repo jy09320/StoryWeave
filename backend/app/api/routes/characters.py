@@ -111,6 +111,60 @@ async def update_character(
     return character
 
 
+@router.post("/{character_id}/enhance-description")
+async def enhance_description(
+    character_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """用 AI 增强角色外貌描述（用于非原创项目）。"""
+    from app.services.description_enhancement_service import description_enhancement_service
+
+    result = await db.execute(
+        select(Character).where(Character.id == character_id, Character.owner_id == current_user.id)
+    )
+    character = result.scalar_one_or_none()
+    if not character:
+        raise HTTPException(status_code=404, detail="Character not found")
+
+    # 查询角色关联的项目
+    from app.models.project import Project, ProjectCharacter
+    project_result = await db.execute(
+        select(Project)
+        .join(ProjectCharacter, ProjectCharacter.project_id == Project.id)
+        .where(ProjectCharacter.character_id == character_id)
+        .limit(1)
+    )
+    project = project_result.scalar_one_or_none()
+
+    if not project:
+        raise HTTPException(status_code=400, detail="角色未关联到任何项目")
+
+    if project.type == "original":
+        raise HTTPException(status_code=400, detail="原创项目无需增强外貌描述")
+
+    if not project.source_work:
+        raise HTTPException(status_code=400, detail="请先在项目设置中填写原作名称")
+
+    try:
+        enhanced_description = await description_enhancement_service.enhance(
+            character_name=character.name,
+            current_description=character.description,
+            source_work=project.source_work,
+            project_type=project.type,
+            db=db,
+            owner_id=current_user.id,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"AI 增强失败：{e}")
+
+    return {
+        "enhanced_description": enhanced_description,
+        "source_work": project.source_work,
+        "character_name": character.name,
+    }
+
+
 @router.post("/{character_id}/portrait", response_model=CharacterResponse)
 async def generate_portrait(
     character_id: str,
