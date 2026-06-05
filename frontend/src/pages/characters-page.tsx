@@ -307,6 +307,16 @@ export function CharactersPage() {
     setCreateDialogOpen(true)
   }, [])
 
+  const handleAddTab = useCallback(() => {
+    if (!characters) return
+    const closedChars = characters.filter((c) => !openTabs.find((t) => t.id === c.id))
+    if (closedChars.length > 0) {
+      const char = closedChars[0]
+      setOpenTabs((prev) => [...prev, { id: char.id, label: char.name }])
+      setActiveTabId(char.id)
+    }
+  }, [characters, openTabs])
+
   const handleDirtyChange = useCallback(
     (dirty: boolean) => {
       if (activeTabId) {
@@ -497,6 +507,7 @@ export function CharactersPage() {
               onNodeRename={handleNodeRename}
               onNodeDelete={handleNodeDelete}
               onNodeOpenInNewTab={handleNodeOpenInNewTab}
+              onAddTab={handleAddTab}
             />
           </div>
         ) : (
