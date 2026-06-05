@@ -483,6 +483,9 @@ export function AppShell() {
   const isProjectScoped = Boolean(projectId) && location.pathname.startsWith(`/projects/${projectId}`)
   const isEditorRoute = isProjectScoped && location.pathname.includes('/editor/')
   const isAIWorkspaceRoute = isProjectScoped && location.pathname.endsWith('/ai-workspace')
+  const isAssetWorkspaceRoute =
+    isProjectScoped &&
+    (location.pathname.endsWith('/characters') || location.pathname.endsWith('/world'))
   const utilityRouteScope = isEditorRoute ? 'editor' : isAIWorkspaceRoute ? 'ai-workspace' : isProjectScoped ? 'project' : 'global'
 
   const projectQuery = useQuery<ProjectDetail, Error>({
@@ -658,7 +661,7 @@ export function AppShell() {
       }
 
       const key = event.key.toLowerCase()
-      if (key === 'b' && isProjectScoped && !isZenMode) {
+      if (key === 'b' && isProjectScoped && !isZenMode && !isAssetWorkspaceRoute) {
         event.preventDefault()
         setIsProjectTreeOpen((prev) => !prev)
       }
@@ -676,7 +679,7 @@ export function AppShell() {
 
     window.addEventListener('keydown', handleKeydown)
     return () => window.removeEventListener('keydown', handleKeydown)
-  }, [isEditorRoute, isProjectScoped, isZenMode])
+  }, [isAssetWorkspaceRoute, isEditorRoute, isProjectScoped, isZenMode])
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -882,7 +885,7 @@ export function AppShell() {
     editorUtilityContext?.projectId === projectId && editorUtilityContext?.chapterId === chapterId
       ? editorUtilityContext
       : null
-  const shouldRenderProjectTree = isProjectScoped && isProjectTreeOpen && !isZenMode
+  const shouldRenderProjectTree = isProjectScoped && isProjectTreeOpen && !isZenMode && !isAssetWorkspaceRoute
   const shouldRenderUtility = isProjectScoped && isUtilityOpen && !isZenMode
   const shouldRenderAIPanel = isEditorRoute && isAIPanelOpen && !isZenMode
   const scopedEditorAIDraft =
