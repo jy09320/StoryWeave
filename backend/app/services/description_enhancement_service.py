@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 
 from app.services.ai_service import ai_service
-from app.services.runtime_ai_config import runtime_ai_config_service
+
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +54,7 @@ class DescriptionEnhancementService:
             current_description=current_desc,
         )
 
-        result = await ai_service.generate_text_openai(
+        result = await ai_service._generate_openai_non_stream_text(
             api_key=api_key,
             base_url=base_url,
             text="",
