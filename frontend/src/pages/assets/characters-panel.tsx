@@ -4,6 +4,7 @@ import { PencilSimple, Spinner, ChatCenteredText, Plus, PaperPlaneRight, Sparkle
 import { toast } from 'sonner'
 import { clsx } from 'clsx'
 
+import { EnhanceDescriptionDialog } from '@/components/enhance-description-dialog'
 import { EmptyState } from '@/components/empty-state'
 import { LoadingState } from '@/components/loading-state'
 import { Button } from '@/components/ui/button'
@@ -33,6 +34,7 @@ import {
   createCharacterChatSession,
   deleteCharacterChatSession,
   streamCharacterChat,
+  enhanceDescription,
 } from '@/services/characters'
 import { listProjects, getProject } from '@/services/projects'
 import type {
@@ -119,6 +121,14 @@ export function AssetsCharactersPanel() {
   // Cache-busting versions for portrait images after regeneration
   const [portraitVersions, setPortraitVersions] = useState<Record<string, number>>({})
 
+  // Enhance description dialog state
+  const [enhanceDialogOpen, setEnhanceDialogOpen] = useState(false)
+  const [enhanceLoading, setEnhanceLoading] = useState(false)
+  const [enhanceError, setEnhanceError] = useState<string | null>(null)
+  const [enhancedDescription, setEnhancedDescription] = useState<string | null>(null)
+  const [enhanceSourceWork, setEnhanceSourceWork] = useState('')
+  const [pendingPortraitCharacterId, setPendingPortraitCharacterId] = useState<string | null>(null)
+
   // Create-character dialog state
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
   const [createForm, setCreateForm] = useState<CharacterFormState>(defaultFormState)
@@ -182,6 +192,68 @@ export function AssetsCharactersPanel() {
       toast.error(error.message)
     },
   })
+
+  async function handleEnhanceAndGenerate(characterId: string, modelId?: string) {
+    // Find non-original project for this character
+    const characterProjects = characterProjectsMap.get(characterId) ?? []
+    const nonOriginalProject = characterProjects.find((p) => p.type !== 'original')
+
+    if (!nonOriginalProject) {
+      // Original project or no project, generate directly
+      generatePortraitMutation.mutate({ characterId, modelId })
+      return
+    }
+
+    if (!nonOriginalProject.source_work) {
+      toast.error('请先在项目设置中填写原作名称')
+      return
+    }
+
+    // Open dialog and start enhancement
+    setPendingPortraitCharacterId(characterId)
+    setEnhanceSourceWork(nonOriginalProject.source_work)
+    setEnhancedDescription(null)
+    setEnhanceError(null)
+    setEnhanceDialogOpen(true)
+    setEnhanceLoading(true)
+
+    try {
+      const result = await enhanceDescription(characterId)
+      setEnhancedDescription(result.enhanced_description)
+    } catch (err) {
+      setEnhanceError(err instanceof Error ? err.message : 'AI 增强失败')
+    } finally {
+      setEnhanceLoading(false)
+    }
+  }
+
+  async function handleEnhanceConfirm(description: string) {
+    if (!pendingPortraitCharacterId) return
+    setEnhanceDialogOpen(false)
+
+    // First update the character's description
+    try {
+      await updateCharacter(pendingPortraitCharacterId, { description })
+      await queryClient.invalidateQueries({ queryKey: ['characters'] })
+    } catch (err) {
+      toast.error('保存外貌描述失败')
+      return
+    }
+
+    // Then generate portrait
+    generatePortraitMutation.mutate({ characterId: pendingPortraitCharacterId })
+  }
+
+  function handleEnhanceSkip() {
+    if (!pendingPortraitCharacterId) return
+    setEnhanceDialogOpen(false)
+    generatePortraitMutation.mutate({ characterId: pendingPortraitCharacterId })
+  }
+
+  function handleEnhanceRegenerate() {
+    if (!pendingPortraitCharacterId) return
+    handleEnhanceAndGenerate(pendingPortraitCharacterId)
+  }
 
   const characters = useMemo(() => charactersQuery.data ?? [], [charactersQuery.data])
   const displayedCharacters = characters
@@ -380,7 +452,7 @@ export function AssetsCharactersPanel() {
                         onEdit={() => openEditDialog(selectedCharacter)}
                         onDelete={() => handleDelete(selectedCharacter)}
                         onGeneratePortrait={(modelId) =>
-                          generatePortraitMutation.mutate({ characterId: selectedCharacter.id, modelId })
+                          handleEnhanceAndGenerate(selectedCharacter.id, modelId)
                         }
                       />
                     ) : (
@@ -427,6 +499,20 @@ export function AssetsCharactersPanel() {
           onSubmit={handleCreateSubmit}
           pending={createCharacterMutation.isPending}
           submitLabel="创建角色"
+        />
+
+        {/* Enhance description dialog */}
+        <EnhanceDescriptionDialog
+          open={enhanceDialogOpen}
+          onOpenChange={setEnhanceDialogOpen}
+          characterName={selectedCharacter?.name ?? ''}
+          sourceWork={enhanceSourceWork}
+          enhancedDescription={enhancedDescription}
+          isLoading={enhanceLoading}
+          error={enhanceError}
+          onConfirm={handleEnhanceConfirm}
+          onSkip={handleEnhanceSkip}
+          onRegenerate={handleEnhanceRegenerate}
         />
       </div>
     </>
