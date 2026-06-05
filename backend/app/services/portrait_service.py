@@ -3,6 +3,8 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import random
+import time
 from pathlib import Path
 
 import httpx
@@ -73,6 +75,7 @@ async def _submit_task(
             "size": "1K",
             "n": 1,
             "watermark": False,
+            "seed": random.randint(1, 2**31 - 1),
         },
     }
     headers = {
