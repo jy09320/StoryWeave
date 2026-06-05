@@ -136,6 +136,11 @@ class Character(Base):
         back_populates="character",
         cascade="all, delete-orphan",
     )
+    chat_sessions: Mapped[list["CharacterChatSession"]] = relationship(
+        back_populates="character",
+        cascade="all, delete-orphan",
+        order_by="CharacterChatSession.updated_at.desc()",
+    )
 
 
 class ProjectCharacter(Base):
@@ -354,3 +359,19 @@ class StoryOpenLoop(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 
     project: Mapped["Project"] = relationship(back_populates="story_open_loops")
+
+
+class CharacterChatSession(Base):
+    __tablename__ = "character_chat_sessions"
+
+    id: Mapped[str] = mapped_column(String(26), primary_key=True, default=generate_ulid)
+    owner_id: Mapped[str | None] = mapped_column(String(26), ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True)
+    character_id: Mapped[str] = mapped_column(String(26), ForeignKey("characters.id", ondelete="CASCADE"), nullable=False, index=True)
+    project_id: Mapped[str | None] = mapped_column(String(26), ForeignKey("projects.id", ondelete="SET NULL"), nullable=True)
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    messages: Mapped[list[dict]] = mapped_column(JSON, nullable=False, default=list)
+    model_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+
+    character: Mapped["Character"] = relationship(back_populates="chat_sessions")
