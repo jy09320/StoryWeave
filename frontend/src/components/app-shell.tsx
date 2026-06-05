@@ -2298,7 +2298,7 @@ export function AppShell() {
           <main
             className={clsx(
               'min-h-0 flex-1',
-              isAIWorkspaceRoute || location.pathname.endsWith('/graph') || location.pathname.startsWith('/assets')
+              isAIWorkspaceRoute || location.pathname.endsWith('/graph') || location.pathname.startsWith('/assets') || isAssetWorkspaceRoute
                 ? 'flex flex-col overflow-hidden'
                 : 'overflow-y-auto px-4 py-5 md:px-5',
             )}
