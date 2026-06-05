@@ -9,6 +9,11 @@ import { ProtectedRoute } from '@/components/protected-route'
 import { AuthProvider } from '@/contexts/auth-context'
 import { queryClient } from '@/lib/query-client'
 import { AIToolboxPage } from '@/pages/ai-toolbox-page'
+import { AssetsPage } from '@/pages/assets-page'
+import { AssetsCharactersPanel } from '@/pages/assets/characters-panel'
+import { AssetsGraphPanel } from '@/pages/assets/graph-entities-panel'
+import { AssetsPortraitsPanel } from '@/pages/assets/portraits-panel'
+import { AssetsStoriesPanel } from '@/pages/assets/stories-panel'
 import { CharactersPage } from '@/pages/characters-page'
 import { DashboardPage } from '@/pages/dashboard-page'
 import { HomePage } from '@/pages/home-page'
@@ -49,7 +54,18 @@ const router = createBrowserRouter([
       },
       {
         path: 'characters',
-        element: <CharactersPage />,
+        element: <Navigate to="/assets/characters" replace />,
+      },
+      {
+        path: 'assets',
+        element: <AssetsPage />,
+        children: [
+          { index: true, element: <Navigate to="characters" replace /> },
+          { path: 'characters', element: <AssetsCharactersPanel /> },
+          { path: 'stories', element: <AssetsStoriesPanel /> },
+          { path: 'graph-entities', element: <AssetsGraphPanel /> },
+          { path: 'portraits', element: <AssetsPortraitsPanel /> },
+        ],
       },
       {
         path: 'projects/:projectId',
