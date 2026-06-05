@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import logging
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.services.ai_service import ai_service
 
 
@@ -35,13 +37,13 @@ ENHANCE_PROMPT_TEMPLATE = """你是一个专业的角色外貌描述助手。
 class DescriptionEnhancementService:
     async def enhance(
         self,
+        db: AsyncSession,
         *,
         character_name: str,
         current_description: str | None,
         source_work: str,
         project_type: str,
-        api_key: str,
-        base_url: str | None = None,
+        owner_id: str,
     ) -> str:
         """用 LLM 增强角色外貌描述。"""
         project_type_display = PROJECT_TYPE_DISPLAY.get(project_type, project_type)
@@ -54,18 +56,27 @@ class DescriptionEnhancementService:
             current_description=current_desc,
         )
 
-        result = await ai_service._generate_openai_non_stream_text(
-            api_key=api_key,
-            base_url=base_url,
-            text="",
-            instruction=prompt,
-            model="gpt-4o-mini",
-            temperature=0.7,
-            max_tokens=500,
-        )
+        logger.info("Enhancing description for character %s from %s", character_name, source_work)
+
+        try:
+            result = await ai_service.generate_plain_text(
+                db,
+                text="请根据以上信息生成角色外貌描述。",
+                instruction=prompt,
+                model_provider=None,
+                model_id=None,
+                temperature=0.7,
+                max_tokens=500,
+                owner_id=owner_id,
+            )
+        except Exception as e:
+            logger.error("LLM call failed for character %s: %s", character_name, e)
+            raise RuntimeError(f"AI 增强失败：{e}") from e
 
         if not result or not result.strip():
             raise RuntimeError("AI 未能生成有效的外貌描述")
+
+        logger.info("Enhanced description for character %s (%d chars)", character_name, len(result))
 
         # 截断到合理长度
         max_length = 500
