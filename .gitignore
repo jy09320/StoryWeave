@@ -5,3 +5,8 @@ __pycache__/
 
 # Deployment
 deploy/production/.env
+
+# Skills
+.agents/
+.claude/skills/
+skills-lock.json

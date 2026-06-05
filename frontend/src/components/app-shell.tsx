@@ -1504,7 +1504,7 @@ export function AppShell() {
             <div className="flex min-h-full flex-col justify-end">
               <div className="space-y-4">
                 {scopedEditorUtilityContext ? (
-                  <div className="mr-8 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
+                  <div className="mr-8 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
                     <div className="mb-1 text-[11px] uppercase tracking-[0.18em] text-amber-700">
                       {actionLabelMap[scopedEditorUtilityContext.action]}
                     </div>
@@ -1568,9 +1568,9 @@ export function AppShell() {
                       const { warnings, fallbacks, durationMs } = message.pipelineMeta
                       return (
                         <div key={message.id} className="flex justify-start">
-                          <div className="inline-flex max-w-[92%] items-center gap-2 rounded-2xl border border-border bg-white px-4 py-2 text-xs text-muted-foreground/70">
+                          <div className="inline-flex max-w-[92%] items-center gap-2 rounded-xl border border-border bg-white px-4 py-2 text-xs text-muted-foreground/70">
                             <Check className="size-3 shrink-0 text-emerald-500" />
-                            <span>Pipeline 已完成 · {steps.length} 步 · {formatTraceDuration(durationMs)}{warnings > 0 ? ` · ⚠ ${warnings}` : ''}{fallbacks > 0 ? ` · fallback ${fallbacks}` : ''}</span>
+                            <span>Pipeline 已完成 · {steps.length} 步 · {formatTraceDuration(durationMs)}{warnings > 0 ? ` · ! ${warnings}` : ''}{fallbacks > 0 ? ` · fallback ${fallbacks}` : ''}</span>
                             {diagnosticsTrace.length > 0 ? (
                               <button
                                 type="button"
@@ -1586,7 +1586,7 @@ export function AppShell() {
                     }
                     return (
                       <div key={message.id} className="flex justify-start">
-                        <div className="inline-flex max-w-[92%] flex-wrap items-center gap-x-3 gap-y-1.5 rounded-2xl border border-border bg-white px-4 py-2.5">
+                        <div className="inline-flex max-w-[92%] flex-wrap items-center gap-x-3 gap-y-1.5 rounded-xl border border-border bg-white px-4 py-2.5">
                           {steps.length === 0 ? (
                             <span className="text-xs text-muted-foreground/70">正在准备 Pipeline…</span>
                           ) : (
@@ -1611,7 +1611,7 @@ export function AppShell() {
                     <div key={message.id} className={clsx('flex', message.role === 'user' ? 'justify-end' : 'justify-start')}>
                       <div
                         className={clsx(
-                          'max-w-[92%] rounded-2xl px-4 py-3 text-sm leading-6',
+                          'max-w-[92%] rounded-xl px-4 py-3 text-sm leading-6',
                           message.role === 'user'
                             ? 'bg-foreground text-white'
                             : 'border border-border bg-white text-foreground',
@@ -1802,7 +1802,7 @@ export function AppShell() {
             <div className="space-y-4">
               <div
                 className={clsx(
-                  'rounded-2xl border px-4 py-4 text-sm',
+                  'rounded-xl border px-4 py-4 text-sm',
                   pipelineResult.continuity_report?.severity === 'high'
                     ? 'border-rose-200 bg-rose-50 text-rose-700'
                     : pipelineResult.continuity_report?.severity === 'medium'
@@ -1819,7 +1819,7 @@ export function AppShell() {
                 <div>checker: {pipelineResult.metadata?.checker_used ? 'enabled' : 'unknown'}</div>
               </div>
               {pipelineResult.warnings.length > 0 ? (
-                <div className="rounded-2xl border border-border bg-background px-4 py-4">
+                <div className="rounded-xl border border-border bg-background px-4 py-4">
                   <div className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground">Warnings</div>
                   <div className="space-y-2">
                     {pipelineResult.warnings.map((item) => (
@@ -1831,7 +1831,7 @@ export function AppShell() {
                 </div>
               ) : null}
               {pipelineResult.fallbacks.length > 0 ? (
-                <div className="rounded-2xl border border-border bg-background px-4 py-4">
+                <div className="rounded-xl border border-border bg-background px-4 py-4">
                   <div className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground">Fallbacks</div>
                   <div className="flex flex-wrap gap-2">
                     {pipelineResult.fallbacks.map((item) => (
@@ -1842,7 +1842,7 @@ export function AppShell() {
                   </div>
                 </div>
               ) : null}
-              <div className="rounded-2xl border border-border bg-background px-4 py-4">
+              <div className="rounded-xl border border-border bg-background px-4 py-4">
                 <div className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground">Continuity Report</div>
                 <pre className="whitespace-pre-wrap break-words text-sm leading-7 text-foreground">
                   {JSON.stringify(pipelineResult.continuity_report, null, 2)}
@@ -1863,13 +1863,13 @@ export function AppShell() {
               </div>
               <div className="space-y-3">
                 {contextPreview.sections.map((section) => (
-                  <div key={section.title} className="rounded-2xl border border-border bg-background px-4 py-4">
+                  <div key={section.title} className="rounded-xl border border-border bg-background px-4 py-4">
                     <div className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground">{section.title}</div>
                     <pre className="whitespace-pre-wrap break-words text-sm leading-7 text-foreground">{section.content}</pre>
                   </div>
                 ))}
               </div>
-              <div className="rounded-2xl border border-border bg-muted/25 px-4 py-4">
+              <div className="rounded-xl border border-border bg-muted/25 px-4 py-4">
                 <div className="mb-2 flex items-center justify-between gap-2">
                   <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Final Instruction</div>
                   <button
@@ -1900,7 +1900,7 @@ export function AppShell() {
                 <div>returned: {retrievalPreview.metadata.returned_count ?? 0}</div>
                 <div>chapter found: {retrievalPreview.metadata.chapter_found ? 'yes' : 'no'}</div>
               </div>
-              <div className="rounded-2xl border border-border bg-background px-4 py-4">
+              <div className="rounded-xl border border-border bg-background px-4 py-4">
                 <div className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground">Query Terms</div>
                 <div className="flex flex-wrap gap-2">
                   {retrievalPreview.query_terms.length > 0 ? (
@@ -1916,7 +1916,7 @@ export function AppShell() {
               </div>
               <div className="space-y-3">
                 {retrievalPreview.chunks.map((chunk) => (
-                  <div key={chunk.chunk_id} className="rounded-2xl border border-border bg-background px-4 py-4">
+                  <div key={chunk.chunk_id} className="rounded-xl border border-border bg-background px-4 py-4">
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
@@ -1943,7 +1943,7 @@ export function AppShell() {
                   </div>
                 ))}
                 {retrievalPreview.chunks.length === 0 ? (
-                  <div className="rounded-2xl border border-dashed border-border px-4 py-6 text-sm text-muted-foreground">
+                  <div className="rounded-xl border border-dashed border-border px-4 py-6 text-sm text-muted-foreground">
                     当前没有召回到可用正文片段。
                   </div>
                 ) : null}
@@ -1954,19 +1954,19 @@ export function AppShell() {
           {activeDiagnosticsTab === 'pipeline' && (pipelineDebug || diagnosticsTrace.length > 0) ? (
             <div className="space-y-4">
               <div className="grid gap-3 md:grid-cols-4">
-                <div className="rounded-2xl border border-border bg-background px-4 py-3">
+                <div className="rounded-xl border border-border bg-background px-4 py-3">
                   <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">步骤数</div>
                   <div className="mt-1 text-lg font-semibold text-foreground">{diagnosticsTrace.length}</div>
                 </div>
-                <div className="rounded-2xl border border-border bg-background px-4 py-3">
+                <div className="rounded-xl border border-border bg-background px-4 py-3">
                   <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">总耗时</div>
                   <div className="mt-1 text-lg font-semibold text-foreground">{formatTraceDuration(diagnosticsTrace.reduce((t, s) => t + (typeof s.duration_ms === 'number' ? s.duration_ms : 0), 0))}</div>
                 </div>
-                <div className="rounded-2xl border border-border bg-background px-4 py-3">
+                <div className="rounded-xl border border-border bg-background px-4 py-3">
                   <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Fallback</div>
                   <div className="mt-1 text-lg font-semibold text-foreground">{(pipelineDebug?.fallbacks ?? pipelineResult?.fallbacks ?? []).length}</div>
                 </div>
-                <div className="rounded-2xl border border-border bg-background px-4 py-3">
+                <div className="rounded-xl border border-border bg-background px-4 py-3">
                   <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">告警</div>
                   <div className="mt-1 text-lg font-semibold text-foreground">{(pipelineDebug?.warnings ?? pipelineResult?.warnings ?? []).length}</div>
                 </div>
@@ -1974,7 +1974,7 @@ export function AppShell() {
               {diagnosticsTrace.length > 0 ? (
                 <div className="space-y-3">
                   {diagnosticsTrace.map((step) => (
-                    <div key={step.step_key} className="rounded-2xl border border-border bg-background px-4 py-4">
+                    <div key={step.step_key} className="rounded-xl border border-border bg-background px-4 py-4">
                       <div className="flex flex-wrap items-center justify-between gap-3">
                         <div className="flex-1 min-w-0">
                           <div className="mt-1 text-sm font-medium text-foreground">{step.label}</div>
@@ -2034,7 +2034,7 @@ export function AppShell() {
                 </div>
               ) : null}
               {(pipelineDebug?.fallbacks ?? pipelineResult?.fallbacks ?? []).length > 0 ? (
-                <div className="rounded-2xl border border-border bg-background px-4 py-4">
+                <div className="rounded-xl border border-border bg-background px-4 py-4">
                   <div className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground">Fallbacks</div>
                   <div className="flex flex-wrap gap-2">
                     {(pipelineDebug?.fallbacks ?? pipelineResult?.fallbacks ?? []).map((item) => (
@@ -2047,15 +2047,15 @@ export function AppShell() {
               ) : null}
               {pipelineDebug ? (
                 <>
-                  <div className="rounded-2xl border border-border bg-background px-4 py-4">
+                  <div className="rounded-xl border border-border bg-background px-4 py-4">
                     <div className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground">Plan</div>
                     <pre className="whitespace-pre-wrap break-words text-sm leading-7 text-foreground">{JSON.stringify(pipelineDebug.plan, null, 2)}</pre>
                   </div>
-                  <div className="rounded-2xl border border-border bg-background px-4 py-4">
+                  <div className="rounded-xl border border-border bg-background px-4 py-4">
                     <div className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground">Continuity Report</div>
                     <pre className="whitespace-pre-wrap break-words text-sm leading-7 text-foreground">{JSON.stringify(pipelineDebug.continuity_report, null, 2)}</pre>
                   </div>
-                  <div className="rounded-2xl border border-border bg-muted/25 px-4 py-4">
+                  <div className="rounded-xl border border-border bg-muted/25 px-4 py-4">
                     <div className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground">Pipeline Output</div>
                     <pre className="whitespace-pre-wrap break-words text-sm leading-7 text-foreground">{pipelineDebug.final_content}</pre>
                   </div>
@@ -2072,7 +2072,7 @@ export function AppShell() {
     <div className="flex h-screen bg-background text-foreground selection:bg-primary/15 selection:text-foreground">
       {diagnosticsDialog}
       <aside className="flex w-[88px] shrink-0 flex-col items-center border-r border-border bg-sidebar px-3 py-5">
-        <div className="flex size-14 items-center justify-center rounded-2xl border border-primary/15 bg-primary/10 shadow-[0_12px_30px_rgba(16,185,129,0.08)] overflow-hidden">
+        <div className="flex size-14 items-center justify-center rounded-xl border border-primary/15 bg-primary/10 shadow-[0_1px_3px_rgba(0,0,0,0.04)] overflow-hidden">
           <img src={logoUrl} alt="偶记" className="size-12 object-contain" />
         </div>
 
@@ -2201,7 +2201,7 @@ export function AppShell() {
                     >
                       {isProjectTreeOpen ? <PanelLeftClose className="size-4" /> : <PanelLeftOpen className="size-4" />}
                     </button>
-                    <div className="pointer-events-none absolute left-1/2 top-full z-30 mt-2 hidden -translate-x-1/2 whitespace-nowrap rounded-md border border-border bg-popover px-2.5 py-1 text-xs text-popover-foreground shadow-lg group-hover:block">
+                    <div className="pointer-events-none absolute left-1/2 top-full z-30 mt-2 hidden -translate-x-1/2 whitespace-nowrap rounded-md border border-border bg-popover px-2.5 py-1 text-xs text-popover-foreground shadow-[0_1px_3px_rgba(0,0,0,0.04)] group-hover:block">
                       项目栏 Ctrl+B
                     </div>
                   </div>
@@ -2257,7 +2257,7 @@ export function AppShell() {
                                 快捷键
                               </button>
                               {isShortcutMenuOpen ? (
-                                <div className="absolute right-0 top-full z-30 mt-2 w-56 rounded-2xl border border-border bg-popover p-3 shadow-xl">
+                                <div className="absolute right-0 top-full z-30 mt-2 w-56 rounded-xl border border-border bg-popover p-3 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
                                   <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Shortcuts</div>
                                   <div className="mt-3 space-y-2 text-sm text-popover-foreground">
                                     <ShortcutRow label="项目栏" shortcut="Ctrl+B" />
@@ -2312,7 +2312,7 @@ export function AppShell() {
         {shouldRenderUtility ? (
           <aside className="hidden w-[360px] shrink-0 border-l border-border bg-card/96 xl:flex xl:flex-col">
             <div className="border-b border-border px-5 py-4">
-              <div className="grid grid-cols-2 rounded-2xl bg-muted/75 p-1">
+              <div className="grid grid-cols-2 rounded-xl bg-muted/75 p-1">
                 {utilityTabs.map((tab) => (
                   <button
                     key={tab.key}
@@ -2338,7 +2338,7 @@ export function AppShell() {
                   <SidebarHint>{chapterContextHint}</SidebarHint>
                   {contextualCharacters.length > 0 ? (
                     contextualCharacters.slice(0, 6).map(({ item, matches, score }) => (
-                      <div key={item.id} className="rounded-2xl border border-border bg-white p-4">
+                      <div key={item.id} className="rounded-xl border border-border bg-white p-4">
                         <div className="flex flex-wrap items-center gap-2">
                           <div className="text-sm font-medium text-foreground">{item.character.name}</div>
                           {score > 0 ? (
@@ -2527,7 +2527,7 @@ export function AppShell() {
             onClick={(event) => event.stopPropagation()}
           >
             <div className="flex items-center justify-between border-b border-border px-5 py-4">
-              <div className="grid flex-1 grid-cols-2 rounded-2xl bg-muted p-1">
+              <div className="grid flex-1 grid-cols-2 rounded-xl bg-muted p-1">
                 {utilityTabs.map((tab) => (
                   <button
                     key={tab.key}
@@ -2560,7 +2560,7 @@ export function AppShell() {
                   <SidebarHint>{chapterContextHint}</SidebarHint>
                   {contextualCharacters.length > 0 ? (
                     contextualCharacters.slice(0, 6).map(({ item, matches, score }) => (
-                      <div key={item.id} className="rounded-2xl border border-border bg-white p-4">
+                      <div key={item.id} className="rounded-xl border border-border bg-white p-4">
                         <div className="flex flex-wrap items-center gap-2">
                           <div className="text-sm font-medium text-foreground">{item.character.name}</div>
                           {score > 0 ? (
@@ -2677,7 +2677,7 @@ function HeaderIconButton({
       >
         <Icon className="size-4" />
       </button>
-      <div className="pointer-events-none absolute left-1/2 top-full z-30 mt-2 hidden -translate-x-1/2 whitespace-nowrap rounded-md border border-border bg-popover px-2.5 py-1 text-xs text-popover-foreground shadow-lg group-hover:block">
+      <div className="pointer-events-none absolute left-1/2 top-full z-30 mt-2 hidden -translate-x-1/2 whitespace-nowrap rounded-md border border-border bg-popover px-2.5 py-1 text-xs text-popover-foreground shadow-[0_1px_3px_rgba(0,0,0,0.04)] group-hover:block">
         {label} {shortcut}
       </div>
     </div>
@@ -2694,7 +2694,7 @@ function ShortcutRow({ label, shortcut }: { label: string; shortcut: string }) {
 }
 
 function SidebarHint({ children }: { children: React.ReactNode }) {
-  return <div className="rounded-2xl border border-dashed border-border bg-muted/45 px-4 py-3 text-xs leading-6 text-muted-foreground">{children}</div>
+  return <div className="rounded-xl border border-dashed border-border bg-muted/45 px-4 py-3 text-xs leading-6 text-muted-foreground">{children}</div>
 }
 
 function ProjectTreeLink({
@@ -2730,7 +2730,7 @@ function ProjectTreeLink({
 
 function ProjectTreeStatic({ label, meta }: { label: string; meta?: string }) {
   return (
-    <div className="flex items-center justify-between rounded-2xl px-4 py-3 text-muted-foreground">
+    <div className="flex items-center justify-between rounded-xl px-4 py-3 text-muted-foreground">
       <div>
         <div className="text-sm">{label}</div>
         {meta ? <div className="text-xs">{meta}</div> : null}
@@ -2754,7 +2754,7 @@ function UtilityInfoCard({
   return (
     <div
       className={clsx(
-        'rounded-2xl border p-4',
+        'rounded-xl border p-4',
         emphasis ? 'border-primary/18 bg-primary/8' : 'border-border bg-muted/45',
       )}
     >
