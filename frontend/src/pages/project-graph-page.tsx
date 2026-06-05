@@ -690,7 +690,7 @@ export function ProjectGraphPage() {
     })
     observer.observe(el)
     return () => observer.disconnect()
-  })
+  }, [])
 
   const hasData = graph && (graph.entities.length > 0 || graph.events.length > 0 || graph.relations.length > 0)
 
