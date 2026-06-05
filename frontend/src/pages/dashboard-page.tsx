@@ -392,7 +392,7 @@ export function DashboardPage() {
   return (
     <div className="space-y-6 pb-10">
       <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
-        <div className="rounded-xl border border-border bg-card p-5 shadow-[0_1px_3px_rgba(0,0,0,0.03)]">
+        <div className="rounded-xl border border-border bg-card p-5 shadow-[0_1px_3px_rgba(0,0,0,0.03)] transition-all duration-200 hover:-translate-y-px hover:shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
           <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
             <div className="space-y-3">
               <div className="text-[11px] uppercase tracking-[0.22em] text-primary/80">Project Focus</div>
@@ -451,7 +451,7 @@ export function DashboardPage() {
         <RecentActivityHeatmap days={heatmapDays} compact stats={stats} />
       </section>
 
-      <section className="rounded-xl border border-border bg-card shadow-[0_1px_3px_rgba(0,0,0,0.03)]">
+      <section className="rounded-xl border border-border bg-card shadow-[0_1px_3px_rgba(0,0,0,0.03)] transition-all duration-200 hover:-translate-y-px hover:shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
         <div className="flex items-center justify-between border-b border-border/70 px-5 py-4">
           <div className="text-sm font-medium text-foreground">项目列表</div>
           <Button variant="outline" size="sm" onClick={() => setIsCreateOpen(true)}>
@@ -588,7 +588,7 @@ function RecentActivityHeatmap({
   const monthLabels = columns.map((column) => column[0]?.date.toLocaleDateString('zh-CN', { month: 'short' }) ?? '')
 
   return (
-    <div className="rounded-xl border border-border bg-card p-5 shadow-[0_1px_3px_rgba(0,0,0,0.03)]">
+    <div className="rounded-xl border border-border bg-card p-5 shadow-[0_1px_3px_rgba(0,0,0,0.03)] transition-all duration-200 hover:-translate-y-px hover:shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="space-y-1">
           <div className="text-sm font-medium text-foreground">最近活跃热力板</div>

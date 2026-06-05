@@ -615,7 +615,7 @@ export function AIToolboxPage() {
                     key={template.id}
                     type="button"
                     onClick={() => setSelectedTemplateId(template.id)}
-                    className={`rounded-xl border p-4 text-left transition ${
+                    className={`rounded-xl border p-4 text-left transition-all duration-200 hover:-translate-y-px hover:shadow-[0_2px_8px_rgba(0,0,0,0.04)] ${
                       isActive
                         ? 'border-primary/30 bg-primary/10 shadow-sm'
                         : 'border-border bg-background/75 hover:bg-muted/35'

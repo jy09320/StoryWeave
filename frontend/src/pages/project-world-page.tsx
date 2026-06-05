@@ -208,7 +208,7 @@ export function ProjectWorldPage() {
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
         <div className="space-y-6">
-          <Card className="border border-border bg-card/95">
+          <Card className="border border-border bg-card/95 transition-all duration-200 hover:-translate-y-px hover:shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
             <CardHeader className="space-y-3">
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div>
@@ -338,7 +338,7 @@ export function ProjectWorldPage() {
             </CardContent>
           </Card>
 
-          <Card className="border border-border bg-card/95">
+          <Card className="border border-border bg-card/95 transition-all duration-200 hover:-translate-y-px hover:shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
             <CardHeader>
               <CardTitle className="text-lg text-foreground">当前摘要</CardTitle>
             </CardHeader>
@@ -352,7 +352,7 @@ export function ProjectWorldPage() {
             </CardContent>
           </Card>
 
-          <Card className="border border-border bg-card/95">
+          <Card className="border border-border bg-card/95 transition-all duration-200 hover:-translate-y-px hover:shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
             <CardHeader>
               <CardTitle className="text-lg text-foreground">项目角色</CardTitle>
             </CardHeader>

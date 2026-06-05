@@ -212,7 +212,7 @@ function NodeDetailPanel({
   )
 
   return (
-    <div className="absolute right-4 top-4 z-30 w-[340px] max-h-[calc(100vh-12rem)] overflow-y-auto rounded-xl border border-border bg-card/95 shadow-[0_1px_3px_rgba(0,0,0,0.04)] backdrop-blur">
+    <div className="absolute right-4 top-4 z-30 w-[340px] max-h-[calc(100vh-12rem)] overflow-y-auto rounded-xl border border-border bg-card/95 shadow-[0_1px_3px_rgba(0,0,0,0.04)] backdrop-blur transition-all duration-200 hover:-translate-y-px hover:shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
       <div className="flex items-start justify-between gap-3 p-4 pb-3">
         <div className="flex items-center gap-2.5 min-w-0">
           <span
