@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -977,3 +977,37 @@ class StoryGraphResponse(BaseModel):
     events: list[StoryEventResponse] = Field(default_factory=list)
     relations: list[StoryRelationResponse] = Field(default_factory=list)
     open_loops: list[StoryOpenLoopResponse] = Field(default_factory=list)
+
+
+# ---------------------------------------------------------------------------
+# Character Chat Session models
+# ---------------------------------------------------------------------------
+
+
+class CharacterChatMessage(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str
+    created_at: str
+
+
+class CharacterChatSessionCreate(BaseModel):
+    project_id: str | None = None
+    title: str | None = Field(default=None, max_length=200)
+    model_id: str | None = Field(default=None, max_length=100)
+
+
+class CharacterChatRequest(BaseModel):
+    message: str = Field(max_length=8000)
+    project_id: str | None = None
+    model_id: str | None = Field(default=None, max_length=100)
+
+
+class CharacterChatSessionResponse(ORMResponseModel):
+    id: str
+    character_id: str
+    project_id: str | None
+    title: str
+    messages: list[CharacterChatMessage] = Field(default_factory=list)
+    model_id: str | None
+    created_at: datetime
+    updated_at: datetime

@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import ai, auth, chapters, characters, project_asset_ai, project_settings, projects, runtime_settings, story_graph
+from app.api.routes import ai, auth, chapters, character_chat, characters, project_asset_ai, project_settings, projects, runtime_settings, story_graph
 from app.core.config import settings
 from app.core.error_handlers import register_exception_handlers
 from app.core.init_db import init_db
@@ -33,6 +33,7 @@ app.include_router(project_settings.router, prefix="/api/projects", tags=["proje
 app.include_router(project_asset_ai.router, prefix="/api/projects", tags=["project-asset-ai"])
 app.include_router(chapters.router, prefix="/api/chapters", tags=["chapters"])
 app.include_router(characters.router, prefix="/api/characters", tags=["characters"])
+app.include_router(character_chat.router, prefix="/api/characters", tags=["character-chat"])
 app.include_router(ai.router, prefix="/api/ai", tags=["ai"])
 app.include_router(runtime_settings.router, prefix="/api/ai", tags=["ai-runtime-settings"])
 app.include_router(story_graph.router, prefix="/api/projects", tags=["story-graph"])
