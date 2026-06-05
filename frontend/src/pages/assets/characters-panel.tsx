@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Edit2, LoaderCircle, MessageSquare, Plus, Send, Sparkles, Trash2, User } from 'lucide-react'
+import { PencilSimple, Spinner, ChatCenteredText, Plus, PaperPlaneRight, Sparkle, Trash, User } from '@phosphor-icons/react'
 import { toast } from 'sonner'
 import { clsx } from 'clsx'
 
@@ -362,7 +362,7 @@ export function AssetsCharactersPanel() {
                           : 'border-transparent text-muted-foreground hover:text-foreground',
                       )}
                     >
-                      <MessageSquare className="size-3.5" />
+                      <ChatCenteredText className="size-3.5" />
                       AI 对话
                     </button>
                   </div>
@@ -710,9 +710,9 @@ function CharacterDetail({ character, deletePending, isGeneratingPortrait, onEdi
                   title={character.portrait_url ? '重新生成形象' : '生成形象'}
                 >
                   {isGeneratingPortrait ? (
-                    <LoaderCircle className="size-5 animate-spin text-white" />
+                    <Spinner className="size-5 animate-spin text-white" />
                   ) : (
-                    <Sparkles className="size-5 text-white" />
+                    <Sparkle className="size-5 text-white" />
                   )}
                 </button>
               </PopoverTrigger>
@@ -720,7 +720,7 @@ function CharacterDetail({ character, deletePending, isGeneratingPortrait, onEdi
                 <div className="mb-2 text-sm font-medium text-foreground">选择图像模型</div>
                 {portraitModelsQuery.isLoading ? (
                   <div className="flex items-center gap-2 py-2 text-xs text-muted-foreground">
-                    <LoaderCircle className="size-3.5 animate-spin" />
+                    <Spinner className="size-3.5 animate-spin" />
                     正在获取可用模型...
                   </div>
                 ) : availableModels.length > 0 ? (
@@ -747,7 +747,7 @@ function CharacterDetail({ character, deletePending, isGeneratingPortrait, onEdi
                   </div>
                 )}
                 <Button size="sm" className="w-full" onClick={handleGenerate}>
-                  <Sparkles className="size-3.5" />
+                  <Sparkle className="size-3.5" />
                   {character.portrait_url ? '重新生成' : '生成形象'}
                 </Button>
               </PopoverContent>
@@ -772,7 +772,7 @@ function CharacterDetail({ character, deletePending, isGeneratingPortrait, onEdi
                   onClick={onEdit}
                   className="flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-1.5 text-xs text-muted-foreground transition hover:bg-muted hover:text-foreground"
                 >
-                  <Edit2 className="size-3" />
+                  <PencilSimple className="size-3" />
                   编辑
                 </button>
                 <button
@@ -781,7 +781,7 @@ function CharacterDetail({ character, deletePending, isGeneratingPortrait, onEdi
                   disabled={deletePending}
                   className="flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-1.5 text-xs text-muted-foreground transition hover:bg-rose-50 hover:border-rose-200 hover:text-rose-600"
                 >
-                  <Trash2 className="size-3" />
+                  <Trash className="size-3" />
                   删除
                 </button>
               </div>
@@ -1189,7 +1189,7 @@ function CharacterChatPanel({ character }: { character: Character }) {
 
         {selectedSessionId ? (
           <Button variant="ghost" size="sm" onClick={handleDeleteSession}>
-            <Trash2 className="size-3.5" />
+            <Trash className="size-3.5" />
           </Button>
         ) : null}
 
@@ -1214,7 +1214,7 @@ function CharacterChatPanel({ character }: { character: Character }) {
           {messages.length === 0 && !isStreaming ? (
             <div className="flex h-full items-center justify-center py-16">
               <div className="text-center text-sm text-muted-foreground">
-                <Sparkles className="mx-auto mb-2 size-8 text-primary/30" />
+                <Sparkle className="mx-auto mb-2 size-8 text-primary/30" />
                 <p>向「{character.name}」发送第一条消息吧</p>
                 <p className="mt-1 text-xs">AI 将以角色口吻回复你</p>
               </div>
@@ -1230,7 +1230,7 @@ function CharacterChatPanel({ character }: { character: Character }) {
               ) : (
                 <div className="max-w-[90%] rounded-2xl rounded-bl-md border border-border bg-card px-4 py-3">
                   <div className="mb-2 flex items-center gap-1.5">
-                    <Sparkles className="size-3 text-primary" />
+                    <Sparkle className="size-3 text-primary" />
                     <span className="text-[11px] font-medium text-primary/70">{character.name}</span>
                   </div>
                   <p className="whitespace-pre-line text-sm leading-7 text-foreground">{msg.content}</p>
@@ -1244,7 +1244,7 @@ function CharacterChatPanel({ character }: { character: Character }) {
             <div className="flex justify-start">
               <div className="max-w-[90%] rounded-2xl rounded-bl-md border border-border bg-card px-4 py-3">
                 <div className="mb-2 flex items-center gap-1.5">
-                  <Sparkles className="size-3 text-primary" />
+                  <Sparkle className="size-3 text-primary" />
                   <span className="text-[11px] font-medium text-primary/70">{character.name}</span>
                 </div>
                 <p className="whitespace-pre-line text-sm leading-7 text-foreground">{streamingContent}</p>
@@ -1256,7 +1256,7 @@ function CharacterChatPanel({ character }: { character: Character }) {
           {isStreaming && !streamingContent ? (
             <div className="flex justify-start">
               <div className="flex items-center gap-2 rounded-2xl border border-border bg-card px-4 py-3 text-sm text-muted-foreground">
-                <LoaderCircle className="size-3.5 animate-spin text-primary" />
+                <Spinner className="size-3.5 animate-spin text-primary" />
                 {character.name}正在思考…
               </div>
             </div>
@@ -1297,7 +1297,7 @@ function CharacterChatPanel({ character }: { character: Character }) {
               disabled={!inputText.trim()}
               className="self-end"
             >
-              <Send className="size-3.5" />
+              <PaperPlaneRight className="size-3.5" />
               发送
             </Button>
           )}

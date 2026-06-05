@@ -1,6 +1,6 @@
 import * as React from "react"
 import * as DialogPrimitive from "@radix-ui/react-dialog"
-import { XIcon } from "lucide-react"
+import { X } from "@phosphor-icons/react"
 
 import { cn } from "@/lib/utils"
 
@@ -48,7 +48,7 @@ function DialogContent({ className, children, showCloseButton = true, ...props }
         {children}
         {showCloseButton ? (
           <DialogPrimitive.Close className="absolute top-4 right-4 rounded-full p-1 text-muted-foreground transition hover:bg-muted hover:text-foreground">
-            <XIcon className="size-4" />
+            <X className="size-4" />
             <span className="sr-only">Close</span>
           </DialogPrimitive.Close>
         ) : null}

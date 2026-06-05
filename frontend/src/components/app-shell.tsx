@@ -3,25 +3,22 @@ import { useQuery } from '@tanstack/react-query'
 import { clsx } from 'clsx'
 import {
   ArrowLeft,
-  Bot,
-  BookCopy,
+  Robot,
+  Books,
   Check,
-  ChevronDown,
-  ChevronRight,
-  Home,
-  Library,
-  LoaderCircle,
-  LogOut,
-  Maximize2,
-  Minimize2,
-  PanelLeftClose,
-  PanelLeftOpen,
-  PanelRightClose,
-  RefreshCw,
-  SendHorizontal,
-  Settings2,
-  Sparkles,
-} from 'lucide-react'
+  CaretDown,
+  CaretRight,
+  House,
+  Spinner,
+  SignOut,
+  CornersOut,
+  CornersIn,
+  Sidebar,
+  ArrowClockwise,
+  PaperPlaneRight,
+  GearSix,
+  Sparkle,
+} from '@phosphor-icons/react'
 import logoUrl from '@/assets/logo.png'
 import { Link, NavLink, Outlet, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { toast } from 'sonner'
@@ -48,10 +45,10 @@ import type { AIGeneratePayload, AIContextPreviewResponse, AIContinuationDebugRe
 import { useAuth } from '@/contexts/auth-context'
 
 const primaryNavItems = [
-  { to: '/workspace', label: '首页', icon: Home, end: true },
-  { to: '/assets', label: '我的资产', icon: Library, end: false },
-  { to: '/ai-toolbox', label: '模板广场', icon: Sparkles, end: false },
-  { to: '/settings', label: '设置', icon: Settings2, end: false },
+  { to: '/workspace', label: '首页', icon: House, end: true },
+  { to: '/assets', label: '我的资产', icon: Books, end: false },
+  { to: '/ai-toolbox', label: '模板广场', icon: Sparkle, end: false },
+  { to: '/settings', label: '设置', icon: GearSix, end: false },
 ]
 
 type UtilityTabKey = 'characters' | 'world'
@@ -1487,7 +1484,7 @@ export function AppShell() {
           <div className="border-b border-border px-4 py-4">
             <div className="flex items-start gap-3">
               <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
-                <Bot className="size-4" />
+                <Robot className="size-4" />
               </div>
               <div className="min-w-0">
                 <div className="text-sm font-semibold text-foreground">{primaryLabel}</div>
@@ -1515,7 +1512,7 @@ export function AppShell() {
                 {aiMessages.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-10 text-center">
                     <div className="mb-4 flex size-12 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
-                      <Bot className="size-6" />
+                      <Robot className="size-6" />
                     </div>
                     <div className="text-sm font-medium text-foreground">AI 助手已就绪</div>
                     <div className="mt-2 max-w-[240px] text-xs leading-5 text-muted-foreground">
@@ -1595,7 +1592,7 @@ export function AppShell() {
                                 {step.status === 'completed' ? (
                                   <Check className="size-3" />
                                 ) : step.status === 'running' ? (
-                                  <LoaderCircle className="size-3 animate-spin" />
+                                  <Spinner className="size-3 animate-spin" />
                                 ) : (
                                   <span className="size-3" />
                                 )}
@@ -1637,7 +1634,7 @@ export function AppShell() {
                       className="inline-flex h-7 max-w-[120px] items-center justify-between rounded-md bg-muted px-2 text-[11px] text-muted-foreground transition hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       <span className="truncate">{isLoadingModels && !selectedModelId ? '加载中...' : selectedModelId || '选择模型'}</span>
-                      <ChevronDown className="ml-1 size-3 shrink-0 transition" />
+                      <CaretDown className="ml-1 size-3 shrink-0 transition" />
                     </button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent side="top" align="start" className="w-[280px] p-2">
@@ -1649,7 +1646,7 @@ export function AppShell() {
                         disabled={isLoadingModels || !hasSavedRuntimeKey}
                         className="inline-flex size-6 items-center justify-center rounded-lg text-muted-foreground/70 transition hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
                       >
-                        {isLoadingModels ? <LoaderCircle className="size-3 animate-spin" /> : <RefreshCw className="size-3" />}
+                        {isLoadingModels ? <Spinner className="size-3 animate-spin" /> : <ArrowClockwise className="size-3" />}
                       </button>
                     </div>
                     <DropdownMenuSeparator />
@@ -1697,7 +1694,7 @@ export function AppShell() {
                   disabled={isContextPreviewLoading || isRetrievalPreviewLoading || aiState.isGenerating}
                   className="inline-flex h-7 items-center gap-1.5 rounded-md bg-muted px-2 text-[11px] text-muted-foreground transition hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {isContextPreviewLoading || isRetrievalPreviewLoading ? <LoaderCircle className="size-3 animate-spin" /> : <BookCopy className="size-3" />}
+                  {isContextPreviewLoading || isRetrievalPreviewLoading ? <Spinner className="size-3 animate-spin" /> : <Books className="size-3" />}
                   诊断中心
                 </button>
               </div>
@@ -1732,7 +1729,7 @@ export function AppShell() {
                     aiState.isGenerating ? 'bg-amber-500 hover:bg-amber-600' : 'bg-emerald-500 hover:bg-emerald-600',
                   )}
                 >
-                  {aiState.isGenerating ? <LoaderCircle className="size-3.5 animate-spin" /> : <SendHorizontal className="size-3.5" />}
+                  {aiState.isGenerating ? <Spinner className="size-3.5 animate-spin" /> : <PaperPlaneRight className="size-3.5" />}
                 </button>
               </div>
 
@@ -1773,7 +1770,7 @@ export function AppShell() {
               disabled={isPipelineDebugLoading || aiState.isGenerating}
               className="inline-flex h-9 items-center gap-2 rounded-full border border-border bg-background px-4 text-xs text-foreground/75 transition hover:border-primary/35 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {isPipelineDebugLoading ? <LoaderCircle className="size-3.5 animate-spin" /> : <Bot className="size-3.5" />}
+              {isPipelineDebugLoading ? <Spinner className="size-3.5 animate-spin" /> : <Robot className="size-3.5" />}
               运行深度诊断
             </button>
           </div>
@@ -2119,7 +2116,7 @@ export function AppShell() {
                 onClick={() => { logout(); navigate('/login') }}
                 className="flex size-8 items-center justify-center rounded-xl text-muted-foreground transition hover:bg-muted hover:text-foreground"
               >
-                <LogOut className="size-3.5" />
+                <SignOut className="size-3.5" />
               </button>
             </div>
           ) : null}
@@ -2199,7 +2196,7 @@ export function AppShell() {
                       className="inline-flex size-10 items-center justify-center rounded-xl border border-border bg-card text-muted-foreground transition hover:border-border hover:bg-sidebar hover:text-foreground"
                       onClick={() => setIsProjectTreeOpen((prev) => !prev)}
                     >
-                      {isProjectTreeOpen ? <PanelLeftClose className="size-4" /> : <PanelLeftOpen className="size-4" />}
+                      {isProjectTreeOpen ? <Sidebar className="size-4" /> : <Sidebar className="size-4" />}
                     </button>
                     <div className="pointer-events-none absolute left-1/2 top-full z-30 mt-2 hidden -translate-x-1/2 whitespace-nowrap rounded-md border border-border bg-popover px-2.5 py-1 text-xs text-popover-foreground shadow-[0_1px_3px_rgba(0,0,0,0.04)] group-hover:block">
                       项目栏 Ctrl+B
@@ -2229,14 +2226,14 @@ export function AppShell() {
                         {!isZenMode ? (
                           <>
                             <HeaderIconButton
-                              icon={BookCopy}
+                              icon={Books}
                               label="参考栏"
                               shortcut="Ctrl+J"
                               active={isUtilityOpen}
                               onClick={() => setIsUtilityOpen((prev) => !prev)}
                             />
                             <HeaderIconButton
-                              icon={Bot}
+                              icon={Robot}
                               label="AI 面板"
                               shortcut="Ctrl+L"
                               active={isAIPanelOpen}
@@ -2274,14 +2271,14 @@ export function AppShell() {
                           className="inline-flex size-10 items-center justify-center rounded-xl border border-border bg-white text-muted-foreground transition hover:border-border hover:text-foreground md:hidden"
                           onClick={() => setIsZenMode((prev) => !prev)}
                         >
-                          {isZenMode ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
+                          {isZenMode ? <CornersIn className="size-4" /> : <CornersOut className="size-4" />}
                         </button>
                         <button
                           type="button"
                           className="hidden h-10 items-center gap-2 rounded-xl border border-border bg-white px-4 text-sm text-muted-foreground transition hover:border-border hover:text-foreground md:inline-flex"
                           onClick={() => setIsZenMode((prev) => !prev)}
                         >
-                          {isZenMode ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
+                          {isZenMode ? <CornersIn className="size-4" /> : <CornersOut className="size-4" />}
                           {isZenMode ? '退出专注' : '进入专注'}
                         </button>
                       </>
@@ -2448,7 +2445,7 @@ export function AppShell() {
                 className="inline-flex size-10 items-center justify-center rounded-xl border border-border bg-white text-muted-foreground transition hover:text-foreground"
                 onClick={() => setIsProjectTreeOpen(false)}
               >
-                <PanelLeftClose className="size-4" />
+                <Sidebar className="size-4" />
               </button>
             </div>
 
@@ -2549,7 +2546,7 @@ export function AppShell() {
                 className="ml-3 inline-flex size-10 items-center justify-center rounded-xl border border-border bg-white text-muted-foreground transition hover:text-foreground"
                 onClick={closeUtilityDrawer}
               >
-                <PanelRightClose className="size-4" />
+                <Sidebar className="size-4" />
               </button>
             </div>
 
@@ -2723,7 +2720,7 @@ function ProjectTreeLink({
         <div className="truncate text-sm font-medium">{label}</div>
         {meta ? <div className="truncate text-xs text-muted-foreground">{meta}</div> : null}
       </div>
-      <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+      <CaretRight className="size-4 shrink-0 text-muted-foreground" />
     </NavLink>
   )
 }
@@ -2735,7 +2732,7 @@ function ProjectTreeStatic({ label, meta }: { label: string; meta?: string }) {
         <div className="text-sm">{label}</div>
         {meta ? <div className="text-xs">{meta}</div> : null}
       </div>
-      <BookCopy className="size-4" />
+      <Books className="size-4" />
     </div>
   )
 }

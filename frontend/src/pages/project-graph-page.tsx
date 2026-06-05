@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useParams } from 'react-router-dom'
 import * as d3 from 'd3'
-import { Activity, BookOpen, Filter, MapPin, Network, RefreshCw, Sparkles, Tag, Users, X } from 'lucide-react'
+import { Lightning, BookOpen, FunnelSimple, MapPin, Network, ArrowClockwise, Sparkle, Tag, Users, X } from '@phosphor-icons/react'
 
 import { EmptyState } from '@/components/empty-state'
 import { LoadingState } from '@/components/loading-state'
@@ -44,9 +44,9 @@ const CATEGORY_CONFIG: Record<NodeCategory, { label: string; color: string; icon
   character:  { label: '角色', color: '#3b82f6', icon: Users },
   location:   { label: '地点', color: '#22c55e', icon: MapPin },
   object:     { label: '物品', color: '#f59e0b', icon: Tag },
-  concept:    { label: '概念', color: '#a855f7', icon: Sparkles },
+  concept:    { label: '概念', color: '#a855f7', icon: Sparkle },
   event:      { label: '事件', color: '#f97316', icon: BookOpen },
-  open_loop:  { label: '伏笔', color: '#ef4444', icon: Activity },
+  open_loop:  { label: '伏笔', color: '#ef4444', icon: Lightning },
 }
 
 const ALL_CATEGORIES = Object.keys(CATEGORY_CONFIG) as NodeCategory[]
@@ -149,7 +149,7 @@ function buildGraphData(graph: StoryGraph, activeFilters: Set<NodeCategory>) {
 // Sub-components
 // ---------------------------------------------------------------------------
 
-function FilterBar({
+function FunnelSimpleBar({
   activeFilters,
   onToggle,
   stats,
@@ -160,7 +160,7 @@ function FilterBar({
 }) {
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <Filter className="size-4 text-muted-foreground" />
+      <FunnelSimple className="size-4 text-muted-foreground" />
       {ALL_CATEGORIES.map(cat => {
         const config = CATEGORY_CONFIG[cat]
         const Icon = config.icon
@@ -725,7 +725,7 @@ export function ProjectGraphPage() {
     <div className="flex h-full flex-col gap-4 p-4">
       {/* Header bar */}
       <div className="flex items-center justify-between gap-4">
-        <FilterBar activeFilters={activeFilters} onToggle={toggleFilter} stats={stats} />
+        <FunnelSimpleBar activeFilters={activeFilters} onToggle={toggleFilter} stats={stats} />
         <div className="flex items-center gap-3">
           <GraphStats graph={graph!} />
           <Button
@@ -734,7 +734,7 @@ export function ProjectGraphPage() {
             onClick={() => graphQuery.refetch()}
             disabled={graphQuery.isFetching}
           >
-            <RefreshCw className={`size-3.5 ${graphQuery.isFetching ? 'animate-spin' : ''}`} />
+            <ArrowClockwise className={`size-3.5 ${graphQuery.isFetching ? 'animate-spin' : ''}`} />
             刷新
           </Button>
         </div>

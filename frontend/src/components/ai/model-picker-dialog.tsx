@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { LoaderCircle, X } from 'lucide-react'
+import { Spinner, X } from '@phosphor-icons/react'
 import { Link } from 'react-router-dom'
 
 import { Button } from '@/components/ui/button'
@@ -83,7 +83,7 @@ export function ModelPickerDialog({
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <Button variant="outline" onClick={onRefresh} disabled={isLoadingModels || !hasSavedRuntimeKey}>
-                {isLoadingModels ? <LoaderCircle className="size-4 animate-spin" /> : null}
+                {isLoadingModels ? <Spinner className="size-4 animate-spin" /> : null}
                 {isLoadingModels ? '获取中...' : '刷新模型列表'}
               </Button>
               <Link

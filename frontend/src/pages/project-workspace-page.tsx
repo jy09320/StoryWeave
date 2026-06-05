@@ -1,7 +1,7 @@
 import { useMemo, useState, type FormEvent } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { Link, useParams } from 'react-router-dom'
-import { FilePlus2, FileUp, PenSquare, Trash2, UserPlus } from 'lucide-react'
+import { FilePlus, FileArrowUp, PencilSimple, Trash, UserPlus } from '@phosphor-icons/react'
 import { toast } from 'sonner'
 
 import { EmptyState } from '@/components/empty-state'
@@ -267,7 +267,7 @@ export function ProjectWorkspacePage() {
               to={`/projects/${project.id}/editor/${latestChapter.id}`}
               className="inline-flex h-9 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground transition hover:opacity-85"
             >
-              <PenSquare className="size-4" />
+              <PencilSimple className="size-4" />
               继续写作
             </Link>
           ) : null}
@@ -278,7 +278,7 @@ export function ProjectWorkspacePage() {
             项目设定
           </Link>
           <Button variant="outline" className="h-9 rounded-full px-4" onClick={() => setIsImportDialogOpen(true)}>
-            <FileUp className="size-4" />
+            <FileArrowUp className="size-4" />
             导入资料
           </Button>
         </div>
@@ -319,7 +319,7 @@ export function ProjectWorkspacePage() {
                       disabled={deleteChapterMutation.isPending}
                       onClick={() => handleDeleteChapter(chapter)}
                     >
-                      <Trash2 className="size-4" />
+                      <Trash className="size-4" />
                     </Button>
                   </div>
                 </div>
@@ -337,7 +337,7 @@ export function ProjectWorkspacePage() {
                 className="h-9 rounded-full border-border bg-muted/20 px-4 text-sm"
               />
               <Button className="h-9 shrink-0 rounded-full px-4" type="submit" disabled={createChapterMutation.isPending}>
-                <FilePlus2 className="size-4" />
+                <FilePlus className="size-4" />
                 {createChapterMutation.isPending ? '创建中...' : '新建章节'}
               </Button>
             </form>

@@ -5,14 +5,17 @@ import {
   ArrowRight,
   BookOpenText,
   Brain,
-  Layers3,
-  MessageCircleQuestion,
-  Search,
-  Sparkles,
-} from 'lucide-react'
+  StackSimple,
+  Question,
+  MagnifyingGlass,
+  Sparkle,
+} from '@phosphor-icons/react'
 import { Link } from 'react-router-dom'
 
 import logoUrl from '@/assets/logo.png'
+import { CharacterGraphDemo } from '@/components/home/character-graph-demo'
+import { MemoryFlowDemo } from '@/components/home/memory-flow-demo'
+import { PipelineDemo } from '@/components/home/pipeline-demo'
 import { formatDate, parseApiDate } from '@/lib/format'
 import { listProjects } from '@/services/projects'
 import type { Project } from '@/types/api'
@@ -51,12 +54,12 @@ const featureGroups = [
     accent: true,
   },
   {
-    icon: Layers3,
+    icon: StackSimple,
     title: '上下文续写',
     description: '自动检索关联章节再动笔。不会冒出未定义角色，不会跳过已埋伏笔。续写完美贴合你的风格。',
   },
   {
-    icon: Search,
+    icon: MagnifyingGlass,
     title: '世界观检索',
     description: '自然语言查询你的故事宇宙。主角第一次遇见艾琳是哪一章？戒指是在哪里拿到的？直接回答。',
   },
@@ -455,7 +458,7 @@ export function HomePage() {
                         <div className="flex justify-start">
                           <div className="max-w-[90%] rounded-2xl rounded-bl-md bg-primary/6 px-3.5 py-2.5">
                             <div className="flex items-center gap-1.5 mb-1.5">
-                              <Sparkles className="size-3 text-primary" />
+                              <Sparkle className="size-3 text-primary" />
                               <span className="text-[10px] font-medium text-primary/70">偶记</span>
                             </div>
                             <div className="text-[12px] leading-relaxed text-foreground/75">
@@ -472,7 +475,7 @@ export function HomePage() {
                         <div className="flex justify-start">
                           <div className="max-w-[90%] rounded-2xl rounded-bl-md bg-primary/6 px-3.5 py-2.5">
                             <div className="flex items-center gap-1.5 mb-1.5">
-                              <Sparkles className="size-3 text-primary" />
+                              <Sparkle className="size-3 text-primary" />
                               <span className="text-[10px] font-medium text-primary/70">偶记</span>
                             </div>
                             <div className="text-[12px] leading-relaxed text-foreground/75">
@@ -611,7 +614,7 @@ export function HomePage() {
               className="rounded-2xl bg-white p-8 shadow-[0_20px_60px_rgba(0,0,0,0.04)]"
             >
               <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                <MessageCircleQuestion className="size-4 text-primary" />
+                <Question className="size-4 text-primary" />
                 向 AI 提问
               </div>
               <div className="mt-4 space-y-3">
@@ -623,7 +626,7 @@ export function HomePage() {
                 <div className="flex justify-start">
                   <div className="max-w-[85%] rounded-2xl rounded-bl-md bg-primary/6 px-4 py-2.5">
                     <div className="flex items-center gap-1.5 mb-1">
-                      <Sparkles className="size-3 text-primary" />
+                      <Sparkle className="size-3 text-primary" />
                       <span className="text-[11px] font-medium text-primary/70">偶记</span>
                     </div>
                     <div className="text-sm leading-relaxed text-foreground/75">
@@ -703,7 +706,7 @@ export function HomePage() {
               <GlowCard className="h-full rounded-2xl bg-white p-7 shadow-[0_20px_60px_rgba(0,0,0,0.04)] transition-all duration-300 hover:-translate-y-0.5">
                 <div className="relative z-20">
                   <div className="flex size-11 items-center justify-center rounded-xl bg-linear-to-br from-emerald-500/15 to-sky-500/10 text-emerald-700">
-                    <Layers3 className="size-5" />
+                    <StackSimple className="size-5" />
                   </div>
                   <h3 className="mt-5 text-lg font-semibold text-foreground">{featureGroups[1].title}</h3>
                   <p className="mt-3 text-sm leading-7 text-muted-foreground">{featureGroups[1].description}</p>
@@ -716,7 +719,7 @@ export function HomePage() {
               <GlowCard className="h-full rounded-2xl bg-white p-7 shadow-[0_20px_60px_rgba(0,0,0,0.04)] transition-all duration-300 hover:-translate-y-0.5">
                 <div className="relative z-20">
                   <div className="flex size-11 items-center justify-center rounded-xl bg-linear-to-br from-emerald-500/15 to-sky-500/10 text-emerald-700">
-                    <Search className="size-5" />
+                    <MagnifyingGlass className="size-5" />
                   </div>
                   <h3 className="mt-5 text-lg font-semibold text-foreground">{featureGroups[2].title}</h3>
                   <p className="mt-3 text-sm leading-7 text-muted-foreground">{featureGroups[2].description}</p>
@@ -724,6 +727,52 @@ export function HomePage() {
               </GlowCard>
             </motion.div>
           </div>
+        </motion.div>
+      </section>
+
+      {/* ============================================================ */}
+      {/*  Feature Demos — animated product walkthroughs               */}
+      {/* ============================================================ */}
+      <section className="border-b border-black/4 bg-muted/20">
+        <motion.div
+          className="mx-auto w-full max-w-7xl px-6 py-24 lg:px-10"
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true, amount: 0.15 }}
+          variants={staggerContainer}
+        >
+          <motion.div variants={fadeUp} className="text-center mb-16">
+            <div className="text-[11px] uppercase tracking-[0.22em] text-primary/70">产品演示</div>
+            <h2 className="mt-3 font-serif text-3xl font-bold tracking-tight text-foreground">看看它怎么工作</h2>
+            <p className="mt-3 text-sm text-muted-foreground">三个核心能力的实时动画演示</p>
+          </motion.div>
+
+          {/* Demo 1: Story Memory System */}
+          <motion.div variants={staggerItem} className="mb-16">
+            <div className="text-center mb-6">
+              <h3 className="text-lg font-semibold text-foreground">故事记忆系统</h3>
+              <p className="mt-1 text-sm text-muted-foreground">AI 跨章节记住角色状态、伏笔与时间线，精准召回每一个细节</p>
+            </div>
+            <MemoryFlowDemo />
+          </motion.div>
+
+          {/* Demo 2: AI Continuation Pipeline */}
+          <motion.div variants={staggerItem} className="mb-16">
+            <div className="text-center mb-6">
+              <h3 className="text-lg font-semibold text-foreground">智能续写流水线</h3>
+              <p className="mt-1 text-sm text-muted-foreground">四阶段 Pipeline：规划 → 检索 → 生成 → 校验，每一步都经过验证</p>
+            </div>
+            <PipelineDemo />
+          </motion.div>
+
+          {/* Demo 3: Character Graph */}
+          <motion.div variants={staggerItem}>
+            <div className="text-center mb-6">
+              <h3 className="text-lg font-semibold text-foreground">角色图谱</h3>
+              <p className="mt-1 text-sm text-muted-foreground">可视化角色关系网络，结构化角色档案，支持跨项目复用</p>
+            </div>
+            <CharacterGraphDemo />
+          </motion.div>
         </motion.div>
       </section>
 
@@ -820,7 +869,7 @@ export function HomePage() {
             className="rounded-2xl bg-white p-6 shadow-[0_20px_60px_rgba(16,185,129,0.06)]"
           >
             <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-              <Sparkles className="size-4 text-primary" />
+              <Sparkle className="size-4 text-primary" />
               继续你的故事
             </div>
 

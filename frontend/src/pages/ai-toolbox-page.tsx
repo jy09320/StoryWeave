@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { BookOpenText, Copy, FileStack, LoaderCircle, Play, Route, Sparkles, WandSparkles } from 'lucide-react'
+import { BookOpenText, Copy, StackSimple, Spinner, Play, Path, Sparkle } from '@phosphor-icons/react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 
@@ -511,7 +511,7 @@ export function AIToolboxPage() {
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-3xl space-y-3">
             <div className="flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-primary/80">
-              <Sparkles className="size-4" />
+              <Sparkle className="size-4" />
               Template Plaza
             </div>
             <div>
@@ -631,7 +631,7 @@ export function AIToolboxPage() {
                         </div>
                         <div className="text-base font-medium text-foreground">{template.title}</div>
                       </div>
-                      {isWorkflow ? <Route className="size-4 text-primary" /> : <WandSparkles className="size-4 text-primary" />}
+                      {isWorkflow ? <Path className="size-4 text-primary" /> : <Sparkle className="size-4 text-primary" />}
                     </div>
 
                     <p className="mt-3 text-sm leading-6 text-muted-foreground">{template.summary}</p>
@@ -676,7 +676,7 @@ export function AIToolboxPage() {
                 </div>
                 <div className="rounded-xl border border-border bg-background/70 p-4">
                   <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-                    <FileStack className="size-4 text-primary" />
+                    <StackSimple className="size-4 text-primary" />
                     预计输出
                   </div>
                   <p className="mt-2 text-sm leading-6 text-muted-foreground">{selectedTemplate.output}</p>
@@ -685,7 +685,7 @@ export function AIToolboxPage() {
 
               <div className="rounded-xl border border-border bg-background/70 p-4">
                 <div className="mb-3 flex items-center gap-2 text-sm font-medium text-foreground">
-                  <Route className="size-4 text-primary" />
+                  <Path className="size-4 text-primary" />
                   使用步骤
                 </div>
                 <div className="grid gap-3 md:grid-cols-3">
@@ -765,7 +765,7 @@ export function AIToolboxPage() {
                   onClick={() => void handleGenerate()}
                   disabled={generation.isGenerating}
                 >
-                  {generation.isGenerating ? <LoaderCircle className="size-4 animate-spin" /> : <Play className="size-4" />}
+                  {generation.isGenerating ? <Spinner className="size-4 animate-spin" /> : <Play className="size-4" />}
                   立即使用
                 </Button>
 
@@ -776,7 +776,7 @@ export function AIToolboxPage() {
                 )}
 
                 <Button variant="outline" className="rounded-xl" onClick={() => void handleLoadModels()} disabled={isLoadingModels}>
-                  {isLoadingModels ? <LoaderCircle className="size-4 animate-spin" /> : null}
+                  {isLoadingModels ? <Spinner className="size-4 animate-spin" /> : null}
                   刷新模型
                 </Button>
               </div>

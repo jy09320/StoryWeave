@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { BookOpen, ChevronDown, ChevronRight, ExternalLink, LoaderCircle } from 'lucide-react'
+import { BookOpen, CaretDown, CaretRight, ArrowSquareOut, Spinner } from '@phosphor-icons/react'
 import { Link } from 'react-router-dom'
 import { clsx } from 'clsx'
 
@@ -59,7 +59,7 @@ function ProjectChapters({ projectId }: { projectId: string }) {
   if (detailQuery.isLoading) {
     return (
       <div className="flex items-center gap-2 px-10 py-4 text-xs text-muted-foreground">
-        <LoaderCircle className="size-3 animate-spin" />
+        <Spinner className="size-3 animate-spin" />
         加载章节中…
       </div>
     )
@@ -128,7 +128,7 @@ function ProjectChapters({ projectId }: { projectId: string }) {
               className="shrink-0 flex size-6 items-center justify-center rounded-md text-muted-foreground opacity-0 transition group-hover:opacity-100 hover:bg-muted hover:text-foreground"
               title="打开编辑器"
             >
-              <ExternalLink className="size-3" />
+              <ArrowSquareOut className="size-3" />
             </Link>
           </div>
         )
@@ -196,9 +196,9 @@ function ProjectRow({
           <span className="shrink-0 text-[11px] text-muted-foreground/40">{formatDate(project.updated_at)}</span>
 
           {isExpanded ? (
-            <ChevronDown className="size-3.5 shrink-0 text-muted-foreground transition-transform" />
+            <CaretDown className="size-3.5 shrink-0 text-muted-foreground transition-transform" />
           ) : (
-            <ChevronRight className="size-3.5 shrink-0 text-muted-foreground/50 transition-transform group-hover:text-muted-foreground" />
+            <CaretRight className="size-3.5 shrink-0 text-muted-foreground/50 transition-transform group-hover:text-muted-foreground" />
           )}
         </div>
       </button>

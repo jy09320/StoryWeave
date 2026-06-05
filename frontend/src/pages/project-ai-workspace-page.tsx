@@ -2,19 +2,19 @@ import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useParams } from 'react-router-dom'
 import {
-  Bot,
-  CheckCircle2,
-  Clock3,
-  Globe2,
-  LoaderCircle,
-  MessageCircleQuestion,
+  Robot,
+  CheckCircle,
+  Clock,
+  GlobeSimple,
+  Spinner,
+  Question,
   Plus,
-  Search,
-  Sparkles,
-  Trash2,
-  TriangleAlert,
-  Users2,
-} from 'lucide-react'
+  MagnifyingGlass,
+  Sparkle,
+  Trash,
+  Warning,
+  Users,
+} from '@phosphor-icons/react'
 import { toast } from 'sonner'
 
 import {
@@ -151,27 +151,27 @@ function statusBadge(status: SessionTaskStatus) {
     return {
       label: '执行中',
       className: 'border-sky-500/25 bg-sky-500/10 text-sky-300',
-      icon: LoaderCircle,
+      icon: Spinner,
     }
   }
   if (status === 'done') {
     return {
       label: '已完成',
       className: 'border-emerald-500/25 bg-emerald-500/10 text-emerald-300',
-      icon: CheckCircle2,
+      icon: CheckCircle,
     }
   }
   if (status === 'failed') {
     return {
       label: '失败',
       className: 'border-rose-500/25 bg-rose-500/10 text-rose-300',
-      icon: TriangleAlert,
+      icon: Warning,
     }
   }
   return {
     label: '空闲',
     className: 'border-border bg-background text-muted-foreground',
-    icon: Clock3,
+    icon: Clock,
   }
 }
 
@@ -504,14 +504,14 @@ export function ProjectAIWorkspacePage() {
           <Card className="flex h-full min-h-0 flex-col rounded-none border-0 bg-transparent shadow-none">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
-                <Bot className="size-4 text-primary" />
+                <Robot className="size-4 text-primary" />
                 会话树
               </CardTitle>
             </CardHeader>
             <CardContent className="min-h-0 flex-1 space-y-4 overflow-y-auto">
               <SessionGroup
                 title="角色助手"
-                icon={Users2}
+                icon={Users}
                 sessions={groupedSessions.project_character}
                 activeSessionId={activeSessionId}
                 sessionStateMap={sessionStateMap}
@@ -521,7 +521,7 @@ export function ProjectAIWorkspacePage() {
               />
               <SessionGroup
                 title="世界观助手"
-                icon={Globe2}
+                icon={GlobeSimple}
                 sessions={groupedSessions.world_setting}
                 activeSessionId={activeSessionId}
                 sessionStateMap={sessionStateMap}
@@ -531,7 +531,7 @@ export function ProjectAIWorkspacePage() {
               />
               <SessionGroup
                 title="故事问答"
-                icon={MessageCircleQuestion}
+                icon={Question}
                 sessions={groupedSessions.story_qa}
                 activeSessionId={activeSessionId}
                 sessionStateMap={sessionStateMap}
@@ -682,7 +682,7 @@ function SessionGroup({
   onDelete,
 }: {
   title: string
-  icon: typeof Users2
+  icon: typeof Users
   sessions: ProjectAIWorkspaceSession[]
   activeSessionId: string | null
   sessionStateMap: Record<string, ProjectAIWorkspaceSessionState>
@@ -734,7 +734,7 @@ function SessionGroup({
                 onDelete(session)
               }}
             >
-              <Trash2 className="size-3.5" />
+              <Trash className="size-3.5" />
             </button>
           </div>
         ))}
@@ -967,7 +967,7 @@ function StoryQAPanel({
             if (msg.role === 'system') {
               return (
                 <div key={msg.id} className="flex items-start gap-3 rounded-2xl border border-border bg-muted/20 p-4">
-                  <Search className="mt-0.5 size-4 shrink-0 text-primary" />
+                  <MagnifyingGlass className="mt-0.5 size-4 shrink-0 text-primary" />
                   <p className="whitespace-pre-line text-sm leading-6 text-muted-foreground">{msg.content}</p>
                 </div>
               )
@@ -985,7 +985,7 @@ function StoryQAPanel({
               <div key={msg.id} className="flex justify-start">
                 <div className="max-w-[90%] rounded-2xl rounded-bl-md border border-border bg-card px-4 py-3">
                   <div className="mb-2 flex items-center gap-1.5">
-                    <Sparkles className="size-3 text-primary" />
+                    <Sparkle className="size-3 text-primary" />
                     <span className="text-[11px] font-medium text-primary/70">偶记</span>
                   </div>
                   <p className="whitespace-pre-line text-sm leading-7 text-foreground">{msg.content}</p>
@@ -996,7 +996,7 @@ function StoryQAPanel({
           {isLoading ? (
             <div className="flex justify-start">
               <div className="flex items-center gap-2 rounded-2xl border border-border bg-card px-4 py-3 text-sm text-muted-foreground">
-                <LoaderCircle className="size-3.5 animate-spin text-primary" />
+                <Spinner className="size-3.5 animate-spin text-primary" />
                 正在查询故事记忆…
               </div>
             </div>
@@ -1034,7 +1034,7 @@ function StoryQAPanel({
             disabled={isLoading || !state.inputText.trim()}
             className="absolute right-2 top-1/2 -translate-y-1/2 inline-flex size-8 items-center justify-center rounded-lg bg-primary text-white transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground"
           >
-            {isLoading ? <LoaderCircle className="size-3.5 animate-spin" /> : <Search className="size-3.5" />}
+            {isLoading ? <Spinner className="size-3.5 animate-spin" /> : <MagnifyingGlass className="size-3.5" />}
           </button>
         </div>
       </div>

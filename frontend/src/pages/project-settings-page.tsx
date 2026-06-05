@@ -1,7 +1,7 @@
 import { useMemo, useState, type FormEvent } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { Link, useParams } from 'react-router-dom'
-import { ArrowLeft, PenSquare, Wand2 } from 'lucide-react'
+import { ArrowLeft, PencilSimple, Sparkle } from '@phosphor-icons/react'
 import { toast } from 'sonner'
 
 import { EmptyState } from '@/components/empty-state'
@@ -316,7 +316,7 @@ export function ProjectSettingsPage() {
             </Button>
           ) : (
             <Button onClick={handleStartEdit}>
-              <PenSquare className="mr-2 size-4" />
+              <PencilSimple className="mr-2 size-4" />
               编辑设定
             </Button>
           )}
@@ -338,7 +338,7 @@ export function ProjectSettingsPage() {
               </Button>
             ) : null}
             <Button type="button" variant="outline" onClick={handleGenerateDraft} disabled={generateDraftMutation.isPending}>
-              <Wand2 className="mr-2 size-4" />
+              <Sparkle className="mr-2 size-4" />
               {generateDraftMutation.isPending ? '生成中...' : draft ? '重新生成' : '生成草案'}
             </Button>
             <Button type="button" onClick={handleApplyDraft} disabled={!draft || applyDraftMutation.isPending}>

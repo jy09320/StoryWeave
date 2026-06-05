@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { ChevronRight, LoaderCircle, MapPin, Search, Sword, User, Lightbulb, Network } from 'lucide-react'
+import { CaretRight, Spinner, MapPin, MagnifyingGlass, Sword, User, Lightbulb, Network } from '@phosphor-icons/react'
 import { Link } from 'react-router-dom'
 import { clsx } from 'clsx'
 
@@ -16,7 +16,7 @@ import type { Project, StoryEntity, StoryEntityType, StoryRelation } from '@/typ
 // ---------------------------------------------------------------------------
 
 const ENTITY_TYPE_TABS: Array<{ key: StoryEntityType | 'all'; label: string; icon: typeof User }> = [
-  { key: 'all', label: '全部', icon: Search },
+  { key: 'all', label: '全部', icon: MagnifyingGlass },
   { key: 'character', label: '角色', icon: User },
   { key: 'location', label: '地点', icon: MapPin },
   { key: 'object', label: '物品', icon: Sword },
@@ -185,7 +185,7 @@ function EntityDetailPanel({
         </div>
         {isLoadingRelations ? (
           <div className="flex items-center gap-2 py-3 text-xs text-muted-foreground">
-            <LoaderCircle className="size-3 animate-spin" />加载中…
+            <Spinner className="size-3 animate-spin" />加载中…
           </div>
         ) : relations.length > 0 ? (
           <div className="space-y-1.5">
@@ -195,9 +195,9 @@ function EntityDetailPanel({
               return (
                 <div key={rel.id} className="flex items-center gap-2 rounded-lg border border-border/60 bg-muted/20 px-3 py-2 text-xs">
                   <span className="text-muted-foreground/70">{entity.canonical_name}</span>
-                  <ChevronRight className="size-3 text-muted-foreground/40" />
+                  <CaretRight className="size-3 text-muted-foreground/40" />
                   <span className="rounded-md bg-muted px-2 py-0.5 text-foreground/70">{rel.relation_type}</span>
-                  <ChevronRight className="size-3 text-muted-foreground/40" />
+                  <CaretRight className="size-3 text-muted-foreground/40" />
                   <span className="font-medium text-foreground">{otherName}</span>
                   {!isSource && <span className="ml-1 text-[10px] text-muted-foreground/40">(被指向)</span>}
                   {rel.status_after ? (
@@ -325,7 +325,7 @@ export function AssetsGraphPanel() {
           </div>
           {/* Search */}
           <div className="relative">
-            <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3 -translate-y-1/2 text-muted-foreground/50" />
+            <MagnifyingGlass className="pointer-events-none absolute left-2.5 top-1/2 size-3 -translate-y-1/2 text-muted-foreground/50" />
             <input
               type="text"
               value={keyword}

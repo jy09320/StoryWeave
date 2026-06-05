@@ -1,4 +1,4 @@
-import { FileUp, Globe2, Sparkles, Users2 } from 'lucide-react'
+import { FileArrowUp, GlobeSimple, Sparkle, Users } from '@phosphor-icons/react'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -45,7 +45,7 @@ const assetMeta: Record<
   {
     title: string
     description: string
-    icon: typeof Globe2
+    icon: typeof GlobeSimple
     accentClassName: string
     sourceLabel: string
     sourcePlaceholder: string
@@ -61,7 +61,7 @@ const assetMeta: Record<
   world_setting: {
     title: '世界观 AI 助手',
     description: '通过统一 AI 对话框整理资料、补全指令，并在确认后将结构化结果写入世界观设定。',
-    icon: Globe2,
+    icon: GlobeSimple,
     accentClassName: 'text-sky-500',
     sourceLabel: '设定资料（可选）',
     sourcePlaceholder: '粘贴背景资料、门派设定、历史梗概、地理与势力说明，AI 会据此分析并补全世界观。',
@@ -76,7 +76,7 @@ const assetMeta: Record<
   project_character: {
     title: '角色 AI 助手',
     description: '通过统一 AI 对话框分析人物资料、生成角色建议，并为后续角色工具链保留接入口。',
-    icon: Users2,
+    icon: Users,
     accentClassName: 'text-amber-500',
     sourceLabel: '人物资料（可选）',
     sourcePlaceholder: '粘贴人物小传、角色关系说明、对话片段或剧情简介，AI 会据此整理角色信息。',
@@ -91,7 +91,7 @@ const assetMeta: Record<
   story_qa: {
     title: '故事问答',
     description: '向 AI 提问关于你故事的任何问题。',
-    icon: Globe2,
+    icon: GlobeSimple,
     accentClassName: 'text-primary',
     sourceLabel: '问题',
     sourcePlaceholder: '',
@@ -246,7 +246,7 @@ export function ProjectAssetAIDialog({
             <div className="border-b border-border px-6 py-4">
               <div className="rounded-2xl border border-dashed border-border/80 bg-muted/30 px-4 py-4 text-sm text-muted-foreground">
                 <div className="flex items-center gap-2 font-medium text-foreground">
-                  <FileUp className={`size-4 ${meta.accentClassName}`} />
+                  <FileArrowUp className={`size-4 ${meta.accentClassName}`} />
                   文件解析入口预留
                 </div>
                 <p className="mt-2 leading-6">{meta.uploadHint}</p>
@@ -321,7 +321,7 @@ export function ProjectAssetAIDialog({
                 {assetType === 'world_setting' && latestWorldResult ? (
                   <div className="rounded-2xl border border-sky-500/25 bg-sky-500/8 px-4 py-4 text-sm leading-6 text-foreground/85">
                     <div className="flex items-center gap-2 font-medium text-foreground">
-                      <Sparkles className="size-4 text-sky-500" />
+                      <Sparkle className="size-4 text-sky-500" />
                       最近一次世界观分析结果
                     </div>
                     <div className="mt-2 text-muted-foreground">

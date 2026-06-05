@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Sparkles, User } from 'lucide-react'
+import { Sparkle, User } from '@phosphor-icons/react'
 import { Link } from 'react-router-dom'
 import { clsx } from 'clsx'
 
@@ -204,7 +204,7 @@ export function AssetsPortraitsPanel() {
         action={
           <Link to="/assets/characters">
             <Button variant="outline">
-              <Sparkles className="size-4" />
+              <Sparkle className="size-4" />
               前往角色库
             </Button>
           </Link>

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useParams } from 'react-router-dom'
-import { LoaderCircle, MessageSquare, Plus, Send, Sparkles, Trash2 } from 'lucide-react'
+import { Spinner, ChatCenteredText, Plus, PaperPlaneRight, Sparkle, Trash } from '@phosphor-icons/react'
 import { toast } from 'sonner'
 
 import { EmptyState } from '@/components/empty-state'
@@ -412,7 +412,7 @@ export function CharactersPage() {
                               : 'text-muted-foreground hover:text-foreground',
                           ].join(' ')}
                         >
-                          <MessageSquare className="size-3.5" />
+                          <ChatCenteredText className="size-3.5" />
                           AI 对话
                         </button>
                       </div>
@@ -638,7 +638,7 @@ function CharacterDetail({ character, isProjectScoped, linkedCharacterIds, attac
                 编辑资料
               </Button>
               <Button className="w-full sm:w-auto" variant="ghost" onClick={onDelete} disabled={deletePending}>
-                <Trash2 className="size-4" />
+                <Trash className="size-4" />
                 删除角色
               </Button>
             </div>
@@ -1013,7 +1013,7 @@ function CharacterChatPanel({ character }: { character: Character }) {
 
         {selectedSessionId ? (
           <Button variant="ghost" size="sm" onClick={handleDeleteSession}>
-            <Trash2 className="size-3.5" />
+            <Trash className="size-3.5" />
           </Button>
         ) : null}
 
@@ -1038,7 +1038,7 @@ function CharacterChatPanel({ character }: { character: Character }) {
           {messages.length === 0 && !isStreaming ? (
             <div className="flex h-full items-center justify-center py-16">
               <div className="text-center text-sm text-muted-foreground">
-                <Sparkles className="mx-auto mb-2 size-8 text-primary/30" />
+                <Sparkle className="mx-auto mb-2 size-8 text-primary/30" />
                 <p>向「{character.name}」发送第一条消息吧</p>
                 <p className="mt-1 text-xs">AI 将以角色口吻回复你</p>
               </div>
@@ -1054,7 +1054,7 @@ function CharacterChatPanel({ character }: { character: Character }) {
               ) : (
                 <div className="max-w-[90%] rounded-2xl rounded-bl-md border border-border bg-card px-4 py-3">
                   <div className="mb-2 flex items-center gap-1.5">
-                    <Sparkles className="size-3 text-primary" />
+                    <Sparkle className="size-3 text-primary" />
                     <span className="text-[11px] font-medium text-primary/70">{character.name}</span>
                   </div>
                   <p className="whitespace-pre-line text-sm leading-7 text-foreground">{msg.content}</p>
@@ -1068,7 +1068,7 @@ function CharacterChatPanel({ character }: { character: Character }) {
             <div className="flex justify-start">
               <div className="max-w-[90%] rounded-2xl rounded-bl-md border border-border bg-card px-4 py-3">
                 <div className="mb-2 flex items-center gap-1.5">
-                  <Sparkles className="size-3 text-primary" />
+                  <Sparkle className="size-3 text-primary" />
                   <span className="text-[11px] font-medium text-primary/70">{character.name}</span>
                 </div>
                 <p className="whitespace-pre-line text-sm leading-7 text-foreground">{streamingContent}</p>
@@ -1080,7 +1080,7 @@ function CharacterChatPanel({ character }: { character: Character }) {
           {isStreaming && !streamingContent ? (
             <div className="flex justify-start">
               <div className="flex items-center gap-2 rounded-2xl border border-border bg-card px-4 py-3 text-sm text-muted-foreground">
-                <LoaderCircle className="size-3.5 animate-spin text-primary" />
+                <Spinner className="size-3.5 animate-spin text-primary" />
                 {character.name}正在思考…
               </div>
             </div>
@@ -1121,7 +1121,7 @@ function CharacterChatPanel({ character }: { character: Character }) {
               disabled={!inputText.trim()}
               className="self-end"
             >
-              <Send className="size-3.5" />
+              <PaperPlaneRight className="size-3.5" />
               发送
             </Button>
           )}

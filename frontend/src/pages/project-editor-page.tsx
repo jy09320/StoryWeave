@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { BookCheck, ChevronDown, ChevronLeft, ChevronRight, History, LoaderCircle, RefreshCw, Save, SendHorizontal, Sparkles } from 'lucide-react'
+import { BookBookmark, CaretDown, CaretLeft, CaretRight, ClockClockwise, Spinner, ArrowClockwise, FloppyDisk, PaperPlaneRight, Sparkle } from '@phosphor-icons/react'
 import { toast } from 'sonner'
 
 import { RichTextEditor, type RichTextEditorHandle } from '@/components/editor/rich-text-editor'
@@ -1068,7 +1068,7 @@ ${nextText}` : nextText
               <div className="space-y-4">
                 <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                   <Link to={`/projects/${projectId}`} className="inline-flex items-center gap-1 text-muted-foreground transition hover:text-foreground">
-                    <ChevronLeft className="size-4" />
+                    <CaretLeft className="size-4" />
                     返回工作台
                   </Link>
                   <span>·</span>
@@ -1093,7 +1093,7 @@ ${nextText}` : nextText
                           <span className="rounded-full bg-primary px-2.5 py-0.5 text-xs font-medium text-primary-foreground">
                             {getChapterStatusLabel(activeForm.status)}
                           </span>
-                          <ChevronDown
+                          <CaretDown
                             className={cn('size-4 text-muted-foreground transition', isStatusMenuOpen && 'rotate-180')}
                           />
                         </button>
@@ -1132,7 +1132,7 @@ ${nextText}` : nextText
                           onClick={handleCompleteChapter}
                           disabled={isCompletingChapter}
                         >
-                          {isCompletingChapter ? <LoaderCircle className="size-4 animate-spin" /> : <BookCheck className="size-4" />}
+                          {isCompletingChapter ? <Spinner className="size-4 animate-spin" /> : <BookBookmark className="size-4" />}
                           {'完成本章'}
                         </Button>
                       ) : null}
@@ -1142,7 +1142,7 @@ ${nextText}` : nextText
                         className="h-10 shrink-0 rounded-xl border-border bg-background px-4 text-foreground/85"
                         onClick={() => setIsVersionDialogOpen(true)}
                       >
-                        <History className="size-4" />
+                        <ClockClockwise className="size-4" />
                         {'版本历史'}
                       </Button>
                     </div>
@@ -1208,21 +1208,21 @@ ${nextText}` : nextText
                 onClick={handleOpenMemoryPanel}
               >
                 <span className="flex items-center gap-2">章节记忆</span>
-                <ChevronRight className={cn('size-4 transition-transform', isMemoryPanelOpen && 'rotate-90')} />
+                <CaretRight className={cn('size-4 transition-transform', isMemoryPanelOpen && 'rotate-90')} />
               </button>
 
               {isMemoryPanelOpen ? (
                 <div className="mt-4 space-y-4">
                   {isMemoryLoading ? (
                     <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                      <LoaderCircle className="size-3.5 animate-spin" />
+                      <Spinner className="size-3.5 animate-spin" />
                       正在加载...
                     </div>
                   ) : !chapterMemory ? (
                     <div className="space-y-3">
                       <p className="text-xs text-muted-foreground">暂无章节记忆。保存有内容的章节后，系统会自动提取记忆。</p>
                       <Button variant="outline" size="sm" className="h-8 rounded-lg px-3 text-xs" onClick={handleRefreshMemory}>
-                        <RefreshCw className="size-3.5" />
+                        <ArrowClockwise className="size-3.5" />
                         立即生成
                       </Button>
                     </div>
@@ -1239,7 +1239,7 @@ ${nextText}` : nextText
                           onClick={handleRefreshMemory}
                           disabled={isMemoryLoading}
                         >
-                          <RefreshCw className="size-3" />
+                          <ArrowClockwise className="size-3" />
                           重新生成
                         </Button>
                       </div>
@@ -1332,7 +1332,7 @@ ${nextText}` : nextText
                   : '内容已同步'}
             </div>
             <Button className="h-10 rounded-xl bg-primary px-4 text-primary-foreground hover:opacity-90" onClick={handleManualSave} disabled={saveChapterMutation.isPending}>
-              {saveChapterMutation.isPending ? <LoaderCircle className="size-4 animate-spin" /> : <Save className="size-4" />}
+              {saveChapterMutation.isPending ? <Spinner className="size-4 animate-spin" /> : <FloppyDisk className="size-4" />}
               手动保存
             </Button>
           </CardFooter>
@@ -1430,8 +1430,8 @@ ${nextText}` : nextText
                   className="flex-1"
                 >
                   {bubbleGen.isGenerating
-                    ? <><LoaderCircle className="size-4 animate-spin" />生成中...</>
-                    : <><Sparkles className="size-4" />{bubbleGen.result.trim() ? '重新生成' : '开始生成'}</>}
+                    ? <><Spinner className="size-4 animate-spin" />生成中...</>
+                    : <><Sparkle className="size-4" />{bubbleGen.result.trim() ? '重新生成' : '开始生成'}</>}
                 </Button>
                 {bubbleGen.isGenerating ? (
                   <Button variant="outline" onClick={() => setBubbleGen((prev) => ({ ...prev, isGenerating: false }))}>
@@ -1449,7 +1449,7 @@ ${nextText}` : nextText
                     <Button
                       onClick={() => handleBubbleApply('append')}
                     >
-                      <SendHorizontal className="size-4" />
+                      <PaperPlaneRight className="size-4" />
                       追加到正文
                     </Button>
                   </>

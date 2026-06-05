@@ -1,12 +1,12 @@
 import { NavLink, Outlet } from 'react-router-dom'
 import { clsx } from 'clsx'
-import { Users2, BookOpen, Network, Image } from 'lucide-react'
+import { Users, BookOpen, Network, Image } from '@phosphor-icons/react'
 
 const assetNavItems = [
   {
     to: '/assets/characters',
     label: '角色',
-    icon: Users2,
+    icon: Users,
     desc: '人物档案',
     color: 'text-violet-500',
     activeBg: 'bg-violet-500/8',

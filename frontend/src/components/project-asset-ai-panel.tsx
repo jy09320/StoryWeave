@@ -1,17 +1,17 @@
 import { useRef, useEffect, useCallback, useState, type ChangeEvent, type KeyboardEvent } from 'react'
 import {
-  Globe2,
-  Users2,
-  CheckCircle2,
-  Send,
+  GlobeSimple,
+  Users,
+  CheckCircle,
+  PaperPlaneRight,
   Paperclip,
-  Sparkles,
+  Sparkle,
   Wrench,
-  BrainCircuit,
-  TriangleAlert,
-  ChevronDown,
-  RefreshCw,
-} from 'lucide-react'
+  Brain,
+  Warning,
+  CaretDown,
+  ArrowClockwise,
+} from '@phosphor-icons/react'
 import { toast } from 'sonner'
 import { useQuery } from '@tanstack/react-query'
 
@@ -76,7 +76,7 @@ const assetMeta: Record<
   ProjectAssetAIType,
   {
     title: string
-    icon: typeof Globe2
+    icon: typeof GlobeSimple
     accentClassName: string
     placeholder: string
     guidancePlaceholder: string
@@ -86,7 +86,7 @@ const assetMeta: Record<
 > = {
   world_setting: {
     title: '世界观 AI 助手',
-    icon: Globe2,
+    icon: GlobeSimple,
     accentClassName: 'text-sky-500',
     placeholder: '输入消息或指令，AI 会与你对话并引导完善世界观。\n\nShift+Enter 换行，Enter 发送。',
     guidancePlaceholder: '例如：保留已有世界规则，风格偏东方玄幻，不要覆盖已经确定的人名地名。',
@@ -95,7 +95,7 @@ const assetMeta: Record<
   },
   project_character: {
     title: '角色 AI 助手',
-    icon: Users2,
+    icon: Users,
     accentClassName: 'text-amber-500',
     placeholder: '输入消息或角色信息，AI 会与你对话并引导完善角色设定。\n\nShift+Enter 换行，Enter 发送。',
     guidancePlaceholder: '例如：优先提炼已出现角色，不要擅自新增核心角色，保持角色关系克制真实。',
@@ -104,7 +104,7 @@ const assetMeta: Record<
   },
   story_qa: {
     title: '故事问答',
-    icon: Globe2,
+    icon: GlobeSimple,
     accentClassName: 'text-primary',
     placeholder: '输入你的问题',
     guidancePlaceholder: '',
@@ -216,9 +216,9 @@ const messageIconClass: Record<Exclude<ProjectAssetAIMessage['role'], 'user'>, s
 
 const MessageIcon = ({ role }: { role: Exclude<ProjectAssetAIMessage['role'], 'user'> }) => {
   if (role === 'tool') return <Wrench className="size-3" />
-  if (role === 'result') return <CheckCircle2 className="size-3" />
-  if (role === 'preview') return <Sparkles className="size-3" />
-  return <BrainCircuit className="size-3" />
+  if (role === 'result') return <CheckCircle className="size-3" />
+  if (role === 'preview') return <Sparkle className="size-3" />
+  return <Brain className="size-3" />
 }
 
 function MessageBubble({ message }: { message: ProjectAssetAIMessage }) {
@@ -257,7 +257,7 @@ function StreamingBubble({ text, accentClassName }: { text: string; accentClassN
   return (
     <div className="flex gap-2.5">
       <div className={`mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full border border-border bg-muted ${accentClassName}`}>
-        <Sparkles className="size-3 animate-pulse" />
+        <Sparkle className="size-3 animate-pulse" />
       </div>
       <div className="min-w-0 flex-1">
         <div className="mb-1 text-xs font-medium text-foreground">AI 助手</div>
@@ -633,7 +633,7 @@ export function ProjectAssetAIPanel({
                   className="inline-flex h-6 max-w-[140px] items-center justify-between rounded-full border border-border bg-muted/50 px-2 text-[10px] text-muted-foreground transition hover:border-primary/30 hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <span className="truncate">{modelId || '默认模型'}</span>
-                  <ChevronDown className="ml-0.5 size-2.5 shrink-0" />
+                  <CaretDown className="ml-0.5 size-2.5 shrink-0" />
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent side="bottom" align="end" className="w-[280px] p-2">
@@ -645,7 +645,7 @@ export function ProjectAssetAIPanel({
                     disabled={isLoadingModels || !hasSavedRuntimeKey}
                     className="inline-flex size-6 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
                   >
-                    {isLoadingModels ? <RefreshCw className="size-3 animate-spin" /> : <RefreshCw className="size-3" />}
+                    {isLoadingModels ? <ArrowClockwise className="size-3 animate-spin" /> : <ArrowClockwise className="size-3" />}
                   </button>
                 </div>
                 <DropdownMenuSeparator />
@@ -665,7 +665,7 @@ export function ProjectAssetAIPanel({
                             className={isSelected ? 'bg-primary/10 text-primary focus:bg-primary/10 focus:text-primary' : ''}
                           >
                             <span className="truncate">{model.id}</span>
-                            {isSelected && <CheckCircle2 className="ml-auto size-3.5 shrink-0" />}
+                            {isSelected && <CheckCircle className="ml-auto size-3.5 shrink-0" />}
                           </DropdownMenuItem>
                         )
                       })}
@@ -680,14 +680,14 @@ export function ProjectAssetAIPanel({
 
       {!structuredCapability ? (
         <div className="flex items-center gap-1.5 border-b border-border bg-muted/25 px-4 py-1.5 text-[11px] text-muted-foreground">
-          <TriangleAlert className="size-3.5 shrink-0" />
+          <Warning className="size-3.5 shrink-0" />
           <span>未检测结构化能力，建议先去设置中心检测。</span>
         </div>
       ) : null}
 
       {structuredCapability?.status === 'failed' ? (
         <div className="flex items-center gap-1.5 border-b border-rose-500/20 bg-rose-500/5 px-4 py-1.5 text-[11px] text-rose-200">
-          <TriangleAlert className="size-3.5 shrink-0" />
+          <Warning className="size-3.5 shrink-0" />
           <span>{structuredCapability.detail || '当前结构化能力不可用，建议切换模型或兼容网关。'}</span>
         </div>
       ) : null}
@@ -713,7 +713,7 @@ export function ProjectAssetAIPanel({
               </span>
             </div>
             <Button size="sm" className="h-7 shrink-0 text-xs" onClick={onApplyWorldPatch} disabled={isApplying}>
-              <CheckCircle2 className="size-3" />
+              <CheckCircle className="size-3" />
               {isApplying ? '写入中...' : '应用写入'}
             </Button>
           </div>
@@ -736,7 +736,7 @@ export function ProjectAssetAIPanel({
               onClick={onApplyCharacterActions}
               disabled={isApplying}
             >
-              <CheckCircle2 className="size-3" />
+              <CheckCircle className="size-3" />
               {isApplying ? '写入中...' : '应用写入'}
             </Button>
           </div>
@@ -800,7 +800,7 @@ export function ProjectAssetAIPanel({
             disabled={isStreaming}
             onClick={() => void handleSend()}
           >
-            <Send className="size-4" />
+            <PaperPlaneRight className="size-4" />
           </Button>
         </div>
 

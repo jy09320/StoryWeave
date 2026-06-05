@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { LoaderCircle, Pencil, Plus, Server, Star, Trash2, X } from 'lucide-react'
+import { Spinner, PencilSimple, Plus, HardDrives, Star, Trash, X } from '@phosphor-icons/react'
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
@@ -303,7 +303,7 @@ export function RuntimeSettingsPanel() {
       <Card className="border border-border bg-card/95">
         <CardContent className="flex min-h-65 items-center justify-center">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <LoaderCircle className="size-4 animate-spin" />
+            <Spinner className="size-4 animate-spin" />
             正在加载 AI 运行时配置...
           </div>
         </CardContent>
@@ -410,7 +410,7 @@ export function RuntimeSettingsPanel() {
                           onClick={(e) => { e.stopPropagation(); handleEdit(config) }}
                           title="编辑"
                         >
-                          <Pencil className="size-3.5" />
+                          <PencilSimple className="size-3.5" />
                         </Button>
                         <Button
                           variant="ghost"
@@ -420,7 +420,7 @@ export function RuntimeSettingsPanel() {
                           disabled={active}
                           title={active ? '不能删除活跃配置' : '删除'}
                         >
-                          <Trash2 className="size-3.5" />
+                          <Trash className="size-3.5" />
                         </Button>
                       </div>
                     </div>
@@ -596,7 +596,7 @@ export function RuntimeSettingsPanel() {
           <CardHeader>
             <div className="flex items-start justify-between gap-3">
               <CardTitle className="flex items-center gap-2 text-lg text-foreground">
-                <Server className="size-4 text-primary" />
+                <HardDrives className="size-4 text-primary" />
                 当前生效配置
               </CardTitle>
               <Button

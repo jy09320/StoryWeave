@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { Link, useParams } from 'react-router-dom'
-import { ArrowLeft, BrainCircuit, Sparkles, Users2, Wand2 } from 'lucide-react'
+import { ArrowLeft, Brain, Sparkle, Users } from '@phosphor-icons/react'
 import { toast } from 'sonner'
 
 import { EmptyState } from '@/components/empty-state'
@@ -201,7 +201,7 @@ export function ProjectWorldPage() {
           to={`/ai-toolbox?task=consistency&projectId=${project.id}${returnToEditor ? `&chapterId=${returnToEditor.chapterId}` : ''}`}
           className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-primary/20 bg-primary/10 px-3 text-sm font-medium text-primary transition hover:bg-primary/15"
         >
-          <Sparkles className="size-4" />
+          <Sparkle className="size-4" />
           设定巡检模板
         </Link>
       </div>
@@ -224,7 +224,7 @@ export function ProjectWorldPage() {
                     </Button>
                   ) : null}
                   <Button type="button" variant="outline" onClick={handleGenerateAIDraft} disabled={generateDraftMutation.isPending}>
-                    <Wand2 className="mr-2 size-4" />
+                    <Sparkle className="mr-2 size-4" />
                     {generateDraftMutation.isPending ? '生成中...' : 'AI 生成草案'}
                   </Button>
                   <Button type="button" onClick={handleApplyAIDraft} disabled={!aiDraft}>
@@ -322,7 +322,7 @@ export function ProjectWorldPage() {
 
                 <div className="flex flex-wrap items-center gap-3">
                   <Button type="submit" disabled={updateWorldSettingMutation.isPending}>
-                    <BrainCircuit className="size-4" />
+                    <Brain className="size-4" />
                     {updateWorldSettingMutation.isPending ? '保存中...' : worldSetting ? '保存世界观修改' : '创建世界观'}
                   </Button>
                   <Button
@@ -370,7 +370,7 @@ export function ProjectWorldPage() {
                 to={`/projects/${project.id}/characters`}
                 className="inline-flex h-9 w-full items-center justify-center rounded-lg border border-border bg-background px-3 text-sm font-medium text-foreground transition hover:bg-muted"
               >
-                <Users2 className="mr-2 size-4" />
+                <Users className="mr-2 size-4" />
                 管理项目角色
               </Link>
             </CardFooter>

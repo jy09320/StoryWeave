@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type Dispatch, type FormEvent, type ReactNode, type SetStateAction } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { Link, useNavigate } from 'react-router-dom'
-import { Plus, Sparkles, Trash2, Wand2 } from 'lucide-react'
+import { Plus, Sparkle, Trash } from '@phosphor-icons/react'
 import { toast } from 'sonner'
 
 import { EmptyState } from '@/components/empty-state'
@@ -455,7 +455,7 @@ export function DashboardPage() {
         <div className="flex items-center justify-between border-b border-border/70 px-5 py-4">
           <div className="text-sm font-medium text-foreground">项目列表</div>
           <Button variant="outline" size="sm" onClick={() => setIsCreateOpen(true)}>
-            <Sparkles className="mr-2 size-4" />
+            <Sparkle className="mr-2 size-4" />
             新建项目
           </Button>
         </div>
@@ -509,7 +509,7 @@ export function DashboardPage() {
                     编辑
                   </Button>
                   <Button variant="ghost" size="sm" onClick={() => handleDelete(project)} disabled={deleteProjectMutation.isPending}>
-                    <Trash2 className="mr-1 size-4" />
+                    <Trash className="mr-1 size-4" />
                     删除
                   </Button>
                   <Link
@@ -964,7 +964,7 @@ function ProjectDialog<T extends ProjectFormState>({
                           </Button>
                         ) : null}
                         <Button type="button" onClick={onGenerateDraft} disabled={generatingDraft}>
-                          <Wand2 className="mr-2 size-4" />
+                          <Sparkle className="mr-2 size-4" />
                           {generatingDraft ? '生成中...' : projectDraft ? '重新生成' : '生成草案'}
                         </Button>
                       </div>

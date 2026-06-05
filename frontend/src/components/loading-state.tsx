@@ -1,4 +1,4 @@
-import { LoaderCircle } from 'lucide-react'
+import { Spinner } from '@phosphor-icons/react'
 
 import { cn } from '@/lib/utils'
 
@@ -11,11 +11,11 @@ export function LoadingState({ label = '正在加载数据...', className }: Loa
   return (
     <div
       className={cn(
-        'flex min-h-[220px] flex-col items-center justify-center gap-3 rounded-3xl border border-border bg-card/90 text-muted-foreground shadow-sm',
+        'flex min-h-[220px] flex-col items-center justify-center gap-3 rounded-xl border border-border bg-card/90 text-muted-foreground shadow-sm',
         className,
       )}
     >
-      <LoaderCircle className="size-6 animate-spin text-primary" />
+      <Spinner className="size-6 animate-spin text-primary" />
       <p className="text-sm">{label}</p>
     </div>
   )
