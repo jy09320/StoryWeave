@@ -1,10 +1,13 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48">
-  <defs>
-    <linearGradient id="bolt" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#9b5dff"/>
-      <stop offset="100%" stop-color="#6c2bff"/>
-    </linearGradient>
-  </defs>
-  <path d="M28 2L8 28h12L16 46l24-28H28L32 2z" fill="url(#bolt)"/>
-  <path d="M28 2L8 28h12L16 46l24-28H28L32 2z" fill="none" stroke="#b388ff" stroke-width="1" stroke-linejoin="round"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 48" width="80" height="48">
+  <rect width="80" height="48" rx="6" fill="#ffffff"/>
+  <text
+    x="40"
+    y="36"
+    font-family="'Arial Black', 'Helvetica Neue', Arial, sans-serif"
+    font-weight="900"
+    font-size="32"
+    fill="#111111"
+    text-anchor="middle"
+    letter-spacing="-1"
+  >ouki</text>
 </svg>
