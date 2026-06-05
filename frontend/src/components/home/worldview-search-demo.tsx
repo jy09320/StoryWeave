@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { MagnifyingGlass, BookOpenText, Users, Sparkle, MapPin, Clock } from '@phosphor-icons/react'
 

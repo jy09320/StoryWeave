@@ -64,9 +64,9 @@ export function AssetWorkspace({
   onTabClose,
   onTabsReorder,
   renderEditor,
-  onNodeRename,
-  onNodeDelete,
-  onNodeOpenInNewTab,
+  onNodeRename: _onNodeRename,
+  onNodeDelete: _onNodeDelete,
+  onNodeOpenInNewTab: _onNodeOpenInNewTab,
   onAddTab,
 }: AssetWorkspaceProps) {
   return (

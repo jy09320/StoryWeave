@@ -406,6 +406,7 @@ export function AssetsCharactersPanel() {
                 characterProjectsMap={characterProjectsMap}
                 onSelect={handleSelectCharacter}
                 onCreateNew={() => setCreateDialogOpen(true)}
+                portraitVersions={portraitVersions}
               />
             </aside>
 
@@ -529,6 +530,7 @@ interface CharacterListProps {
   characterProjectsMap: Map<string, Project[]>
   onSelect: (id: string) => void
   onCreateNew?: () => void
+  portraitVersions: Record<string, number>
 }
 
 const avatarColors = [
@@ -548,10 +550,12 @@ function CharacterRow({
   character,
   isActive,
   onSelect,
+  portraitVersions,
 }: {
   character: Character
   isActive: boolean
   onSelect: () => void
+  portraitVersions: Record<string, number>
 }) {
   const tags = splitTags(character.tags)
   const initial = character.name.charAt(0)
@@ -614,7 +618,7 @@ function CharacterRow({
   )
 }
 
-function CharacterList({ characters, selectedCharacter, characterProjectsMap, onSelect, onCreateNew }: CharacterListProps) {
+function CharacterList({ characters, selectedCharacter, characterProjectsMap, onSelect, onCreateNew, portraitVersions }: CharacterListProps) {
   // Build groups: projectId → { project, characters[] }, then unassigned group
   const { groups, unassigned } = useMemo(() => {
     const projectMap = new Map<string, { title: string; chars: Character[] }>()
@@ -687,6 +691,7 @@ function CharacterList({ characters, selectedCharacter, characterProjectsMap, on
                       character={character}
                       isActive={selectedCharacter?.id === character.id}
                       onSelect={() => onSelect(character.id)}
+                      portraitVersions={portraitVersions}
                     />
                   ))}
                 </div>
@@ -707,6 +712,7 @@ function CharacterList({ characters, selectedCharacter, characterProjectsMap, on
                     character={character}
                     isActive={selectedCharacter?.id === character.id}
                     onSelect={() => onSelect(character.id)}
+                    portraitVersions={portraitVersions}
                   />
                 ))}
               </div>
@@ -720,6 +726,7 @@ function CharacterList({ characters, selectedCharacter, characterProjectsMap, on
               character={character}
               isActive={selectedCharacter?.id === character.id}
               onSelect={() => onSelect(character.id)}
+              portraitVersions={portraitVersions}
             />
           ))
         )}

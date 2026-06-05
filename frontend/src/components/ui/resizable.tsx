@@ -1,15 +1,21 @@
 import * as React from "react"
-import { PanelGroup, Panel, PanelResizeHandle } from "react-resizable-panels"
+import { Group, Panel, Separator } from "react-resizable-panels"
 import { DotsSixVertical } from "@phosphor-icons/react"
 
 import { cn } from "@/lib/utils"
 
-function ResizablePanelGroup({ className, ...props }: React.ComponentProps<typeof PanelGroup>) {
+function ResizablePanelGroup({
+  className,
+  direction,
+  ...props
+}: Omit<React.ComponentProps<typeof Group>, "orientation"> & { direction?: "horizontal" | "vertical" }) {
   return (
-    <PanelGroup
+    <Group
       data-slot="resizable-panel-group"
+      data-orientation={direction}
+      orientation={direction}
       className={cn(
-        "flex h-full w-full data-[panel-group-direction=vertical]:flex-col",
+        "flex h-full w-full data-[orientation=vertical]:flex-col",
         className
       )}
       {...props}
@@ -25,12 +31,12 @@ function ResizableHandle({
   withHandle,
   className,
   ...props
-}: React.ComponentProps<typeof PanelResizeHandle> & { withHandle?: boolean }) {
+}: React.ComponentProps<typeof Separator> & { withHandle?: boolean }) {
   return (
-    <PanelResizeHandle
+    <Separator
       data-slot="resizable-handle"
       className={cn(
-        "relative flex w-px items-center justify-center bg-border after:absolute after:inset-y-0 after:left-1/2 after:w-1 after:-translate-x-1/2 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-offset-1 data-[panel-group-direction=vertical]:h-px data-[panel-group-direction=vertical]:w-full data-[panel-group-direction=vertical]:after:left-0 data-[panel-group-direction=vertical]:after:h-1 data-[panel-group-direction=vertical]:after:w-full data-[panel-group-direction=vertical]:after:translate-x-0 data-[panel-group-direction=vertical]:after:-translate-y-1/2",
+        "relative flex w-px items-center justify-center bg-border after:absolute after:inset-y-0 after:left-1/2 after:w-1 after:-translate-x-1/2 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-offset-1 data-[orientation=vertical]:h-px data-[orientation=vertical]:w-full data-[orientation=vertical]:after:left-0 data-[orientation=vertical]:after:h-1 data-[orientation=vertical]:after:w-full data-[orientation=vertical]:after:translate-x-0 data-[orientation=vertical]:after:-translate-y-1/2",
         className
       )}
       {...props}
@@ -40,7 +46,7 @@ function ResizableHandle({
           <DotsSixVertical className="h-2.5 w-2.5" />
         </div>
       )}
-    </PanelResizeHandle>
+    </Separator>
   )
 }
 
