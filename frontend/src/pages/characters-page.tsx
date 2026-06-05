@@ -1,9 +1,7 @@
-import { useMemo, useState, type FormEvent } from 'react'
-import { useMutation, useQuery } from '@tanstack/react-query'
-import { Link, useParams } from 'react-router-dom'
-import { Trash2 } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useParams } from 'react-router-dom'import { LoaderCircle, MessageSquare, Plus, Send, Sparkles, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
-
 
 import { EmptyState } from '@/components/empty-state'
 import { LoadingState } from '@/components/loading-state'
@@ -27,19 +25,27 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
-import { readEditorRouteContext } from '@/lib/editor-route-context'
 import { formatDate } from '@/lib/format'
-import { queryClient } from '@/lib/query-client'
 import {
   attachProjectCharacter,
   deleteCharacter,
   getProject,
-  listCharacters,
   updateCharacter,
 } from '@/services/projects'
+import {
+  listCharacters,
+  createCharacter,
+  listCharacterChatSessions,
+  createCharacterChatSession,
+  deleteCharacterChatSession,
+  streamCharacterChat,
+} from '@/services/characters'
+import { listProjects } from '@/services/projects'
 import type {
   Character,
+  CharacterChatSession,
   CharacterPayload,
+  Project,
   ProjectDetail,
 } from '@/types/api'
 
@@ -111,11 +117,18 @@ function splitTags(tags?: string | null) {
 export function CharactersPage() {
   const { projectId } = useParams<{ projectId?: string }>()
   const isProjectScoped = Boolean(projectId)
+  const queryClient = useQueryClient()
 
   const [searchKeyword] = useState('')
   const [selectedCharacterId, setSelectedCharacterId] = useState<string | null>(null)
   const [editingCharacter, setEditingCharacter] = useState<Character | null>(null)
   const [editForm, setEditForm] = useState<CharacterFormState>(defaultFormState)
+  const [activeTab, setActiveTab] = useState<'detail' | 'chat'>('detail')
+
+  // Create-character dialog state
+  const [createDialogOpen, setCreateDialogOpen] = useState(false)
+  const [createForm, setCreateForm] = useState<CharacterFormState>(defaultFormState)
+
   const projectQuery = useQuery<ProjectDetail, Error>({
     queryKey: ['project', projectId],
     queryFn: () => getProject(projectId ?? ''),
@@ -168,6 +181,22 @@ export function CharactersPage() {
       toast.error(error.message)
     },
   })
+
+  const createCharacterMutation = useMutation({
+    mutationFn: (payload: CharacterPayload) => createCharacter(payload),
+    onSuccess: async (character: Character) => {
+      await queryClient.invalidateQueries({ queryKey: ['characters'] })
+      setSelectedCharacterId(character.id)
+      setActiveTab('detail')
+      setCreateDialogOpen(false)
+      setCreateForm(defaultFormState)
+      toast.success(`角色「${character.name}」已创建`)
+    },
+    onError: (error: Error) => {
+      toast.error(error.message)
+    },
+  })
+
   const characters = useMemo(() => charactersQuery.data ?? [], [charactersQuery.data])
   const projectCharacters = useMemo(() => projectQuery.data?.project_characters ?? [], [projectQuery.data?.project_characters])
   const linkedCharacterIds = useMemo(() => new Set(projectCharacters.map((item) => item.character_id)), [projectCharacters])
@@ -175,7 +204,6 @@ export function CharactersPage() {
     () => (isProjectScoped ? characters.filter((character) => linkedCharacterIds.has(character.id)) : characters),
     [characters, isProjectScoped, linkedCharacterIds],
   )
-  const editorRouteContext = useMemo(() => readEditorRouteContext(), [])
   const selectedCharacter = useMemo(
     () => displayedCharacters.find((character) => character.id === selectedCharacterId) ?? displayedCharacters[0] ?? null,
     [displayedCharacters, selectedCharacterId],
@@ -215,13 +243,25 @@ export function CharactersPage() {
     })
   }
 
+  function handleCreateSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+
+    const payload = buildPayload(createForm)
+    if (!payload.name) {
+      toast.error('请输入角色名称')
+      return
+    }
+
+    createCharacterMutation.mutate(payload)
+  }
+
   function openEditDialog(character: Character) {
     setEditingCharacter(character)
     setEditForm(getInitialFormState(character))
   }
 
   function handleDelete(character: Character) {
-    const confirmed = window.confirm(`确认删除角色“${character.name}”吗？已关联到项目的关系也会被移除。`)
+    const confirmed = window.confirm(`确认删除角色"${character.name}"吗？已关联到项目的关系也会被移除。`)
     if (!confirmed) {
       return
     }
@@ -236,6 +276,12 @@ export function CharactersPage() {
 
     attachCharacterMutation.mutate({ projectId, characterId: character.id })
   }
+
+  function handleSelectCharacter(id: string) {
+    setSelectedCharacterId(id)
+    setActiveTab('detail')
+  }
+
   if (isProjectScoped && !projectId) {
     return <EmptyState title="项目标识缺失" description="当前路由中没有有效的项目 ID。" />
   }
@@ -279,24 +325,6 @@ export function CharactersPage() {
   return (
     <>
       <div className="space-y-6 pb-8">
-        {editorRouteContext && !isProjectScoped ? (
-          <Card className="border border-border bg-card/95 shadow-[0_12px_30px_rgba(148,163,184,0.14)]">
-            <CardContent className="flex flex-col gap-3 px-5 py-4 md:flex-row md:items-center md:justify-between">
-              <div className="space-y-1">
-                <div className="text-sm font-medium text-foreground">当前仍有章节上下文</div>
-                <div className="text-sm text-muted-foreground">
-                  {editorRouteContext.projectTitle || '当前项目'} / {editorRouteContext.chapterTitle || '当前章节'}
-                </div>
-              </div>
-              <Link
-                to={`/projects/${editorRouteContext.projectId}/editor/${editorRouteContext.chapterId}`}
-                className="inline-flex h-9 items-center justify-center rounded-md border border-border bg-background px-4 text-sm text-foreground transition hover:bg-muted"
-              >
-                返回当前章节
-              </Link>
-            </CardContent>
-          </Card>
-        ) : null}
 
         {isProjectScoped ? (
           <section className="space-y-4">
@@ -312,7 +340,7 @@ export function CharactersPage() {
                   selectedCharacter={selectedCharacter}
                   linkedCharacterIds={linkedCharacterIds}
                   isProjectScoped={isProjectScoped}
-                  onSelect={setSelectedCharacterId}
+                  onSelect={handleSelectCharacter}
                 />
                 {selectedCharacter ? (
                   <CharacterDetail
@@ -330,12 +358,18 @@ export function CharactersPage() {
             )}
           </section>
         ) : (
-          /* Global: original layout */
+          /* Global: two-column layout with tabs */
           <>
             {displayedCharacters.length === 0 ? (
               <EmptyState
                 title={searchKeyword ? '没有匹配的角色' : '角色库还是空的'}
                 description={searchKeyword ? '换个关键词再试。' : '先创建一个角色。'}
+                action={
+                  <Button onClick={() => setCreateDialogOpen(true)}>
+                    <Plus className="size-4" />
+                    新建角色
+                  </Button>
+                }
               />
             ) : (
               <section className="grid gap-4 xl:grid-cols-[300px_minmax(0,1fr)]">
@@ -345,22 +379,58 @@ export function CharactersPage() {
                     selectedCharacter={selectedCharacter}
                     linkedCharacterIds={linkedCharacterIds}
                     isProjectScoped={false}
-                    onSelect={setSelectedCharacterId}
+                    onSelect={handleSelectCharacter}
+                    onCreateNew={() => setCreateDialogOpen(true)}
                   />
                 </aside>
 
                 <section className="min-w-0 space-y-4">
                   {selectedCharacter ? (
-                    <CharacterDetail
-                      character={selectedCharacter}
-                      isProjectScoped={false}
-                      linkedCharacterIds={linkedCharacterIds}
-                      attachPending={attachCharacterMutation.isPending}
-                      deletePending={deleteCharacterMutation.isPending}
-                      onAttach={() => handleAttachToProject(selectedCharacter)}
-                      onEdit={() => openEditDialog(selectedCharacter)}
-                      onDelete={() => handleDelete(selectedCharacter)}
-                    />
+                    <>
+                      {/* Tab bar */}
+                      <div className="flex gap-1 rounded-lg border border-border bg-muted/30 p-1">
+                        <button
+                          type="button"
+                          onClick={() => setActiveTab('detail')}
+                          className={[
+                            'flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition',
+                            activeTab === 'detail'
+                              ? 'bg-background text-foreground shadow-sm'
+                              : 'text-muted-foreground hover:text-foreground',
+                          ].join(' ')}
+                        >
+                          角色详情
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setActiveTab('chat')}
+                          className={[
+                            'flex items-center justify-center gap-1.5 flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition',
+                            activeTab === 'chat'
+                              ? 'bg-background text-foreground shadow-sm'
+                              : 'text-muted-foreground hover:text-foreground',
+                          ].join(' ')}
+                        >
+                          <MessageSquare className="size-3.5" />
+                          AI 对话
+                        </button>
+                      </div>
+
+                      {activeTab === 'detail' ? (
+                        <CharacterDetail
+                          character={selectedCharacter}
+                          isProjectScoped={false}
+                          linkedCharacterIds={linkedCharacterIds}
+                          attachPending={attachCharacterMutation.isPending}
+                          deletePending={deleteCharacterMutation.isPending}
+                          onAttach={() => handleAttachToProject(selectedCharacter)}
+                          onEdit={() => openEditDialog(selectedCharacter)}
+                          onDelete={() => handleDelete(selectedCharacter)}
+                        />
+                      ) : (
+                        <CharacterChatPanel character={selectedCharacter} />
+                      )}
+                    </>
                   ) : null}
                 </section>
               </section>
@@ -368,6 +438,7 @@ export function CharactersPage() {
           </>
         )}
 
+        {/* Edit dialog */}
         <CharacterDialog
           open={Boolean(editingCharacter)}
           onOpenChange={(open) => {
@@ -384,10 +455,32 @@ export function CharactersPage() {
           pending={updateCharacterMutation.isPending}
           submitLabel="保存修改"
         />
+
+        {/* Create dialog */}
+        <CharacterDialog
+          open={createDialogOpen}
+          onOpenChange={(open) => {
+            if (!open) {
+              setCreateDialogOpen(false)
+              setCreateForm(defaultFormState)
+            }
+          }}
+          title="新建角色"
+          description="创建一个新角色，加入全局角色库"
+          form={createForm}
+          onChange={setCreateForm}
+          onSubmit={handleCreateSubmit}
+          pending={createCharacterMutation.isPending}
+          submitLabel="创建角色"
+        />
       </div>
     </>
   )
 }
+
+// ---------------------------------------------------------------------------
+// CharacterList
+// ---------------------------------------------------------------------------
 
 interface CharacterListProps {
   characters: Character[]
@@ -395,9 +488,10 @@ interface CharacterListProps {
   linkedCharacterIds: Set<string>
   isProjectScoped: boolean
   onSelect: (id: string) => void
+  onCreateNew?: () => void
 }
 
-function CharacterList({ characters, selectedCharacter, linkedCharacterIds, isProjectScoped, onSelect }: CharacterListProps) {
+function CharacterList({ characters, selectedCharacter, linkedCharacterIds, isProjectScoped, onSelect, onCreateNew }: CharacterListProps) {
   return (
     <Card className="border border-border bg-card/95">
       <CardHeader className="pb-2">
@@ -465,10 +559,26 @@ function CharacterList({ characters, selectedCharacter, linkedCharacterIds, isPr
             </button>
           )
         })}
+
+        {/* Create new character button */}
+        {onCreateNew ? (
+          <button
+            type="button"
+            onClick={onCreateNew}
+            className="flex w-full items-center justify-center gap-1.5 rounded-md border border-dashed border-border px-3 py-2.5 text-sm text-muted-foreground transition hover:border-primary/30 hover:bg-muted/35 hover:text-foreground"
+          >
+            <Plus className="size-3.5" />
+            新建角色
+          </button>
+        ) : null}
       </CardContent>
     </Card>
   )
 }
+
+// ---------------------------------------------------------------------------
+// CharacterDetail
+// ---------------------------------------------------------------------------
 
 interface CharacterDetailProps {
   character: Character
@@ -561,6 +671,10 @@ function InfoBlock({ label, value }: { label: string; value: string }) {
     </Card>
   )
 }
+
+// ---------------------------------------------------------------------------
+// CharacterDialog
+// ---------------------------------------------------------------------------
 
 interface CharacterDialogProps {
   open: boolean
@@ -662,5 +776,356 @@ function CharacterDialog({
         </form>
       </DialogContent>
     </Dialog>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// CharacterChatPanel
+// ---------------------------------------------------------------------------
+
+interface ChatBubble {
+  role: 'user' | 'assistant'
+  content: string
+}
+
+function CharacterChatPanel({ character }: { character: Character }) {
+  const queryClient = useQueryClient()
+
+  // Session state
+  const [sessions, setSessions] = useState<CharacterChatSession[]>([])
+  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null)
+  const [loadingSessions, setLoadingSessions] = useState(false)
+
+  // Chat state
+  const [messages, setMessages] = useState<ChatBubble[]>([])
+  const [inputText, setInputText] = useState('')
+  const [isStreaming, setIsStreaming] = useState(false)
+  const [streamingContent, setStreamingContent] = useState('')
+  const [error, setError] = useState<string | null>(null)
+
+  // Project selector
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
+  const projectsQuery = useQuery<Project[], Error>({
+    queryKey: ['projects'],
+    queryFn: listProjects,
+  })
+
+  const messagesEndRef = useRef<HTMLDivElement>(null)
+  const abortRef = useRef<AbortController | null>(null)
+
+  // Load sessions when character changes
+  useEffect(() => {
+    let cancelled = false
+    setLoadingSessions(true)
+    setSelectedSessionId(null)
+    setMessages([])
+    setError(null)
+
+    listCharacterChatSessions(character.id)
+      .then((data) => {
+        if (cancelled) return
+        setSessions(data)
+        if (data.length > 0) {
+          setSelectedSessionId(data[0].id)
+          setMessages(data[0].messages)
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setSessions([])
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingSessions(false)
+      })
+
+    return () => {
+      cancelled = true
+      abortRef.current?.abort()
+    }
+  }, [character.id])
+
+  // Load messages when session changes
+  useEffect(() => {
+    if (!selectedSessionId) {
+      setMessages([])
+      return
+    }
+
+    const session = sessions.find((s) => s.id === selectedSessionId)
+    if (session) {
+      setMessages(session.messages)
+    }
+  }, [selectedSessionId, sessions])
+
+  // Auto-scroll
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages, streamingContent])
+
+  const handleNewSession = useCallback(async () => {
+    try {
+      const session = await createCharacterChatSession(character.id, {
+        project_id: selectedProjectId,
+        title: `与${character.name}的对话`,
+      })
+      setSessions((prev) => [session, ...prev])
+      setSelectedSessionId(session.id)
+      setMessages([])
+      setError(null)
+    } catch {
+      toast.error('创建会话失败')
+    }
+  }, [character.id, character.name, selectedProjectId])
+
+  const handleDeleteSession = useCallback(async () => {
+    if (!selectedSessionId) return
+
+    const confirmed = window.confirm('确认删除这个对话会话吗？')
+    if (!confirmed) return
+
+    try {
+      await deleteCharacterChatSession(character.id, selectedSessionId)
+      setSessions((prev) => prev.filter((s) => s.id !== selectedSessionId))
+      const remaining = sessions.filter((s) => s.id !== selectedSessionId)
+      if (remaining.length > 0) {
+        setSelectedSessionId(remaining[0].id)
+        setMessages(remaining[0].messages)
+      } else {
+        setSelectedSessionId(null)
+        setMessages([])
+      }
+      toast.success('会话已删除')
+    } catch {
+      toast.error('删除会话失败')
+    }
+  }, [character.id, selectedSessionId, sessions])
+
+  const handleSendWithAutoSession = useCallback(async () => {
+    const text = inputText.trim()
+    if (!text || isStreaming) return
+
+    let sessionId = selectedSessionId
+
+    if (!sessionId) {
+      try {
+        const session = await createCharacterChatSession(character.id, {
+          project_id: selectedProjectId,
+          title: `与${character.name}的对话`,
+        })
+        setSessions((prev) => [session, ...prev])
+        setSelectedSessionId(session.id)
+        sessionId = session.id
+      } catch {
+        toast.error('创建会话失败')
+        return
+      }
+    }
+
+    setError(null)
+    setIsStreaming(true)
+    setStreamingContent('')
+    setInputText('')
+
+    const userBubble: ChatBubble = { role: 'user', content: text }
+    setMessages((prev) => (sessionId === selectedSessionId ? [...prev, userBubble] : [userBubble]))
+
+    const controller = new AbortController()
+    abortRef.current = controller
+
+    let acc = ''
+    try {
+      await streamCharacterChat(
+        character.id,
+        sessionId,
+        { message: text, project_id: selectedProjectId },
+        {
+          onChunk: (chunk) => {
+            acc += chunk
+            setStreamingContent(acc)
+          },
+          onDone: () => {
+            setMessages((prev) => [...prev, { role: 'assistant', content: acc }])
+            setStreamingContent('')
+            setIsStreaming(false)
+            queryClient.invalidateQueries({ queryKey: ['characters'] })
+          },
+          onError: (err) => {
+            setError(err)
+            setIsStreaming(false)
+            setStreamingContent('')
+          },
+        },
+        controller.signal,
+      )
+    } catch (err: unknown) {
+      if (err instanceof DOMException && err.name === 'AbortError') return
+      setError(err instanceof Error ? err.message : '对话请求失败')
+      setIsStreaming(false)
+      setStreamingContent('')
+    }
+  }, [inputText, isStreaming, selectedSessionId, character.id, character.name, selectedProjectId, queryClient])
+
+  const handleStop = useCallback(() => {
+    abortRef.current?.abort()
+    setIsStreaming(false)
+  }, [])
+
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault()
+        handleSendWithAutoSession()
+      }
+    },
+    [handleSendWithAutoSession],
+  )
+
+  return (
+    <Card className="flex h-[calc(100vh-220px)] min-h-125 flex-col border border-border bg-card/95">
+      {/* Top bar: session selector + project selector */}
+      <div className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-3">
+        {/* Session selector */}
+        <select
+          value={selectedSessionId ?? ''}
+          onChange={(e) => {
+            const val = e.target.value || null
+            setSelectedSessionId(val)
+            setError(null)
+          }}
+          className="h-8 min-w-0 flex-1 rounded-md border border-border bg-background px-2 text-sm text-foreground"
+          disabled={loadingSessions}
+        >
+          {sessions.length === 0 ? (
+            <option value="">暂无会话</option>
+          ) : (
+            sessions.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.title || '未命名会话'}
+              </option>
+            ))
+          )}
+        </select>
+
+        <Button variant="outline" size="sm" onClick={handleNewSession}>
+          <Plus className="size-3.5" />
+          新会话
+        </Button>
+
+        {selectedSessionId ? (
+          <Button variant="ghost" size="sm" onClick={handleDeleteSession}>
+            <Trash2 className="size-3.5" />
+          </Button>
+        ) : null}
+
+        {/* Project selector */}
+        <select
+          value={selectedProjectId ?? ''}
+          onChange={(e) => setSelectedProjectId(e.target.value || null)}
+          className="h-8 min-w-35 rounded-md border border-border bg-background px-2 text-sm text-foreground"
+        >
+          <option value="">无项目上下文</option>
+          {(projectsQuery.data ?? []).map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.title}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {/* Messages area */}
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4">
+        <div className="space-y-4">
+          {messages.length === 0 && !isStreaming ? (
+            <div className="flex h-full items-center justify-center py-16">
+              <div className="text-center text-sm text-muted-foreground">
+                <Sparkles className="mx-auto mb-2 size-8 text-primary/30" />
+                <p>向「{character.name}」发送第一条消息吧</p>
+                <p className="mt-1 text-xs">AI 将以角色口吻回复你</p>
+              </div>
+            </div>
+          ) : null}
+
+          {messages.map((msg, i) => (
+            <div key={`${selectedSessionId}-${i}`} className={msg.role === 'user' ? 'flex justify-end' : 'flex justify-start'}>
+              {msg.role === 'user' ? (
+                <div className="max-w-[85%] rounded-2xl rounded-br-md bg-foreground/8 px-4 py-2.5 text-sm text-foreground">
+                  {msg.content}
+                </div>
+              ) : (
+                <div className="max-w-[90%] rounded-2xl rounded-bl-md border border-border bg-card px-4 py-3">
+                  <div className="mb-2 flex items-center gap-1.5">
+                    <Sparkles className="size-3 text-primary" />
+                    <span className="text-[11px] font-medium text-primary/70">{character.name}</span>
+                  </div>
+                  <p className="whitespace-pre-line text-sm leading-7 text-foreground">{msg.content}</p>
+                </div>
+              )}
+            </div>
+          ))}
+
+          {/* Streaming content */}
+          {isStreaming && streamingContent ? (
+            <div className="flex justify-start">
+              <div className="max-w-[90%] rounded-2xl rounded-bl-md border border-border bg-card px-4 py-3">
+                <div className="mb-2 flex items-center gap-1.5">
+                  <Sparkles className="size-3 text-primary" />
+                  <span className="text-[11px] font-medium text-primary/70">{character.name}</span>
+                </div>
+                <p className="whitespace-pre-line text-sm leading-7 text-foreground">{streamingContent}</p>
+              </div>
+            </div>
+          ) : null}
+
+          {/* Loading indicator */}
+          {isStreaming && !streamingContent ? (
+            <div className="flex justify-start">
+              <div className="flex items-center gap-2 rounded-2xl border border-border bg-card px-4 py-3 text-sm text-muted-foreground">
+                <LoaderCircle className="size-3.5 animate-spin text-primary" />
+                {character.name}正在思考…
+              </div>
+            </div>
+          ) : null}
+
+          {/* Error */}
+          {error ? (
+            <div className="flex justify-start">
+              <div className="max-w-[90%] rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                {error}
+              </div>
+            </div>
+          ) : null}
+
+          <div ref={messagesEndRef} />
+        </div>
+      </div>
+
+      {/* Input area */}
+      <div className="border-t border-border p-4">
+        <div className="flex gap-2">
+          <Textarea
+            value={inputText}
+            onChange={(e) => setInputText(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder={`和${character.name}聊点什么...（Shift+Enter 换行）`}
+            disabled={isStreaming}
+            rows={2}
+            className="min-h-10 flex-1 resize-none rounded-xl border-border bg-background text-sm placeholder:text-muted-foreground focus:border-primary/40 focus:ring-1 focus:ring-primary/30 disabled:opacity-50"
+          />
+          {isStreaming ? (
+            <Button variant="outline" onClick={handleStop} className="self-end">
+              停止
+            </Button>
+          ) : (
+            <Button
+              onClick={handleSendWithAutoSession}
+              disabled={!inputText.trim()}
+              className="self-end"
+            >
+              <Send className="size-3.5" />
+              发送
+            </Button>
+          )}
+        </div>
+      </div>
+    </Card>
   )
 }
