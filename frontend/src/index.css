@@ -6,39 +6,45 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --background: oklch(0.965 0.012 95);
-  --foreground: oklch(0.22 0.02 235);
-  --card: oklch(0.995 0.003 95);
-  --card-foreground: oklch(0.22 0.02 235);
-  --popover: oklch(0.997 0.002 95);
-  --popover-foreground: oklch(0.22 0.02 235);
-  --primary: oklch(0.63 0.13 168);
-  --primary-foreground: oklch(0.988 0.004 95);
-  --secondary: oklch(0.955 0.012 100);
-  --secondary-foreground: oklch(0.3 0.02 235);
-  --muted: oklch(0.945 0.01 100);
-  --muted-foreground: oklch(0.48 0.02 230);
-  --accent: oklch(0.94 0.02 162);
-  --accent-foreground: oklch(0.31 0.03 180);
+  /* 羊皮纸白底，带极淡暖黄，像翻旧书的质感 */
+  --background: oklch(0.982 0.007 80);
+  --foreground: oklch(0.20 0.025 240);
+  /* 卡片比背景亮一丢丢，形成轻微浮起感 */
+  --card: oklch(0.997 0.003 80);
+  --card-foreground: oklch(0.20 0.025 240);
+  --popover: oklch(0.998 0.002 80);
+  --popover-foreground: oklch(0.20 0.025 240);
+  /* 主色：沉墨绿，像中式砚台或旧版画的深绿，比亮绿更有文学感 */
+  --primary: oklch(0.38 0.095 168);
+  --primary-foreground: oklch(0.97 0.004 80);
+  --secondary: oklch(0.962 0.008 85);
+  --secondary-foreground: oklch(0.28 0.02 240);
+  --muted: oklch(0.952 0.007 85);
+  --muted-foreground: oklch(0.50 0.018 230);
+  /* accent：浅墨绿，用于 hover 背景 */
+  --accent: oklch(0.942 0.018 162);
+  --accent-foreground: oklch(0.28 0.04 175);
   --destructive: oklch(0.577 0.245 27.325);
   --destructive-foreground: oklch(0.985 0 0);
-  --border: oklch(0.895 0.012 95);
-  --input: oklch(0.925 0.012 95);
-  --ring: oklch(0.74 0.08 170);
+  /* 边框：牛皮纸感，比纯灰暖 */
+  --border: oklch(0.906 0.009 80);
+  --input: oklch(0.930 0.010 82);
+  --ring: oklch(0.52 0.07 168);
   --radius: 0.625rem;
-  --chart-1: oklch(0.79 0.11 168);
-  --chart-2: oklch(0.72 0.07 208);
-  --chart-3: oklch(0.74 0.09 120);
-  --chart-4: oklch(0.77 0.1 80);
-  --chart-5: oklch(0.68 0.08 250);
-  --sidebar: oklch(0.975 0.012 96);
-  --sidebar-foreground: oklch(0.22 0.02 235);
-  --sidebar-primary: oklch(0.63 0.13 168);
-  --sidebar-primary-foreground: oklch(0.988 0.004 95);
-  --sidebar-accent: oklch(0.94 0.02 162);
-  --sidebar-accent-foreground: oklch(0.31 0.03 180);
-  --sidebar-border: oklch(0.895 0.012 95);
-  --sidebar-ring: oklch(0.74 0.08 170);
+  --chart-1: oklch(0.52 0.10 168);
+  --chart-2: oklch(0.58 0.08 208);
+  --chart-3: oklch(0.60 0.09 120);
+  --chart-4: oklch(0.62 0.09 60);
+  --chart-5: oklch(0.56 0.08 250);
+  /* sidebar 比背景深一档，形成纸质感层次 */
+  --sidebar: oklch(0.958 0.009 82);
+  --sidebar-foreground: oklch(0.20 0.025 240);
+  --sidebar-primary: oklch(0.38 0.095 168);
+  --sidebar-primary-foreground: oklch(0.97 0.004 80);
+  --sidebar-accent: oklch(0.942 0.018 162);
+  --sidebar-accent-foreground: oklch(0.28 0.04 175);
+  --sidebar-border: oklch(0.896 0.010 80);
+  --sidebar-ring: oklch(0.52 0.07 168);
 }
 
 @theme inline {
@@ -97,7 +103,8 @@
 
   body {
     @apply min-h-screen antialiased bg-background text-foreground;
-    background: linear-gradient(180deg, oklch(0.97 0.014 95) 0%, oklch(0.95 0.016 92) 100%);
+    /* 羊皮纸渐变底，顶部略亮，底部略深，像展开的稿纸 */
+    background: linear-gradient(180deg, oklch(0.990 0.005 75) 0%, oklch(0.970 0.010 82) 100%);
     background-attachment: fixed;
   }
 
