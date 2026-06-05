@@ -36,6 +36,15 @@ export async function generatePortrait(characterId: string, modelId?: string): P
   return data
 }
 
+export async function enhanceDescription(characterId: string): Promise<{
+  enhanced_description: string
+  source_work: string
+  character_name: string
+}> {
+  const { data } = await apiClient.post(`/characters/${characterId}/enhance-description`)
+  return data
+}
+
 export async function listPortraitModels(): Promise<string[]> {
   const { data } = await apiClient.get<{ models: string[] }>('/characters/portrait-models')
   return data.models
