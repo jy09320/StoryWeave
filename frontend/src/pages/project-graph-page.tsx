@@ -669,7 +669,10 @@ export function ProjectGraphPage() {
     setSelectedNodeId(null)
   }, [])
 
-  // Measure container
+  const hasData = graph && (graph.entities.length > 0 || graph.events.length > 0 || graph.relations.length > 0)
+
+  // Measure container — re-run when hasData changes so the observer attaches
+  // after the loading spinner is replaced by the actual graph container.
   useEffect(() => {
     const el = containerRef.current
     if (!el) return
@@ -690,9 +693,7 @@ export function ProjectGraphPage() {
     })
     observer.observe(el)
     return () => observer.disconnect()
-  }, [])
-
-  const hasData = graph && (graph.entities.length > 0 || graph.events.length > 0 || graph.relations.length > 0)
+  }, [hasData])
 
   if (graphQuery.isLoading) {
     return <LoadingState label="正在加载知识图谱..." className="mx-auto mt-20 max-w-md" />
