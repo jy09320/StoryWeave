@@ -184,8 +184,19 @@ export function AssetsCharactersPanel() {
     mutationFn: ({ characterId, modelId }: { characterId: string; modelId?: string }) =>
       generatePortrait(characterId, modelId),
     onSuccess: async (character: Character) => {
+      const ts = Date.now()
       setPortraitVersions((prev) => ({ ...prev, [character.id]: (prev[character.id] ?? 0) + 1 }))
+      // Invalidate first so the server response comes in, then stamp the URL in cache
+      // to bust the browser's cached copy of the (same-filename) portrait image.
       await queryClient.invalidateQueries({ queryKey: ['characters'] })
+      if (character.portrait_url) {
+        const baseUrl = character.portrait_url.split('?')[0]
+        queryClient.setQueriesData<Character[]>({ queryKey: ['characters'] }, (old) =>
+          old?.map((c) =>
+            c.id === character.id ? { ...c, portrait_url: `${baseUrl}?v=${ts}` } : c,
+          ),
+        )
+      }
       toast.success(`角色「${character.name}」的形象已生成`)
     },
     onError: (error: Error) => {
