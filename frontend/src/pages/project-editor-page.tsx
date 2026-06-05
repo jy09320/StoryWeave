@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/card'
 import { Textarea } from '@/components/ui/textarea'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import {
   EDITOR_AI_COMMAND_EVENT,
   EDITOR_AI_PREVIEW_EVENT,
@@ -1342,12 +1343,12 @@ ${nextText}` : nextText
 
       </section>
 
-      <Dialog open={isVersionDialogOpen} onOpenChange={setIsVersionDialogOpen}>
-        <DialogContent className="max-w-3xl border border-border bg-popover text-popover-foreground">
-          <DialogHeader>
-            <DialogTitle>章节版本历史</DialogTitle>
-            <DialogDescription>查看历史快照。</DialogDescription>
-          </DialogHeader>
+      <Sheet open={isVersionDialogOpen} onOpenChange={setIsVersionDialogOpen}>
+        <SheetContent side="right" className="border border-border bg-popover text-popover-foreground">
+          <SheetHeader>
+            <SheetTitle>章节版本历史</SheetTitle>
+            <SheetDescription>查看历史快照。</SheetDescription>
+          </SheetHeader>
 
           <div className="max-h-[70vh] space-y-4 overflow-y-auto pr-2">
             {chapterVersionsQuery.isLoading ? (
@@ -1387,8 +1388,8 @@ ${nextText}` : nextText
               <EmptyState title="暂无历史版本" />
             )}
           </div>
-        </DialogContent>
-      </Dialog>
+        </SheetContent>
+      </Sheet>
 
       <Dialog open={Boolean(bubbleDialog)} onOpenChange={(open) => { if (!open) setBubbleDialog(null) }}>
         <DialogContent className="flex max-h-[90vh] max-w-2xl flex-col border border-border bg-popover text-popover-foreground">

@@ -22,6 +22,16 @@ import {
   ProjectAssetAIPanel,
   type ProjectAssetAIPanelState,
 } from '@/components/project-asset-ai-panel'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { EmptyState } from '@/components/empty-state'
 import { LoadingState } from '@/components/loading-state'
 import { Badge } from '@/components/ui/badge'
@@ -196,6 +206,7 @@ export function ProjectAIWorkspacePage() {
 
   const [availableModels, setAvailableModels] = useState<AIModelOption[]>([])
   const [isLoadingModels, setIsLoadingModels] = useState(false)
+  const [deleteSessionTarget, setDeleteSessionTarget] = useState<ProjectAIWorkspaceSession | null>(null)
   const hasSavedRuntimeKey = Boolean(runtimeSettingsQuery.data?.api_key_masked)
 
   async function handleLoadModels() {
@@ -240,14 +251,12 @@ export function ProjectAIWorkspacePage() {
     actions.setDetailTab('result')
   }
 
-  function handleDeleteSession(session: ProjectAIWorkspaceSession) {
-    const confirmed = window.confirm(`确认删除“${session.title}”吗？该会话的消息、上传文件引用和待应用结果都会清除。`)
-    if (!confirmed) {
-      return
-    }
-    actions.deleteSession(session.id)
+  function handleDeleteSessionConfirm() {
+    if (!deleteSessionTarget) return
+    actions.deleteSession(deleteSessionTarget.id)
     actions.setDetailTab('task')
     toast.success('会话已删除')
+    setDeleteSessionTarget(null)
   }
 
   async function handleUploadFile(session: ProjectAIWorkspaceSession, file: File) {
@@ -522,7 +531,7 @@ export function ProjectAIWorkspacePage() {
                 sessionStateMap={sessionStateMap}
                 onSelect={(sessionId) => actions.setActiveSessionId(sessionId)}
                 onCreate={() => handleCreateSession('project_character')}
-                onDelete={handleDeleteSession}
+                onDelete={setDeleteSessionTarget}
               />
               <SessionGroup
                 title="世界观助手"
@@ -532,7 +541,7 @@ export function ProjectAIWorkspacePage() {
                 sessionStateMap={sessionStateMap}
                 onSelect={(sessionId) => actions.setActiveSessionId(sessionId)}
                 onCreate={() => handleCreateSession('world_setting')}
-                onDelete={handleDeleteSession}
+                onDelete={setDeleteSessionTarget}
               />
               <SessionGroup
                 title="故事问答"
@@ -542,7 +551,7 @@ export function ProjectAIWorkspacePage() {
                 sessionStateMap={sessionStateMap}
                 onSelect={(sessionId) => actions.setActiveSessionId(sessionId)}
                 onCreate={() => handleCreateSession('story_qa')}
-                onDelete={handleDeleteSession}
+                onDelete={setDeleteSessionTarget}
               />
               </div>
             </CardContent>
@@ -673,6 +682,26 @@ export function ProjectAIWorkspacePage() {
 
         </aside>
       </section>
+
+      <AlertDialog open={deleteSessionTarget !== null} onOpenChange={(open) => { if (!open) setDeleteSessionTarget(null) }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>确认删除</AlertDialogTitle>
+            <AlertDialogDescription>
+              确认删除「{deleteSessionTarget?.title}」吗？该会话的消息、上传文件引用和待应用结果都会清除。此操作不可撤销。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={handleDeleteSessionConfirm}
+            >
+              删除
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
@@ -719,7 +748,7 @@ function SessionGroup({
               'flex w-full items-center justify-between gap-2 rounded-xl border px-3 py-2.5 text-left transition',
               session.id === activeSessionId
                 ? 'border-primary/30 bg-primary/10'
-                : 'border-border bg-background/90 hover:border-primary/20 hover:bg-muted/35',
+                : 'border-border bg-background/90 hover:border-primary/20 hover:bg-muted/50',
             ].join(' ')}
           >
             <button type="button" className="min-w-0 flex-1 text-left" onClick={() => onSelect(session.id)}>
@@ -790,7 +819,7 @@ function ResultTab({
         {hasSources ? (
           <div className="space-y-2">
             {state.latestQASources.map((src, index) => (
-              <div key={`${src.label}-${index}`} className="rounded-xl border border-border bg-muted/35 p-3">
+              <div key={`${src.label}-${index}`} className="rounded-xl border border-border bg-muted/50 p-3">
                 <div className="flex items-center gap-2">
                   <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
                     {typeLabel[src.type] ?? src.type}
@@ -837,7 +866,7 @@ function ResultTab({
         <div className="space-y-2">
           {Object.entries(state.latestWorldPatch ?? {}).map(([key, value]) =>
             value ? (
-              <div key={key} className="rounded-xl border border-border bg-muted/35 p-3">
+              <div key={key} className="rounded-xl border border-border bg-muted/50 p-3">
                 <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">{key}</div>
                 <div className="mt-2 whitespace-pre-wrap text-sm leading-6 text-foreground/85">{value}</div>
               </div>
@@ -849,7 +878,7 @@ function ResultTab({
       {hasCharacterResult ? (
         <div className="space-y-2">
           {(state.latestCharacterActions ?? []).map((action, index) => (
-            <div key={`${action.name}-${index}`} className="rounded-xl border border-border bg-muted/35 p-3">
+            <div key={`${action.name}-${index}`} className="rounded-xl border border-border bg-muted/50 p-3">
               <div className="text-sm font-medium text-foreground">
                 {index + 1}. {action.name}
               </div>
@@ -915,7 +944,7 @@ function TaskTab({
 
   return (
     <div className="space-y-3">
-      <div className="rounded-xl border border-border bg-muted/35 p-4">
+      <div className="rounded-xl border border-border bg-muted/50 p-4">
         <div className="text-sm font-medium text-foreground">{displaySessionTitle(session)}</div>
         <div className="mt-2 flex items-center gap-2">
           <Badge variant="outline" className={meta.className}>
@@ -946,7 +975,7 @@ function TaskTab({
 
 function ContextBlock({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl border border-border bg-muted/35 p-4">
+    <div className="rounded-xl border border-border bg-muted/50 p-4">
       <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">{label}</div>
       <div className="mt-2 text-sm leading-6 text-foreground/85">{value}</div>
     </div>

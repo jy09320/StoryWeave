@@ -7,6 +7,16 @@ import { toast } from 'sonner'
 import { EmptyState } from '@/components/empty-state'
 import { LoadingState } from '@/components/loading-state'
 import { StatusBadge } from '@/components/status-badge'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -80,6 +90,7 @@ export function ProjectWorkspacePage() {
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false)
   const [projectImportDraft, setProjectImportDraft] = useState<ProjectImportDraftState>(defaultProjectImportDraft)
   const [latestImportResult, setLatestImportResult] = useState<ProjectImportResult | null>(null)
+  const [deleteChapterTarget, setDeleteChapterTarget] = useState<Chapter | null>(null)
 
   const headerRef = useScrollReveal<HTMLDivElement>()
   const chapterSectionRef = useScrollReveal<HTMLElement>()
@@ -168,12 +179,10 @@ export function ProjectWorkspacePage() {
     })
   }
 
-  function handleDeleteChapter(chapter: Chapter) {
-    const confirmed = window.confirm(`确认删除章节“${chapter.title}”吗？`)
-    if (!confirmed) {
-      return
-    }
-    deleteChapterMutation.mutate(chapter.id)
+  function handleDeleteChapterConfirm() {
+    if (!deleteChapterTarget) return
+    deleteChapterMutation.mutate(deleteChapterTarget.id)
+    setDeleteChapterTarget(null)
   }
 
   function handleAttachCharacter(event: FormEvent<HTMLFormElement>) {
@@ -245,11 +254,11 @@ export function ProjectWorkspacePage() {
           <div className="flex flex-wrap items-center gap-2">
             <h1 className="text-2xl font-semibold tracking-tight text-foreground">{project.title}</h1>
             <StatusBadge status={project.status} />
-            <Badge variant="outline" className="">
+            <Badge variant="outline">
               {formatProjectType(project.type)}
             </Badge>
             {project.channel ? (
-              <Badge variant="outline" className="">
+              <Badge variant="outline">
                 {formatProjectChannel(project.channel)}
               </Badge>
             ) : null}
@@ -322,7 +331,7 @@ export function ProjectWorkspacePage() {
                       size="sm"
                       className="h-8 px-2 text-destructive hover:text-destructive"
                       disabled={deleteChapterMutation.isPending}
-                      onClick={() => handleDeleteChapter(chapter)}
+                      onClick={() => setDeleteChapterTarget(chapter)}
                     >
                       <Trash className="size-4" />
                     </Button>
@@ -349,8 +358,8 @@ export function ProjectWorkspacePage() {
           </div>
         </section>
 
-        <aside ref={sidebarRef} className="space-y-4 xl:sticky xl:top-4 xl:self-start">
-          <div className="rounded-xl border border-border bg-card px-5 py-4 shadow-[0_1px_3px_rgba(0,0,0,0.03)] transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] hover:-translate-y-px hover:shadow-[0_4px_16px_oklch(0.20_0.025_240/0.06)]">
+        <aside ref={sidebarRef} className="space-y-4 xl:sticky xl:top-4 xl:self-start xl:max-h-[calc(100vh-2rem)] xl:overflow-y-auto">
+          <div className="rounded-xl border border-border bg-card px-5 py-4 shadow-[0_1px_3px_rgba(0,0,0,0.03)] transition-colors hover:bg-muted/20">
             <div className="mb-3 flex items-center justify-between">
               <span className="text-sm font-medium text-foreground">项目设定</span>
               <Link to={`/projects/${project.id}/settings`} className="text-xs text-primary hover:underline">
@@ -397,7 +406,7 @@ export function ProjectWorkspacePage() {
             </div>
           </div>
 
-          <div className="rounded-xl border border-border bg-card px-5 py-4 shadow-[0_1px_3px_rgba(0,0,0,0.03)] transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] hover:-translate-y-px hover:shadow-[0_4px_16px_oklch(0.20_0.025_240/0.06)]">
+          <div className="rounded-xl border border-border bg-card px-5 py-4 shadow-[0_1px_3px_rgba(0,0,0,0.03)] transition-colors hover:bg-muted/20">
             <div className="mb-3 flex items-center justify-between">
               <span className="text-sm font-medium text-foreground">世界观</span>
               <Link to={`/projects/${project.id}/world`} className="text-xs text-primary hover:underline">
@@ -514,6 +523,26 @@ export function ProjectWorkspacePage() {
           </form>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={deleteChapterTarget !== null} onOpenChange={(open) => { if (!open) setDeleteChapterTarget(null) }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>确认删除</AlertDialogTitle>
+            <AlertDialogDescription>
+              确认删除章节「{deleteChapterTarget?.title}」吗？此操作不可撤销。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={handleDeleteChapterConfirm}
+            >
+              删除
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

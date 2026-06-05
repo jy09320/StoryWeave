@@ -624,7 +624,7 @@ export function AIToolboxPage() {
                     className={`rounded-xl border p-4 text-left transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] hover:-translate-y-px hover:shadow-[0_4px_16px_oklch(0.20_0.025_240/0.06)] ${
                       isActive
                         ? 'border-primary/30 bg-primary/10 shadow-sm'
-                        : 'border-border bg-background/75 hover:bg-muted/35'
+                        : 'border-border bg-background/75 hover:bg-muted/50'
                     }`}
                   >
                     <div className="flex items-start justify-between gap-3">

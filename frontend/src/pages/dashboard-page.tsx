@@ -8,6 +8,16 @@ import { toast } from 'sonner'
 import { EmptyState } from '@/components/empty-state'
 import { LoadingState } from '@/components/loading-state'
 import { StatusBadge } from '@/components/status-badge'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { SectionLabel } from '@/components/ui/section-label'
@@ -217,6 +227,7 @@ export function DashboardPage() {
   const [editForm, setEditForm] = useState<ProjectFormState>(defaultFormState)
   const [projectDraft, setProjectDraft] = useState<ProjectDraftResult | null>(null)
   const [selectedOutlineChapters, setSelectedOutlineChapters] = useState<string[]>([])
+  const [deleteProjectTarget, setDeleteProjectTarget] = useState<Project | null>(null)
 
   const staggerRef = useStaggerReveal<HTMLElement>()
   const revealRef = useScrollReveal<HTMLElement>()
@@ -360,13 +371,10 @@ export function DashboardPage() {
     })
   }
 
-  function handleDelete(project: Project) {
-    const confirmed = window.confirm(`确认删除项目“${project.title}”吗？该操作不可恢复。`)
-    if (!confirmed) {
-      return
-    }
-
-    deleteProjectMutation.mutate(project.id)
+  function handleDeleteConfirm() {
+    if (!deleteProjectTarget) return
+    deleteProjectMutation.mutate(deleteProjectTarget.id)
+    setDeleteProjectTarget(null)
   }
 
   function openEditDialog(project: Project) {
@@ -397,7 +405,7 @@ export function DashboardPage() {
   return (
     <div className="space-y-8 pb-10">
       <section ref={staggerRef} className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_420px]">
-        <div className="surface-raised p-6 transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] hover:-translate-y-px hover:shadow-[0_4px_16px_oklch(0.20_0.025_240/0.06)]">
+        <div className="surface-raised p-6 shadow-[0_2px_8px_rgba(0,0,0,0.04)] transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] hover:-translate-y-px hover:shadow-[0_4px_16px_oklch(0.20_0.025_240/0.06)]">
           <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
             <div className="space-y-3">
               <SectionLabel variant="inked">Project Focus</SectionLabel>
@@ -407,16 +415,16 @@ export function DashboardPage() {
                     <div className="text-2xl font-semibold text-foreground">{featuredProject.title}</div>
                     <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                       <StatusBadge status={featuredProject.status} />
-                      <Badge variant="outline" className="">
+                      <Badge variant="outline">
                         {formatProjectType(featuredProject.type)}
                       </Badge>
                       {featuredProject.channel ? (
-                        <Badge variant="outline" className="">
+                        <Badge variant="outline">
                           {formatProjectChannel(featuredProject.channel)}
                         </Badge>
                       ) : null}
                       {featuredProject.genres.slice(0, 2).map((genre) => (
-                        <Badge key={genre} variant="outline" className="">
+                        <Badge key={genre} variant="outline">
                           {genre}
                         </Badge>
                       ))}
@@ -481,21 +489,21 @@ export function DashboardPage() {
         ) : (
           <div className="divide-y divide-border/70">
             {projects.map((project) => (
-              <div key={project.id} className="grid gap-4 px-5 py-4 transition-colors hover:bg-muted/40 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+              <div key={project.id} className="grid gap-4 px-5 py-4 transition-colors hover:bg-muted/30 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
                 <div className="min-w-0 space-y-2">
                   <div className="flex flex-wrap items-center gap-2">
                     <div className="truncate text-base font-medium text-foreground">{project.title}</div>
                     <StatusBadge status={project.status} />
-                    <Badge variant="outline" className="">
+                    <Badge variant="outline">
                       {formatProjectType(project.type)}
                     </Badge>
                     {project.channel ? (
-                      <Badge variant="outline" className="">
+                      <Badge variant="outline">
                         {formatProjectChannel(project.channel)}
                       </Badge>
                     ) : null}
                     {project.genres.slice(0, 3).map((genre) => (
-                      <Badge key={genre} variant="outline" className="">
+                      <Badge key={genre} variant="outline">
                         {genre}
                       </Badge>
                     ))}
@@ -513,7 +521,7 @@ export function DashboardPage() {
                   <Button variant="ghost" size="sm" onClick={() => openEditDialog(project)}>
                     编辑
                   </Button>
-                  <Button variant="ghost" size="sm" onClick={() => handleDelete(project)} disabled={deleteProjectMutation.isPending}>
+                  <Button variant="ghost" size="sm" onClick={() => setDeleteProjectTarget(project)} disabled={deleteProjectMutation.isPending}>
                     <Trash className="mr-1 size-4" />
                     删除
                   </Button>
@@ -572,6 +580,26 @@ export function DashboardPage() {
         selectedOutlineChapters={selectedOutlineChapters}
         onOutlineChaptersChange={setSelectedOutlineChapters}
       />
+
+      <AlertDialog open={deleteProjectTarget !== null} onOpenChange={(open) => { if (!open) setDeleteProjectTarget(null) }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>确认删除</AlertDialogTitle>
+            <AlertDialogDescription>
+              确认删除项目「{deleteProjectTarget?.title}」吗？该操作不可恢复。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={handleDeleteConfirm}
+            >
+              删除
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
@@ -732,7 +760,7 @@ function ProjectDialog<T extends ProjectFormState>({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       {trigger ? <DialogTrigger asChild>{trigger}</DialogTrigger> : null}
-      <DialogContent className="max-w-3xl">
+      <DialogContent className={isCreateFlow ? 'max-w-3xl max-h-[85vh] overflow-y-auto' : 'max-w-xl'}>
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>{description}</DialogDescription>

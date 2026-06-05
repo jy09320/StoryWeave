@@ -300,11 +300,11 @@ export function ProjectSettingsPage() {
           <div className="flex flex-wrap items-center gap-2">
             <h1 className="text-2xl font-semibold tracking-tight text-foreground">{project.title}</h1>
             <StatusBadge status={project.status} />
-            <Badge variant="outline" className="">
+            <Badge variant="outline">
               {formatProjectType(project.type)}
             </Badge>
             {project.channel ? (
-              <Badge variant="outline" className="">
+              <Badge variant="outline">
                 {formatProjectChannel(project.channel)}
               </Badge>
             ) : null}
@@ -649,7 +649,7 @@ function TagGroup({
         <div className="flex flex-wrap gap-2">
           {values.length > 0 ? (
             values.map((value) => (
-              <Badge key={value} variant="outline" className="">
+              <Badge key={value} variant="outline">
                 {value}
               </Badge>
             ))

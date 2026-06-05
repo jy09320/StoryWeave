@@ -214,7 +214,7 @@ function NodeDetailPanel({
   )
 
   return (
-    <div className="absolute right-4 top-4 z-30 w-[340px] max-h-[calc(100vh-12rem)] overflow-y-auto rounded-xl border border-border bg-card/95 shadow-[0_1px_3px_rgba(0,0,0,0.04)] backdrop-blur transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] hover:-translate-y-px hover:shadow-[0_4px_16px_oklch(0.20_0.025_240/0.06)]">
+    <div className="absolute right-4 top-4 z-30 w-[340px] max-h-[calc(100vh-12rem)] overflow-y-auto rounded-xl border border-border bg-card/95 shadow-[0_8px_30px_rgba(0,0,0,0.12)] backdrop-blur transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] hover:-translate-y-px hover:shadow-[0_4px_16px_oklch(0.20_0.025_240/0.06)]">
       <div className="flex items-start justify-between gap-3 p-4 pb-3">
         <div className="flex items-center gap-2.5 min-w-0">
           <span
@@ -725,7 +725,7 @@ export function ProjectGraphPage() {
   }
 
   return (
-    <div className="flex h-full flex-col gap-4 p-4">
+    <div className="flex h-full flex-col gap-4 px-6 py-4">
       {/* Header bar */}
       <div ref={headerRef} className="flex items-center justify-between gap-4">
         <FunnelSimpleBar activeFilters={activeFilters} onToggle={toggleFilter} stats={stats} />
@@ -744,7 +744,7 @@ export function ProjectGraphPage() {
       </div>
 
       {/* Graph area */}
-      <div ref={containerRef} className="relative flex-1 min-h-0">
+      <div ref={containerRef} className="relative flex-1 min-h-0 overflow-hidden">
         {nodes.length === 0 ? (
           <div className="flex h-full items-center justify-center">
             <p className="text-sm text-muted-foreground">当前筛选条件下无节点，请调整筛选器。</p>

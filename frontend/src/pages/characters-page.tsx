@@ -5,6 +5,16 @@ import { useParams } from 'react-router-dom'
 import { Spinner, ChatCenteredText, Plus, PaperPlaneRight, Sparkle, Trash } from '@phosphor-icons/react'
 import { toast } from 'sonner'
 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { EmptyState } from '@/components/empty-state'
 import { LoadingState } from '@/components/loading-state'
 import { Button } from '@/components/ui/button'
@@ -17,14 +27,14 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog'
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from '@/components/ui/sheet'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { formatDate } from '@/lib/format'
@@ -133,6 +143,7 @@ export function CharactersPage() {
   // Create-character dialog state
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
   const [createForm, setCreateForm] = useState<CharacterFormState>(defaultFormState)
+  const [deleteCharacterTarget, setDeleteCharacterTarget] = useState<Character | null>(null)
 
   const projectQuery = useQuery<ProjectDetail, Error>({
     queryKey: ['project', projectId],
@@ -265,13 +276,10 @@ export function CharactersPage() {
     setEditForm(getInitialFormState(character))
   }
 
-  function handleDelete(character: Character) {
-    const confirmed = window.confirm(`确认删除角色"${character.name}"吗？已关联到项目的关系也会被移除。`)
-    if (!confirmed) {
-      return
-    }
-
-    deleteCharacterMutation.mutate(character.id)
+  function handleDeleteCharacterConfirm() {
+    if (!deleteCharacterTarget) return
+    deleteCharacterMutation.mutate(deleteCharacterTarget.id)
+    setDeleteCharacterTarget(null)
   }
 
   function handleAttachToProject(character: Character) {
@@ -356,7 +364,7 @@ export function CharactersPage() {
                     deletePending={deleteCharacterMutation.isPending}
                     onAttach={() => handleAttachToProject(selectedCharacter)}
                     onEdit={() => openEditDialog(selectedCharacter)}
-                    onDelete={() => handleDelete(selectedCharacter)}
+                    onDelete={() => setDeleteCharacterTarget(selectedCharacter)}
                   />
                 ) : null}
               </>
@@ -430,7 +438,7 @@ export function CharactersPage() {
                           deletePending={deleteCharacterMutation.isPending}
                           onAttach={() => handleAttachToProject(selectedCharacter)}
                           onEdit={() => openEditDialog(selectedCharacter)}
-                          onDelete={() => handleDelete(selectedCharacter)}
+                          onDelete={() => setDeleteCharacterTarget(selectedCharacter)}
                         />
                       ) : (
                         <CharacterChatPanel character={selectedCharacter} />
@@ -478,6 +486,26 @@ export function CharactersPage() {
           pending={createCharacterMutation.isPending}
           submitLabel="创建角色"
         />
+
+        <AlertDialog open={deleteCharacterTarget !== null} onOpenChange={(open) => { if (!open) setDeleteCharacterTarget(null) }}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>确认删除</AlertDialogTitle>
+              <AlertDialogDescription>
+                确认删除角色「{deleteCharacterTarget?.name}」吗？已关联到项目的关系也会被移除。此操作不可撤销。
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>取消</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                onClick={handleDeleteCharacterConfirm}
+              >
+                删除
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </>
   )
@@ -525,7 +553,7 @@ function CharacterList({ characters, selectedCharacter, linkedCharacterIds, isPr
                 'w-full rounded-md border px-3 py-2.5 text-left transition',
                 isActive
                   ? 'border-primary/30 bg-primary/10'
-                  : 'border-border bg-background/90 hover:border-primary/20 hover:bg-muted/35',
+                  : 'border-border bg-background/90 hover:border-primary/20 hover:bg-muted/50',
               ].join(' ')}
             >
               <div className="flex items-start justify-between gap-3">
@@ -554,7 +582,7 @@ function CharacterList({ characters, selectedCharacter, linkedCharacterIds, isPr
                   {tags.slice(0, 3).map((tag) => (
                     <span
                       key={`${character.id}-${tag}`}
-                      className="rounded-full border border-border bg-muted/35 px-2 py-0.5 text-[11px] text-muted-foreground"
+                      className="rounded-full border border-border bg-muted/50 px-2 py-0.5 text-[11px] text-muted-foreground"
                     >
                       {tag}
                     </span>
@@ -570,7 +598,7 @@ function CharacterList({ characters, selectedCharacter, linkedCharacterIds, isPr
           <button
             type="button"
             onClick={onCreateNew}
-            className="flex w-full items-center justify-center gap-1.5 rounded-md border border-dashed border-border px-3 py-2.5 text-sm text-muted-foreground transition hover:border-primary/30 hover:bg-muted/35 hover:text-foreground"
+            className="flex w-full items-center justify-center gap-1.5 rounded-md border border-dashed border-border px-3 py-2.5 text-sm text-muted-foreground transition hover:border-primary/30 hover:bg-muted/50 hover:text-foreground"
           >
             <Plus className="size-3.5" />
             新建角色
@@ -601,7 +629,7 @@ function CharacterDetail({ character, isProjectScoped, linkedCharacterIds, attac
 
   return (
     <>
-      <Card className="border border-border bg-card/95">
+      <Card className="border border-border bg-card/95 shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
         <CardHeader className="gap-3">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div className="min-w-0 space-y-3">
@@ -650,7 +678,7 @@ function CharacterDetail({ character, isProjectScoped, linkedCharacterIds, attac
             </div>
           </div>
         </CardHeader>
-        <CardFooter className="flex flex-col items-start gap-2 border-border bg-muted/35 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+        <CardFooter className="flex flex-col items-start gap-2 border-border bg-muted/50 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
           <span>创建于 {formatDate(character.created_at)}</span>
           <span>更新于 {formatDate(character.updated_at)}</span>
         </CardFooter>
@@ -673,7 +701,7 @@ function InfoBlock({ label, value }: { label: string; value: string }) {
         <CardTitle className="text-sm font-medium text-foreground">{label}</CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="rounded-md border border-border bg-muted/35 p-4 text-sm leading-7 text-foreground/85">{value}</div>
+        <div className="rounded-md border border-border bg-muted/50 p-4 text-sm leading-7 text-foreground/85">{value}</div>
       </CardContent>
     </Card>
   )
@@ -709,13 +737,13 @@ function CharacterDialog({
   trigger,
 }: CharacterDialogProps) {
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      {trigger ? <DialogTrigger asChild>{trigger}</DialogTrigger> : null}
-      <DialogContent className="flex max-h-[calc(100vh-2rem)] max-w-3xl flex-col overflow-hidden">
-        <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
-          <DialogDescription>{description}</DialogDescription>
-        </DialogHeader>
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      {trigger ? <SheetTrigger asChild>{trigger}</SheetTrigger> : null}
+      <SheetContent side="right" className="flex max-h-[calc(100vh-2rem)] flex-col overflow-hidden">
+        <SheetHeader>
+          <SheetTitle>{title}</SheetTitle>
+          <SheetDescription>{description}</SheetDescription>
+        </SheetHeader>
 
         <form className="flex min-h-0 flex-1 flex-col overflow-hidden" onSubmit={onSubmit}>
           <div className="min-h-0 flex-1 space-y-5 overflow-y-auto pr-1">
@@ -772,17 +800,17 @@ function CharacterDialog({
             </div>
           </div>
 
-          <DialogFooter className="mt-5 shrink-0 border-t border-border pt-4">
+          <SheetFooter className="mt-5 shrink-0 border-t border-border pt-4">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               取消
             </Button>
             <Button type="submit" disabled={pending}>
               {pending ? '正在保存...' : submitLabel}
             </Button>
-          </DialogFooter>
+          </SheetFooter>
         </form>
-      </DialogContent>
-    </Dialog>
+      </SheetContent>
+    </Sheet>
   )
 }
 
@@ -809,6 +837,7 @@ function CharacterChatPanel({ character }: { character: Character }) {
   const [isStreaming, setIsStreaming] = useState(false)
   const [streamingContent, setStreamingContent] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [deleteChatSessionOpen, setDeleteChatSessionOpen] = useState(false)
 
   // Project selector
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
@@ -883,11 +912,8 @@ function CharacterChatPanel({ character }: { character: Character }) {
     }
   }, [character.id, character.name, selectedProjectId])
 
-  const handleDeleteSession = useCallback(async () => {
+  const handleDeleteSessionConfirm = useCallback(async () => {
     if (!selectedSessionId) return
-
-    const confirmed = window.confirm('确认删除这个对话会话吗？')
-    if (!confirmed) return
 
     try {
       await deleteCharacterChatSession(character.id, selectedSessionId)
@@ -904,6 +930,7 @@ function CharacterChatPanel({ character }: { character: Character }) {
     } catch {
       toast.error('删除会话失败')
     }
+    setDeleteChatSessionOpen(false)
   }, [character.id, selectedSessionId, sessions])
 
   const handleSendWithAutoSession = useCallback(async () => {
@@ -1018,7 +1045,7 @@ function CharacterChatPanel({ character }: { character: Character }) {
         </Button>
 
         {selectedSessionId ? (
-          <Button variant="ghost" size="sm" onClick={handleDeleteSession}>
+          <Button variant="ghost" size="sm" onClick={() => setDeleteChatSessionOpen(true)}>
             <Trash className="size-3.5" />
           </Button>
         ) : null}
@@ -1133,6 +1160,26 @@ function CharacterChatPanel({ character }: { character: Character }) {
           )}
         </div>
       </div>
+
+      <AlertDialog open={deleteChatSessionOpen} onOpenChange={setDeleteChatSessionOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>确认删除</AlertDialogTitle>
+            <AlertDialogDescription>
+              确认删除这个对话会话吗？此操作不可撤销。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => void handleDeleteSessionConfirm()}
+            >
+              删除
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   )
 }

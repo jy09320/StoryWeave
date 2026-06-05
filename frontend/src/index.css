@@ -2,6 +2,7 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/geist";
+@import "@fontsource-variable/geist-mono";
 @import "@fontsource-variable/noto-serif";
 
 @custom-variant dark (&:is(.dark *));
@@ -88,6 +89,7 @@
   --font-heading: 'Noto Serif Variable', 'Noto Serif SC', 'Songti SC', serif;
   --font-sans: 'Geist Variable', sans-serif;
   --font-serif: 'Noto Serif Variable', 'Noto Serif SC', 'Songti SC', serif;
+  --font-mono: 'Geist Mono Variable', 'SF Mono', 'JetBrains Mono', monospace;
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);

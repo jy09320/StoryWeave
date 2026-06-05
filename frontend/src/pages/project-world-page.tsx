@@ -209,7 +209,7 @@ export function ProjectWorldPage() {
         </Link>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+      <div className="max-w-4xl mx-auto">
         <div ref={cardsStaggerRef} className="space-y-6">
           <Card className="border border-border bg-card/95 transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] hover:-translate-y-px hover:shadow-[0_4px_16px_oklch(0.20_0.025_240/0.06)]">
             <CardHeader className="space-y-3">
@@ -281,7 +281,7 @@ export function ProjectWorldPage() {
                   />
                 </div>
 
-                <Separator className="bg-border" />
+                <Separator className="bg-border my-2" />
 
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-foreground/85">势力摘要</label>
@@ -361,14 +361,14 @@ export function ProjectWorldPage() {
             </CardHeader>
             <CardContent className="space-y-3">
               {projectCharacters.length === 0 ? (
-                <div className="rounded-xl border border-dashed border-border bg-muted/35 px-4 py-5 text-sm leading-6 text-muted-foreground">
+                <div className="rounded-xl border border-dashed border-border bg-muted/50 px-4 py-5 text-sm leading-6 text-muted-foreground">
                   当前项目还没有绑定角色。
                 </div>
               ) : (
                 projectCharacters.map((item) => <ProjectCharacterCard key={item.id} item={item} />)
               )}
             </CardContent>
-            <CardFooter className="border-border bg-muted/35">
+            <CardFooter className="border-border bg-muted/50">
               <Link
                 to={`/projects/${project.id}/characters`}
                 className="inline-flex h-9 w-full items-center justify-center rounded-lg border border-border bg-background px-3 text-sm font-medium text-foreground transition hover:bg-muted"
@@ -395,7 +395,7 @@ function AIDraftInfo({ label, value }: { label: string; value: string | null | u
 
 function SummaryBlock({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl border border-border bg-muted/35 p-4">
+    <div className="rounded-xl border border-border bg-muted/50 p-4">
       <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">{label}</div>
       <p className="mt-2 text-sm leading-6 text-foreground">{value}</p>
     </div>
@@ -404,7 +404,7 @@ function SummaryBlock({ label, value }: { label: string; value: string }) {
 
 function ProjectCharacterCard({ item }: { item: ProjectCharacter }) {
   return (
-    <div className="rounded-xl border border-border bg-muted/35 p-4">
+    <div className="rounded-xl border border-border bg-muted/50 p-4">
       <div className="flex flex-wrap items-center gap-2">
         <div className="text-sm font-medium text-foreground">{item.character.name}</div>
         {item.role_label ? (

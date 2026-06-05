@@ -116,6 +116,8 @@ export function AssetsCharactersPanel() {
   const [editingCharacter, setEditingCharacter] = useState<Character | null>(null)
   const [editForm, setEditForm] = useState<CharacterFormState>(defaultFormState)
   const [activeTab, setActiveTab] = useState<'detail' | 'chat'>('detail')
+  // Cache-busting versions for portrait images after regeneration
+  const [portraitVersions, setPortraitVersions] = useState<Record<string, number>>({})
 
   // Create-character dialog state
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
@@ -172,6 +174,7 @@ export function AssetsCharactersPanel() {
     mutationFn: ({ characterId, modelId }: { characterId: string; modelId?: string }) =>
       generatePortrait(characterId, modelId),
     onSuccess: async (character: Character) => {
+      setPortraitVersions((prev) => ({ ...prev, [character.id]: (prev[character.id] ?? 0) + 1 }))
       await queryClient.invalidateQueries({ queryKey: ['characters'] })
       toast.success(`角色「${character.name}」的形象已生成`)
     },
@@ -373,6 +376,7 @@ export function AssetsCharactersPanel() {
                         character={selectedCharacter}
                         deletePending={deleteCharacterMutation.isPending}
                         isGeneratingPortrait={generatePortraitMutation.isPending}
+                        portraitVersion={portraitVersions[selectedCharacter.id]}
                         onEdit={() => openEditDialog(selectedCharacter)}
                         onDelete={() => handleDelete(selectedCharacter)}
                         onGeneratePortrait={(modelId) =>
@@ -482,7 +486,7 @@ function CharacterRow({
       <div className="shrink-0">
         {character.portrait_url ? (
           <img
-            src={character.portrait_url}
+            src={portraitVersions[character.id] ? `${character.portrait_url}?v=${portraitVersions[character.id]}` : character.portrait_url}
             alt={character.name}
             className="size-9 rounded-lg object-cover ring-1 ring-border/50"
           />
@@ -657,12 +661,13 @@ interface CharacterDetailProps {
   character: Character
   deletePending: boolean
   isGeneratingPortrait: boolean
+  portraitVersion?: number
   onEdit: () => void
   onDelete: () => void
   onGeneratePortrait: (modelId?: string) => void
 }
 
-function CharacterDetail({ character, deletePending, isGeneratingPortrait, onEdit, onDelete, onGeneratePortrait }: CharacterDetailProps) {
+function CharacterDetail({ character, deletePending, isGeneratingPortrait, portraitVersion, onEdit, onDelete, onGeneratePortrait }: CharacterDetailProps) {
   const tags = splitTags(character.tags)
 
   const [portraitPopoverOpen, setPortraitPopoverOpen] = useState(false)
@@ -691,7 +696,7 @@ function CharacterDetail({ character, deletePending, isGeneratingPortrait, onEdi
           <div className="relative shrink-0 group">
             {character.portrait_url ? (
               <img
-                src={character.portrait_url}
+                src={portraitVersion ? `${character.portrait_url}?v=${portraitVersion}` : character.portrait_url}
                 alt={character.name}
                 className="size-24 rounded-xl object-cover ring-2 ring-border shadow-[0_1px_3px_rgba(0,0,0,0.03)]"
               />
