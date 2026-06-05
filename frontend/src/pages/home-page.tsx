@@ -358,136 +358,24 @@ export function HomePage() {
         </div>
       </section>
 
-      {/* AI Memory Demo — independent section, full visibility */}
+      {/* AI Memory Demo — animated memory flow */}
       <section className="relative overflow-hidden border-b border-black/4 pb-24">
         <div className="relative z-10 mx-auto flex w-full max-w-7xl flex-col items-center px-6 lg:px-10">
           <motion.div
-            className="relative w-full max-w-4xl"
+            className="relative w-full"
             initial={{ opacity: 0, y: 50, rotateX: 4 }}
             whileInView={{ opacity: 1, y: 0, rotateX: 0 }}
             viewport={{ once: true, amount: 0.15 }}
             transition={{ duration: 1, ease: appleEase }}
             style={{ perspective: 1200 }}
           >
-            {/* Floating animation wrapper */}
             <motion.div
               animate={{ y: [0, -6, 0] }}
               transition={{ duration: 5, repeat: Infinity, ease: 'easeInOut' }}
             >
-              {/* Soft shadow */}
               <div className="absolute inset-x-12 -bottom-6 h-28 rounded-3xl bg-primary/5 blur-3xl" />
               <div className="absolute inset-x-4 -bottom-2 h-16 rounded-3xl bg-black/4 blur-2xl" />
-
-              {/* Glowing border */}
-              <div className="relative rounded-2xl p-px" style={{
-                background: 'linear-gradient(135deg, rgba(16,185,129,0.2), rgba(14,165,233,0.15), rgba(16,185,129,0.1), transparent 60%)',
-              }}>
-                {/* Animated border glow sweep */}
-                <motion.div
-                  className="pointer-events-none absolute inset-0 rounded-2xl"
-                  style={{
-                    background: 'linear-gradient(90deg, transparent, rgba(16,185,129,0.12), transparent)',
-                    backgroundSize: '200% 100%',
-                  }}
-                  animate={{ backgroundPosition: ['200% 0', '-200% 0'] }}
-                  transition={{ duration: 4, repeat: Infinity, ease: 'linear' }}
-                />
-
-                <div className="relative overflow-hidden rounded-2xl bg-white/95" style={{ backdropFilter: 'blur(8px)', boxShadow: '0 0 0 0.5px rgba(200,200,204,0.3), 0 8px 32px rgba(0,0,0,0.04), 0 40px 80px rgba(16,185,129,0.05), 0 80px 160px rgba(14,165,233,0.04), 0 20px 60px rgba(0,0,0,0.05)' }}>
-                  {/* Title bar */}
-                  <div className="flex items-center justify-between border-b border-black/4 px-5 py-3.5">
-                    <div className="text-sm font-medium text-foreground/80">偶记 · 故事记忆</div>
-                    <div className="flex items-center gap-2">
-                      <span className="size-2.5 rounded-full bg-emerald-400/70" />
-                      <span className="size-2.5 rounded-full bg-sky-400/60" />
-                      <span className="size-2.5 rounded-full bg-slate-300/60" />
-                    </div>
-                  </div>
-
-                  <div className="grid gap-0 md:grid-cols-[2fr_3fr]">
-                    {/* Left: Character profile */}
-                    <div className="border-r border-black/4 p-7">
-                      <div className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground/70">角色档案</div>
-                      <div className="mt-3 space-y-3">
-                        <div className="rounded-xl bg-muted/20 p-3.5">
-                          <div className="flex items-center gap-2">
-                            <div className="size-7 rounded-full bg-primary/10 flex items-center justify-center">
-                              <span className="text-xs">⚔️</span>
-                            </div>
-                            <div>
-                              <div className="text-sm font-medium text-foreground/80">莱纳</div>
-                              <div className="text-[11px] text-muted-foreground/60">王国骑士 · 主角</div>
-                            </div>
-                          </div>
-                          <div className="mt-2.5 space-y-1.5 text-[12px] text-muted-foreground/80">
-                            <div><span className="text-foreground/50">身份：</span>北境守护骑士团副团长</div>
-                            <div><span className="text-foreground/50">最近剧情：</span>刚发现父亲失踪的真相</div>
-                          </div>
-                        </div>
-                        <div className="rounded-xl bg-muted/20 p-3.5">
-                          <div className="flex items-center gap-2">
-                            <div className="size-7 rounded-full bg-sky-400/10 flex items-center justify-center">
-                              <span className="text-xs">🔮</span>
-                            </div>
-                            <div>
-                              <div className="text-sm font-medium text-foreground/80">艾琳</div>
-                              <div className="text-[11px] text-muted-foreground/60">银月教团祭司 · 女主</div>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="rounded-xl bg-muted/20 p-3.5">
-                          <div className="text-[11px] uppercase tracking-widest text-muted-foreground/50">世界观</div>
-                          <div className="mt-1 text-[12px] text-muted-foreground/80">北境七城 · 银月教团</div>
-                        </div>
-                        <div className="flex items-center gap-2 rounded-lg bg-amber-50/60 px-3 py-2">
-                          <span className="text-[11px]">⚠️</span>
-                          <span className="text-[11px] text-amber-700/70">未完成伏笔：银月教团的预言</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Right: AI Q&A */}
-                    <div className="p-7">
-                      <div className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground/70">向 AI 提问</div>
-                      <div className="mt-3 space-y-3">
-                        <div className="flex justify-end">
-                          <div className="max-w-[85%] rounded-2xl rounded-br-md bg-foreground/6 px-3.5 py-2.5">
-                            <div className="text-[12px] text-foreground/80">主角什么时候得到戒指的？</div>
-                          </div>
-                        </div>
-                        <div className="flex justify-start">
-                          <div className="max-w-[90%] rounded-2xl rounded-bl-md bg-primary/6 px-3.5 py-2.5">
-                            <div className="flex items-center gap-1.5 mb-1.5">
-                              <Sparkle className="size-3 text-primary" />
-                              <span className="text-[10px] font-medium text-primary/70">偶记</span>
-                            </div>
-                            <div className="text-[12px] leading-relaxed text-foreground/75">
-                              第 17 章《雪夜》。<br />
-                              莱纳在父亲遗物中发现了一枚刻有银月纹章的戒指，当时他正在整理北境旧宅的书房。
-                            </div>
-                          </div>
-                        </div>
-                        <div className="flex justify-end">
-                          <div className="max-w-[85%] rounded-2xl rounded-br-md bg-foreground/6 px-3.5 py-2.5">
-                            <div className="text-[12px] text-foreground/80">艾琳第一次出场在哪章？</div>
-                          </div>
-                        </div>
-                        <div className="flex justify-start">
-                          <div className="max-w-[90%] rounded-2xl rounded-bl-md bg-primary/6 px-3.5 py-2.5">
-                            <div className="flex items-center gap-1.5 mb-1.5">
-                              <Sparkle className="size-3 text-primary" />
-                              <span className="text-[10px] font-medium text-primary/70">偶记</span>
-                            </div>
-                            <div className="text-[12px] leading-relaxed text-foreground/75">
-                              第 5 章《边境集市》。她以流浪祭司的身份出现，用治愈术救了受伤的莱纳。
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
+              <MemoryFlowDemo />
             </motion.div>
           </motion.div>
         </div>
@@ -677,31 +565,15 @@ export function HomePage() {
                     ))}
                   </div>
 
-                  {/* Mini relationship graph wireframe */}
-                  <div className="mt-6 rounded-xl border border-black/4 bg-muted/15 p-4">
-                    <div className="text-[9px] uppercase tracking-[0.15em] text-muted-foreground/50 mb-3">角色关系图谱</div>
-                    <svg viewBox="0 0 280 100" className="w-full" fill="none">
-                      {/* Nodes */}
-                      <circle cx="60" cy="50" r="18" stroke="rgba(16,185,129,0.3)" strokeWidth="1" fill="rgba(16,185,129,0.05)" />
-                      <text x="60" y="54" textAnchor="middle" fill="rgba(30,30,32,0.5)" fontSize="9" fontFamily="sans-serif">莱纳</text>
-                      <circle cx="160" cy="30" r="18" stroke="rgba(14,165,233,0.3)" strokeWidth="1" fill="rgba(14,165,233,0.05)" />
-                      <text x="160" y="34" textAnchor="middle" fill="rgba(30,30,32,0.5)" fontSize="9" fontFamily="sans-serif">艾琳</text>
-                      <circle cx="160" cy="75" r="16" stroke="rgba(100,100,110,0.2)" strokeWidth="1" fill="rgba(100,100,110,0.03)" />
-                      <text x="160" y="79" textAnchor="middle" fill="rgba(30,30,32,0.4)" fontSize="9" fontFamily="sans-serif">洛维斯</text>
-                      <circle cx="250" cy="50" r="14" stroke="rgba(245,158,11,0.25)" strokeWidth="1" fill="rgba(245,158,11,0.04)" />
-                      <text x="250" y="54" textAnchor="middle" fill="rgba(30,30,32,0.4)" fontSize="8" fontFamily="sans-serif">银月教团</text>
-                      {/* Connections */}
-                      <line x1="78" y1="42" x2="142" y2="33" stroke="rgba(16,185,129,0.15)" strokeWidth="1" strokeDasharray="3 3" />
-                      <line x1="78" y1="58" x2="144" y2="72" stroke="rgba(100,100,110,0.12)" strokeWidth="1" strokeDasharray="3 3" />
-                      <line x1="178" y1="36" x2="236" y2="47" stroke="rgba(245,158,11,0.12)" strokeWidth="1" strokeDasharray="3 3" />
-                      <line x1="176" y1="70" x2="236" y2="55" stroke="rgba(100,100,110,0.1)" strokeWidth="1" strokeDasharray="3 3" />
-                    </svg>
+                  {/* Animated character graph */}
+                  <div className="mt-6">
+                    <CharacterGraphDemo />
                   </div>
                 </div>
               </GlowCard>
             </motion.div>
 
-            {/* Small card 1 */}
+            {/* Small card 1 — with pipeline demo */}
             <motion.div variants={staggerItem}>
               <GlowCard className="h-full rounded-2xl bg-white p-7 shadow-[0_20px_60px_rgba(0,0,0,0.04)] transition-all duration-300 hover:-translate-y-0.5">
                 <div className="relative z-20">
@@ -710,6 +582,9 @@ export function HomePage() {
                   </div>
                   <h3 className="mt-5 text-lg font-semibold text-foreground">{featureGroups[1].title}</h3>
                   <p className="mt-3 text-sm leading-7 text-muted-foreground">{featureGroups[1].description}</p>
+                  <div className="mt-5">
+                    <PipelineDemo />
+                  </div>
                 </div>
               </GlowCard>
             </motion.div>
@@ -727,52 +602,6 @@ export function HomePage() {
               </GlowCard>
             </motion.div>
           </div>
-        </motion.div>
-      </section>
-
-      {/* ============================================================ */}
-      {/*  Feature Demos — animated product walkthroughs               */}
-      {/* ============================================================ */}
-      <section className="border-b border-black/4 bg-muted/20">
-        <motion.div
-          className="mx-auto w-full max-w-7xl px-6 py-24 lg:px-10"
-          initial="hidden"
-          whileInView="visible"
-          viewport={{ once: true, amount: 0.15 }}
-          variants={staggerContainer}
-        >
-          <motion.div variants={fadeUp} className="text-center mb-16">
-            <div className="text-[11px] uppercase tracking-[0.22em] text-primary/70">产品演示</div>
-            <h2 className="mt-3 font-serif text-3xl font-bold tracking-tight text-foreground">看看它怎么工作</h2>
-            <p className="mt-3 text-sm text-muted-foreground">三个核心能力的实时动画演示</p>
-          </motion.div>
-
-          {/* Demo 1: Story Memory System */}
-          <motion.div variants={staggerItem} className="mb-16">
-            <div className="text-center mb-6">
-              <h3 className="text-lg font-semibold text-foreground">故事记忆系统</h3>
-              <p className="mt-1 text-sm text-muted-foreground">AI 跨章节记住角色状态、伏笔与时间线，精准召回每一个细节</p>
-            </div>
-            <MemoryFlowDemo />
-          </motion.div>
-
-          {/* Demo 2: AI Continuation Pipeline */}
-          <motion.div variants={staggerItem} className="mb-16">
-            <div className="text-center mb-6">
-              <h3 className="text-lg font-semibold text-foreground">智能续写流水线</h3>
-              <p className="mt-1 text-sm text-muted-foreground">四阶段 Pipeline：规划 → 检索 → 生成 → 校验，每一步都经过验证</p>
-            </div>
-            <PipelineDemo />
-          </motion.div>
-
-          {/* Demo 3: Character Graph */}
-          <motion.div variants={staggerItem}>
-            <div className="text-center mb-6">
-              <h3 className="text-lg font-semibold text-foreground">角色图谱</h3>
-              <p className="mt-1 text-sm text-muted-foreground">可视化角色关系网络，结构化角色档案，支持跨项目复用</p>
-            </div>
-            <CharacterGraphDemo />
-          </motion.div>
         </motion.div>
       </section>
 
