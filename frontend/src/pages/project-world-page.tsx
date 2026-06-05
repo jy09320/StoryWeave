@@ -11,6 +11,7 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/componen
 import { Input } from '@/components/ui/input'
 import { Separator } from '@/components/ui/separator'
 import { Textarea } from '@/components/ui/textarea'
+import { useScrollReveal, useStaggerReveal } from '@/hooks/use-scroll-reveal'
 import { readEditorRouteContext } from '@/lib/editor-route-context'
 import { queryClient } from '@/lib/query-client'
 import { generateProjectDraft, getProject, updateProjectWorldSetting } from '@/services/projects'
@@ -68,6 +69,8 @@ export function ProjectWorldPage() {
   const projectCharacters = useMemo(() => project?.project_characters ?? [], [project?.project_characters])
   const editorRouteContext = useMemo(() => readEditorRouteContext(), [])
   const returnToEditor = editorRouteContext && editorRouteContext.projectId === projectId ? editorRouteContext : null
+  const navRevealRef = useScrollReveal<HTMLDivElement>()
+  const cardsStaggerRef = useStaggerReveal<HTMLDivElement>()
 
   useEffect(() => {
     if (projectQuery.data) {
@@ -189,7 +192,7 @@ export function ProjectWorldPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center gap-2">
+      <div ref={navRevealRef} className="flex flex-wrap items-center gap-2">
         <Link
           to={returnToEditor ? `/projects/${returnToEditor.projectId}/editor/${returnToEditor.chapterId}` : `/projects/${project.id}`}
           className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-border bg-background px-3 text-sm font-medium text-foreground transition hover:bg-muted"
@@ -207,8 +210,8 @@ export function ProjectWorldPage() {
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
-        <div className="space-y-6">
-          <Card className="border border-border bg-card/95 transition-all duration-200 hover:-translate-y-px hover:shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
+        <div ref={cardsStaggerRef} className="space-y-6">
+          <Card className="border border-border bg-card/95 transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] hover:-translate-y-px hover:shadow-[0_4px_16px_oklch(0.20_0.025_240/0.06)]">
             <CardHeader className="space-y-3">
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div>
@@ -338,7 +341,7 @@ export function ProjectWorldPage() {
             </CardContent>
           </Card>
 
-          <Card className="border border-border bg-card/95 transition-all duration-200 hover:-translate-y-px hover:shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
+          <Card className="border border-border bg-card/95 transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] hover:-translate-y-px hover:shadow-[0_4px_16px_oklch(0.20_0.025_240/0.06)]">
             <CardHeader>
               <CardTitle className="text-lg text-foreground">当前摘要</CardTitle>
             </CardHeader>
@@ -352,7 +355,7 @@ export function ProjectWorldPage() {
             </CardContent>
           </Card>
 
-          <Card className="border border-border bg-card/95 transition-all duration-200 hover:-translate-y-px hover:shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
+          <Card className="border border-border bg-card/95 transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] hover:-translate-y-px hover:shadow-[0_4px_16px_oklch(0.20_0.025_240/0.06)]">
             <CardHeader>
               <CardTitle className="text-lg text-foreground">项目角色</CardTitle>
             </CardHeader>

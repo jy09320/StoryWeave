@@ -169,7 +169,7 @@ function EnergyLine() {
       <div className="absolute inset-0 bg-border" />
       {/* Animated fill */}
       <motion.div
-        className="absolute top-0 left-0 w-full bg-gradient-to-b from-primary via-primary to-primary/40"
+        className="absolute top-0 left-0 w-full bg-foreground"
         initial={{ height: '0%' }}
         animate={isInView ? { height: '100%' } : { height: '0%' }}
         transition={{ duration: 1.2, ease: appleEase, delay: 0.3 }}
@@ -232,13 +232,13 @@ export function HomePage() {
           <div className="flex items-center gap-3">
             <Link
               to="/workspace"
-              className="hidden h-9 items-center justify-center rounded-full border border-black/8 bg-white/80 px-4 text-sm text-foreground transition-all duration-200 hover:-translate-y-px hover:bg-white hover:shadow-sm active:translate-y-0 md:inline-flex"
+              className="hidden h-9 items-center justify-center rounded-lg border border-black/8 bg-white/80 px-4 text-sm text-foreground transition-all duration-200 hover:-translate-y-px hover:bg-white hover:shadow-sm active:translate-y-0 md:inline-flex"
             >
               进入工作台
             </Link>
             <Link
               to="/ai-toolbox"
-              className="inline-flex h-9 items-center justify-center rounded-full bg-foreground px-4 text-sm font-medium text-background transition-all duration-200 hover:-translate-y-px hover:shadow-md active:translate-y-0 active:scale-[0.98]"
+              className="inline-flex h-9 items-center justify-center rounded-lg bg-foreground px-4 text-sm font-medium text-background transition-all duration-200 hover:-translate-y-px active:translate-y-0 active:scale-[0.98]"
             >
               体验 AI 写作
             </Link>
@@ -329,7 +329,7 @@ export function HomePage() {
                   key={tag}
                   className="rounded-full border border-black/5 bg-white/70 px-3.5 py-1 text-[13px] text-muted-foreground/70"
                 >
-                  ✓ {tag}
+                  {tag}
                 </span>
               ))}
             </motion.div>
@@ -343,13 +343,13 @@ export function HomePage() {
             >
               <Link
                 to="/workspace"
-                className="inline-flex h-11 items-center justify-center rounded-full bg-foreground px-7 text-sm font-medium text-background shadow-[0_4px_20px_rgba(0,0,0,0.18)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_8px_30px_rgba(0,0,0,0.22)] active:translate-y-0 active:scale-[0.98]"
+                className="inline-flex h-11 items-center justify-center rounded-lg bg-foreground px-7 text-sm font-medium text-background shadow-[0_4px_20px_rgba(0,0,0,0.18)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_8px_30px_rgba(0,0,0,0.22)] active:translate-y-0 active:scale-[0.98]"
               >
                 创建我的故事
               </Link>
               <a
                 href="#product"
-                className="inline-flex h-11 items-center justify-center rounded-full border border-black/8 bg-white/80 px-7 text-sm text-foreground transition-all duration-200 hover:-translate-y-0.5 hover:bg-white hover:shadow-[0_4px_16px_rgba(0,0,0,0.06)] active:translate-y-0"
+                className="inline-flex h-11 items-center justify-center rounded-lg border border-black/8 bg-white/80 px-7 text-sm text-foreground transition-all duration-200 hover:-translate-y-0.5 hover:bg-white hover:shadow-[0_4px_16px_rgba(0,0,0,0.06)] active:translate-y-0"
               >
                 看看它能记住什么 ↓
               </a>
@@ -680,13 +680,13 @@ export function HomePage() {
             <div className="mt-8 flex flex-wrap gap-3">
               <Link
                 to="/workspace"
-                className="inline-flex h-11 items-center justify-center rounded-full bg-foreground px-7 text-sm font-semibold text-background shadow-[0_4px_20px_rgba(0,0,0,0.18)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_8px_30px_rgba(0,0,0,0.22)] active:translate-y-0 active:scale-[0.98]"
+                className="inline-flex h-11 items-center justify-center rounded-lg bg-foreground px-7 text-sm font-semibold text-background shadow-[0_4px_20px_rgba(0,0,0,0.18)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_8px_30px_rgba(0,0,0,0.22)] active:translate-y-0 active:scale-[0.98]"
               >
                 免费开始写
               </Link>
               <Link
                 to="/ai-toolbox"
-                className="inline-flex h-11 items-center justify-center rounded-full border border-black/8 bg-white/80 px-7 text-sm text-foreground transition-all duration-200 hover:-translate-y-0.5 hover:bg-white hover:shadow-[0_4px_16px_rgba(0,0,0,0.06)] active:translate-y-0"
+                className="inline-flex h-11 items-center justify-center rounded-lg border border-black/8 bg-white/80 px-7 text-sm text-foreground transition-all duration-200 hover:-translate-y-0.5 hover:bg-white hover:shadow-[0_4px_16px_rgba(0,0,0,0.06)] active:translate-y-0"
               >
                 让 AI 先读你的旧稿
               </Link>

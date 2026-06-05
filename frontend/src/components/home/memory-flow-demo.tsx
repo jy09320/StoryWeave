@@ -29,7 +29,7 @@ const qaPairs = [
 ] as const
 
 const characters = [
-  { name: '莱纳', role: '王国骑士 · 主角', emoji: '⚔️', color: 'emerald', status: '刚发现父亲失踪的真相' },
+  { name: '莱纳', role: '王国骑士 · 主角', emoji: '冲突', color: 'emerald', status: '刚发现父亲失踪的真相' },
   { name: '艾琳', role: '银月教团祭司 · 女主', emoji: '🔮', color: 'sky', status: '正在调查教团内部的异动' },
 ] as const
 
@@ -134,7 +134,7 @@ export function MemoryFlowDemo() {
                   animate={{ opacity: [0.7, 1, 0.7] }}
                   transition={{ duration: 2, repeat: Infinity }}
                 >
-                  <span className="text-[11px]">⚠️</span>
+                  <span className="text-[11px]">注意</span>
                   <span className="text-[11px] text-amber-700/70">未完成伏笔：银月教团的预言</span>
                 </motion.div>
               </div>

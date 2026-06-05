@@ -31,6 +31,7 @@ import { writeEditorUtilityContext, type EditorUtilityAction } from '@/lib/edito
 import { formatDate } from '@/lib/format'
 import { queryClient } from '@/lib/query-client'
 import { cn } from '@/lib/utils'
+import { useScrollReveal } from '@/hooks/use-scroll-reveal'
 import { getAIRuntimeSettings, streamGenerate } from '@/services/ai'
 import { writeToolboxInputDraft } from '@/lib/ai-toolbox-context'
 import { getChapterMemory, getProject, listChapterVersions, refreshChapterMemory, updateChapter, updateChapterMemory } from '@/services/projects'
@@ -322,6 +323,7 @@ export function ProjectEditorPage() {
   const allowNextNavigationRef = useRef(false)
   const editorRef = useRef<RichTextEditorHandle | null>(null)
   const statusMenuRef = useRef<HTMLDivElement | null>(null)
+  const sectionRevealRef = useScrollReveal<HTMLElement>()
 
   useEffect(() => {
     return () => {
@@ -1061,7 +1063,7 @@ ${nextText}` : nextText
 
   return (
     <div className="space-y-5">
-      <section className="space-y-5">
+      <section className="space-y-5" ref={sectionRevealRef}>
         <Card className="overflow-hidden border border-border bg-background shadow-[0_1px_3px_rgba(0,0,0,0.03)]">
           <CardHeader className="gap-5 border-b border-border bg-sidebar/80 px-6 py-5">
             <div className="space-y-4">

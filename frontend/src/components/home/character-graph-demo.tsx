@@ -25,7 +25,7 @@ const nodes: GraphNode[] = [
     id: 'protagonist',
     name: '莱纳',
     role: '主角',
-    emoji: '⚔️',
+    emoji: '对抗',
     x: 50,
     y: 45,
     color: 'emerald',
@@ -210,9 +210,9 @@ export function CharacterGraphDemo() {
                   <motion.div
                     className={`${nodeSize} rounded-full flex items-center justify-center transition-all duration-300 ${
                       isActive
-                        ? 'bg-primary/15 border-2 border-primary/30 shadow-lg shadow-primary/10'
+                        ? 'bg-primary/15 border-2 border-primary/30 shadow-[0_1px_3px_rgba(0,0,0,0.03)] shadow-primary/10'
                         : isProtagonist
-                          ? 'bg-white border-2 border-primary/15 shadow-md'
+                          ? 'bg-white border-2 border-primary/15 shadow-[0_1px_3px_rgba(0,0,0,0.03)]'
                           : 'bg-white border border-black/10 shadow-sm'
                     }`}
                     animate={isActive ? { scale: [1, 1.08, 1] } : {}}

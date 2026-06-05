@@ -44,7 +44,7 @@ const stages = [
     icon: CheckCircle,
     color: 'amber',
     description: '校验连续性与一致性',
-    detail: '✓ 时间线一致  ✓ 角色性格匹配  ✓ 伏笔衔接  ✓ 世界观无矛盾',
+    detail: '完成 时间线一致  完成 角色性格匹配  完成 伏笔衔接  完成 世界观无矛盾',
     animation: 'checklist',
   },
 ] as const

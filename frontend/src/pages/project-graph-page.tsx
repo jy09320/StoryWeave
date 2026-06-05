@@ -5,6 +5,7 @@ import * as d3 from 'd3'
 import { Lightning, BookOpen, FunnelSimple, MapPin, Network, ArrowClockwise, Sparkle, Tag, Users, X } from '@phosphor-icons/react'
 
 import { EmptyState } from '@/components/empty-state'
+import { useScrollReveal, useStaggerReveal } from '@/hooks/use-scroll-reveal'
 import { LoadingState } from '@/components/loading-state'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -158,8 +159,9 @@ function FunnelSimpleBar({
   onToggle: (cat: NodeCategory) => void
   stats: Record<NodeCategory, number>
 }) {
+  const staggerRef = useStaggerReveal<HTMLDivElement>()
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <div ref={staggerRef} className="flex flex-wrap items-center gap-2">
       <FunnelSimple className="size-4 text-muted-foreground" />
       {ALL_CATEGORIES.map(cat => {
         const config = CATEGORY_CONFIG[cat]
@@ -212,7 +214,7 @@ function NodeDetailPanel({
   )
 
   return (
-    <div className="absolute right-4 top-4 z-30 w-[340px] max-h-[calc(100vh-12rem)] overflow-y-auto rounded-xl border border-border bg-card/95 shadow-[0_1px_3px_rgba(0,0,0,0.04)] backdrop-blur transition-all duration-200 hover:-translate-y-px hover:shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
+    <div className="absolute right-4 top-4 z-30 w-[340px] max-h-[calc(100vh-12rem)] overflow-y-auto rounded-xl border border-border bg-card/95 shadow-[0_1px_3px_rgba(0,0,0,0.04)] backdrop-blur transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] hover:-translate-y-px hover:shadow-[0_4px_16px_oklch(0.20_0.025_240/0.06)]">
       <div className="flex items-start justify-between gap-3 p-4 pb-3">
         <div className="flex items-center gap-2.5 min-w-0">
           <span
@@ -621,6 +623,7 @@ export function ProjectGraphPage() {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 })
+  const headerRef = useScrollReveal<HTMLDivElement>()
 
   const graphQuery = useQuery<StoryGraph, Error>({
     queryKey: ['story-graph', projectId],
@@ -724,7 +727,7 @@ export function ProjectGraphPage() {
   return (
     <div className="flex h-full flex-col gap-4 p-4">
       {/* Header bar */}
-      <div className="flex items-center justify-between gap-4">
+      <div ref={headerRef} className="flex items-center justify-between gap-4">
         <FunnelSimpleBar activeFilters={activeFilters} onToggle={toggleFilter} stats={stats} />
         <div className="flex items-center gap-3">
           <GraphStats graph={graph!} />

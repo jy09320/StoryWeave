@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useScrollReveal, useStaggerReveal } from '@/hooks/use-scroll-reveal'
 import { useQuery } from '@tanstack/react-query'
 import { BookOpenText, Copy, StackSimple, Spinner, Play, Path, Sparkle } from '@phosphor-icons/react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
@@ -373,6 +374,11 @@ export function AIToolboxPage() {
     return templateLibrary.filter((item) => item.category === selectedCategory)
   }, [selectedCategory])
 
+  const heroRef = useScrollReveal<HTMLElement>()
+  const leftColumnRef = useStaggerReveal<HTMLDivElement>()
+  const centerColumnRef = useStaggerReveal<HTMLDivElement>()
+  const rightColumnRef = useStaggerReveal<HTMLDivElement>()
+
   async function handleLoadModels() {
     if (isLoadingModels) {
       return
@@ -507,7 +513,7 @@ export function AIToolboxPage() {
 
   return (
     <div className="space-y-6 pb-10">
-      <section className="rounded-xl border border-border bg-card/95 p-6 shadow-sm">
+      <section ref={heroRef} className="rounded-xl border border-border bg-card/95 p-6 shadow-sm">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-3xl space-y-3">
             <div className="flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-primary/80">
@@ -547,7 +553,7 @@ export function AIToolboxPage() {
       </section>
 
       <section className="grid gap-6 xl:grid-cols-[320px_minmax(0,1fr)_420px]">
-        <div className="space-y-6">
+        <div ref={leftColumnRef} className="space-y-6">
           <Card className="border border-border bg-card/95">
             <CardHeader>
               <CardTitle className="text-lg">分类浏览</CardTitle>
@@ -599,7 +605,7 @@ export function AIToolboxPage() {
           )}
         </div>
 
-        <div className="space-y-6">
+        <div ref={centerColumnRef} className="space-y-6">
           <Card className="border border-border bg-card/95">
             <CardHeader>
               <CardTitle className="text-lg">模板列表</CardTitle>
@@ -615,7 +621,7 @@ export function AIToolboxPage() {
                     key={template.id}
                     type="button"
                     onClick={() => setSelectedTemplateId(template.id)}
-                    className={`rounded-xl border p-4 text-left transition-all duration-200 hover:-translate-y-px hover:shadow-[0_2px_8px_rgba(0,0,0,0.04)] ${
+                    className={`rounded-xl border p-4 text-left transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] hover:-translate-y-px hover:shadow-[0_4px_16px_oklch(0.20_0.025_240/0.06)] ${
                       isActive
                         ? 'border-primary/30 bg-primary/10 shadow-sm'
                         : 'border-border bg-background/75 hover:bg-muted/35'
@@ -701,7 +707,7 @@ export function AIToolboxPage() {
           </Card>
         </div>
 
-        <div className="space-y-6">
+        <div ref={rightColumnRef} className="space-y-6">
           <Card className="border border-border bg-card/95">
             <CardHeader>
               <CardTitle className="text-lg">一键运行</CardTitle>

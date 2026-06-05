@@ -1,4 +1,5 @@
 import { useMemo, useState, type FormEvent } from 'react'
+import { useScrollReveal, useStaggerReveal } from '@/hooks/use-scroll-reveal'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { Link, useParams } from 'react-router-dom'
 import { ArrowLeft, PencilSimple, Sparkle } from '@phosphor-icons/react'
@@ -105,6 +106,10 @@ export function ProjectSettingsPage() {
   const [isEditing, setIsEditing] = useState(false)
   const [form, setForm] = useState<ProjectSettingsFormState | null>(null)
   const [draft, setDraft] = useState<ProjectDraftResult | null>(null)
+
+  const headerRevealRef = useScrollReveal<HTMLDivElement>()
+  const draftSectionRevealRef = useScrollReveal<HTMLElement>()
+  const formStaggerRef = useStaggerReveal<HTMLFormElement>()
 
   const projectQuery = useQuery<ProjectDetail, Error>({
     queryKey: ['project', projectId],
@@ -286,7 +291,7 @@ export function ProjectSettingsPage() {
 
   return (
     <div className="space-y-6 pb-10">
-      <div className="flex flex-wrap items-start justify-between gap-4">
+      <div ref={headerRevealRef} className="flex flex-wrap items-start justify-between gap-4">
         <div className="space-y-3">
           <Link to={`/projects/${project.id}`} className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
             <ArrowLeft className="size-4" />
@@ -295,11 +300,11 @@ export function ProjectSettingsPage() {
           <div className="flex flex-wrap items-center gap-2">
             <h1 className="text-2xl font-semibold tracking-tight text-foreground">{project.title}</h1>
             <StatusBadge status={project.status} />
-            <Badge variant="outline" className="border-border bg-background text-muted-foreground">
+            <Badge variant="outline" className="">
               {formatProjectType(project.type)}
             </Badge>
             {project.channel ? (
-              <Badge variant="outline" className="border-border bg-background text-muted-foreground">
+              <Badge variant="outline" className="">
                 {formatProjectChannel(project.channel)}
               </Badge>
             ) : null}
@@ -323,7 +328,7 @@ export function ProjectSettingsPage() {
         </div>
       </div>
 
-      <section className="rounded-xl border border-border bg-card px-5 py-5 transition-all duration-200 hover:-translate-y-px hover:shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
+      <section ref={draftSectionRevealRef} className="rounded-xl border border-border bg-card px-5 py-5 transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] hover:-translate-y-px hover:shadow-[0_4px_16px_oklch(0.20_0.025_240/0.06)]">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <h2 className="text-base font-semibold text-foreground">AI 项目草案</h2>
@@ -401,8 +406,8 @@ export function ProjectSettingsPage() {
         )}
       </section>
 
-      <form className="space-y-6" onSubmit={handleSave}>
-        <section className="rounded-xl border border-border bg-card px-5 py-5 transition-all duration-200 hover:-translate-y-px hover:shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
+      <form ref={formStaggerRef} className="space-y-6" onSubmit={handleSave}>
+        <section className="rounded-xl border border-border bg-card px-5 py-5 transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] hover:-translate-y-px hover:shadow-[0_4px_16px_oklch(0.20_0.025_240/0.06)]">
           <div className="mb-4">
             <h2 className="text-base font-semibold text-foreground">基础信息</h2>
             <p className="mt-1 text-sm text-muted-foreground">维护项目名称、简介和基础属性。</p>
@@ -477,7 +482,7 @@ export function ProjectSettingsPage() {
           </div>
         </section>
 
-        <section className="rounded-xl border border-border bg-card px-5 py-5 transition-all duration-200 hover:-translate-y-px hover:shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
+        <section className="rounded-xl border border-border bg-card px-5 py-5 transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] hover:-translate-y-px hover:shadow-[0_4px_16px_oklch(0.20_0.025_240/0.06)]">
           <div className="mb-4">
             <h2 className="text-base font-semibold text-foreground">创作定位</h2>
             <p className="mt-1 text-sm text-muted-foreground">明确频道、题材和标签，后续 AI 与工作流都围绕这里展开。</p>
@@ -543,7 +548,7 @@ export function ProjectSettingsPage() {
           </div>
         </section>
 
-        <section className="rounded-xl border border-border bg-card px-5 py-5 transition-all duration-200 hover:-translate-y-px hover:shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
+        <section className="rounded-xl border border-border bg-card px-5 py-5 transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] hover:-translate-y-px hover:shadow-[0_4px_16px_oklch(0.20_0.025_240/0.06)]">
           <div className="mb-4">
             <h2 className="text-base font-semibold text-foreground">故事提要</h2>
             <p className="mt-1 text-sm text-muted-foreground">一句话描述这个项目最核心的设定或冲突。</p>
@@ -644,7 +649,7 @@ function TagGroup({
         <div className="flex flex-wrap gap-2">
           {values.length > 0 ? (
             values.map((value) => (
-              <Badge key={value} variant="outline" className="border-border bg-background text-muted-foreground">
+              <Badge key={value} variant="outline" className="">
                 {value}
               </Badge>
             ))

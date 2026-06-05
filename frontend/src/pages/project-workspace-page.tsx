@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
+import { useScrollReveal, useStaggerReveal } from '@/hooks/use-scroll-reveal'
 import { formatDate, formatProjectType, parseApiDate } from '@/lib/format'
 import { formatProjectChannel } from '@/lib/project-profile'
 import { queryClient } from '@/lib/query-client'
@@ -79,6 +80,10 @@ export function ProjectWorkspacePage() {
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false)
   const [projectImportDraft, setProjectImportDraft] = useState<ProjectImportDraftState>(defaultProjectImportDraft)
   const [latestImportResult, setLatestImportResult] = useState<ProjectImportResult | null>(null)
+
+  const headerRef = useScrollReveal<HTMLDivElement>()
+  const chapterSectionRef = useScrollReveal<HTMLElement>()
+  const sidebarRef = useStaggerReveal<HTMLElement>()
 
   const projectQuery = useQuery<ProjectDetail, Error>({
     queryKey: ['project', projectId],
@@ -235,16 +240,16 @@ export function ProjectWorkspacePage() {
 
   return (
     <div className="space-y-6 pb-10">
-      <div className="flex flex-wrap items-center justify-between gap-4">
+      <div ref={headerRef} className="flex flex-wrap items-center justify-between gap-4">
         <div className="min-w-0 space-y-2">
           <div className="flex flex-wrap items-center gap-2">
             <h1 className="text-2xl font-semibold tracking-tight text-foreground">{project.title}</h1>
             <StatusBadge status={project.status} />
-            <Badge variant="outline" className="border-border bg-background text-muted-foreground">
+            <Badge variant="outline" className="">
               {formatProjectType(project.type)}
             </Badge>
             {project.channel ? (
-              <Badge variant="outline" className="border-border bg-background text-muted-foreground">
+              <Badge variant="outline" className="">
                 {formatProjectChannel(project.channel)}
               </Badge>
             ) : null}
@@ -285,7 +290,7 @@ export function ProjectWorkspacePage() {
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
-        <section className="rounded-xl border border-border bg-card shadow-[0_1px_3px_rgba(0,0,0,0.03)] transition-all duration-200 hover:-translate-y-px hover:shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
+        <section ref={chapterSectionRef} className="rounded-xl border border-border bg-card shadow-[0_1px_3px_rgba(0,0,0,0.03)] transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] hover:-translate-y-px hover:shadow-[0_4px_16px_oklch(0.20_0.025_240/0.06)]">
           <div className="flex items-center justify-between border-b border-border px-5 py-4">
             <h2 className="font-semibold text-foreground">章节管理</h2>
             <span className="text-sm text-muted-foreground">共 {chapters.length} 章</span>
@@ -344,8 +349,8 @@ export function ProjectWorkspacePage() {
           </div>
         </section>
 
-        <aside className="space-y-4 xl:sticky xl:top-4 xl:self-start">
-          <div className="rounded-xl border border-border bg-card px-5 py-4 shadow-[0_1px_3px_rgba(0,0,0,0.03)] transition-all duration-200 hover:-translate-y-px hover:shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
+        <aside ref={sidebarRef} className="space-y-4 xl:sticky xl:top-4 xl:self-start">
+          <div className="rounded-xl border border-border bg-card px-5 py-4 shadow-[0_1px_3px_rgba(0,0,0,0.03)] transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] hover:-translate-y-px hover:shadow-[0_4px_16px_oklch(0.20_0.025_240/0.06)]">
             <div className="mb-3 flex items-center justify-between">
               <span className="text-sm font-medium text-foreground">项目设定</span>
               <Link to={`/projects/${project.id}/settings`} className="text-xs text-primary hover:underline">
@@ -392,7 +397,7 @@ export function ProjectWorkspacePage() {
             </div>
           </div>
 
-          <div className="rounded-xl border border-border bg-card px-5 py-4 shadow-[0_1px_3px_rgba(0,0,0,0.03)] transition-all duration-200 hover:-translate-y-px hover:shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
+          <div className="rounded-xl border border-border bg-card px-5 py-4 shadow-[0_1px_3px_rgba(0,0,0,0.03)] transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] hover:-translate-y-px hover:shadow-[0_4px_16px_oklch(0.20_0.025_240/0.06)]">
             <div className="mb-3 flex items-center justify-between">
               <span className="text-sm font-medium text-foreground">世界观</span>
               <Link to={`/projects/${project.id}/world`} className="text-xs text-primary hover:underline">
@@ -410,7 +415,7 @@ export function ProjectWorkspacePage() {
             )}
           </div>
 
-          <div className="rounded-xl border border-border bg-card px-5 py-4 shadow-[0_1px_3px_rgba(0,0,0,0.03)] transition-all duration-200 hover:-translate-y-px hover:shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
+          <div className="rounded-xl border border-border bg-card px-5 py-4 shadow-[0_1px_3px_rgba(0,0,0,0.03)] transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] hover:-translate-y-px hover:shadow-[0_4px_16px_oklch(0.20_0.025_240/0.06)]">
             <div className="mb-3 flex items-center justify-between">
               <span className="text-sm font-medium text-foreground">角色 · {projectCharacters.length}</span>
               <Link to={`/projects/${project.id}/characters`} className="text-xs text-primary hover:underline">

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type Dispatch, type FormEvent, type ReactNode, type SetStateAction } from 'react'
+import { useScrollReveal, useStaggerReveal } from '@/hooks/use-scroll-reveal'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { Link, useNavigate } from 'react-router-dom'
 import { Plus, Sparkle, Trash } from '@phosphor-icons/react'
@@ -9,6 +10,7 @@ import { LoadingState } from '@/components/loading-state'
 import { StatusBadge } from '@/components/status-badge'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { SectionLabel } from '@/components/ui/section-label'
 import {
   Dialog,
   DialogContent,
@@ -216,6 +218,9 @@ export function DashboardPage() {
   const [projectDraft, setProjectDraft] = useState<ProjectDraftResult | null>(null)
   const [selectedOutlineChapters, setSelectedOutlineChapters] = useState<string[]>([])
 
+  const staggerRef = useStaggerReveal<HTMLElement>()
+  const revealRef = useScrollReveal<HTMLElement>()
+
   const projectsQuery = useQuery<Project[], Error>({
     queryKey: ['projects'],
     queryFn: listProjects,
@@ -390,28 +395,28 @@ export function DashboardPage() {
   const featuredProject = projects[0] ?? null
 
   return (
-    <div className="space-y-6 pb-10">
-      <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
-        <div className="rounded-xl border border-border bg-card p-5 shadow-[0_1px_3px_rgba(0,0,0,0.03)] transition-all duration-200 hover:-translate-y-px hover:shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
+    <div className="space-y-8 pb-10">
+      <section ref={staggerRef} className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_420px]">
+        <div className="surface-raised p-6 transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] hover:-translate-y-px hover:shadow-[0_4px_16px_oklch(0.20_0.025_240/0.06)]">
           <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
             <div className="space-y-3">
-              <div className="text-[11px] uppercase tracking-[0.22em] text-primary/80">Project Focus</div>
+              <SectionLabel variant="inked">Project Focus</SectionLabel>
               {featuredProject ? (
                 <>
                   <div className="space-y-2">
                     <div className="text-2xl font-semibold text-foreground">{featuredProject.title}</div>
                     <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                       <StatusBadge status={featuredProject.status} />
-                      <Badge variant="outline" className="border-border bg-background text-muted-foreground">
+                      <Badge variant="outline" className="">
                         {formatProjectType(featuredProject.type)}
                       </Badge>
                       {featuredProject.channel ? (
-                        <Badge variant="outline" className="border-border bg-background text-muted-foreground">
+                        <Badge variant="outline" className="">
                           {formatProjectChannel(featuredProject.channel)}
                         </Badge>
                       ) : null}
                       {featuredProject.genres.slice(0, 2).map((genre) => (
-                        <Badge key={genre} variant="outline" className="border-border bg-background text-muted-foreground">
+                        <Badge key={genre} variant="outline" className="">
                           {genre}
                         </Badge>
                       ))}
@@ -451,7 +456,7 @@ export function DashboardPage() {
         <RecentActivityHeatmap days={heatmapDays} compact stats={stats} />
       </section>
 
-      <section className="rounded-xl border border-border bg-card shadow-[0_1px_3px_rgba(0,0,0,0.03)] transition-all duration-200 hover:-translate-y-px hover:shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
+      <section ref={revealRef} className="surface-raised transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] hover:-translate-y-px hover:shadow-[0_4px_16px_oklch(0.20_0.025_240/0.06)]">
         <div className="flex items-center justify-between border-b border-border/70 px-5 py-4">
           <div className="text-sm font-medium text-foreground">项目列表</div>
           <Button variant="outline" size="sm" onClick={() => setIsCreateOpen(true)}>
@@ -481,16 +486,16 @@ export function DashboardPage() {
                   <div className="flex flex-wrap items-center gap-2">
                     <div className="truncate text-base font-medium text-foreground">{project.title}</div>
                     <StatusBadge status={project.status} />
-                    <Badge variant="outline" className="border-border bg-background text-muted-foreground">
+                    <Badge variant="outline" className="">
                       {formatProjectType(project.type)}
                     </Badge>
                     {project.channel ? (
-                      <Badge variant="outline" className="border-border bg-background text-muted-foreground">
+                      <Badge variant="outline" className="">
                         {formatProjectChannel(project.channel)}
                       </Badge>
                     ) : null}
                     {project.genres.slice(0, 3).map((genre) => (
-                      <Badge key={genre} variant="outline" className="border-border bg-background text-muted-foreground">
+                      <Badge key={genre} variant="outline" className="">
                         {genre}
                       </Badge>
                     ))}
@@ -588,7 +593,7 @@ function RecentActivityHeatmap({
   const monthLabels = columns.map((column) => column[0]?.date.toLocaleDateString('zh-CN', { month: 'short' }) ?? '')
 
   return (
-    <div className="rounded-xl border border-border bg-card p-5 shadow-[0_1px_3px_rgba(0,0,0,0.03)] transition-all duration-200 hover:-translate-y-px hover:shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
+    <div className="rounded-xl border border-border bg-card p-5 shadow-[0_1px_3px_rgba(0,0,0,0.03)] transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] hover:-translate-y-px hover:shadow-[0_4px_16px_oklch(0.20_0.025_240/0.06)]">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="space-y-1">
           <div className="text-sm font-medium text-foreground">最近活跃热力板</div>

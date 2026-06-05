@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { useScrollReveal, useStaggerReveal } from '@/hooks/use-scroll-reveal'
 import { useQuery } from '@tanstack/react-query'
 import { useParams } from 'react-router-dom'
 import {
@@ -475,6 +476,9 @@ export function ProjectAIWorkspacePage() {
     }
   }
 
+  const sectionRevealRef = useScrollReveal<HTMLElement>()
+  const sessionListStaggerRef = useStaggerReveal<HTMLDivElement>()
+
   if (!projectId) {
     return <EmptyState title="缺少项目标识" description="当前路由中没有有效的项目 ID。" />
   }
@@ -499,7 +503,7 @@ export function ProjectAIWorkspacePage() {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <section className="grid min-h-0 flex-1 overflow-hidden rounded-xl border border-border bg-card/95 shadow-[0_1px_3px_rgba(0,0,0,0.03)] xl:grid-cols-[300px_minmax(0,1fr)_360px]">
+      <section ref={sectionRevealRef} className="grid min-h-0 flex-1 overflow-hidden rounded-xl border border-border bg-card/95 shadow-[0_1px_3px_rgba(0,0,0,0.03)] xl:grid-cols-[300px_minmax(0,1fr)_360px]">
         <aside className="min-h-0 border-b border-border bg-muted/15 xl:border-b-0 xl:border-r">
           <Card className="flex h-full min-h-0 flex-col rounded-none border-0 bg-transparent shadow-none">
             <CardHeader>
@@ -509,6 +513,7 @@ export function ProjectAIWorkspacePage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="min-h-0 flex-1 space-y-4 overflow-y-auto">
+              <div ref={sessionListStaggerRef} className="space-y-4">
               <SessionGroup
                 title="角色助手"
                 icon={Users}
@@ -539,6 +544,7 @@ export function ProjectAIWorkspacePage() {
                 onCreate={() => handleCreateSession('story_qa')}
                 onDelete={handleDeleteSession}
               />
+              </div>
             </CardContent>
           </Card>
         </aside>
@@ -571,7 +577,7 @@ export function ProjectAIWorkspacePage() {
                             {capabilitySnapshot.structured_output.summary}
                           </Badge>
                         ) : (
-                          <Badge variant="outline" className="border-border bg-background text-muted-foreground">
+                          <Badge variant="outline" className="">
                             能力未检测
                           </Badge>
                         )}
@@ -915,7 +921,7 @@ function TaskTab({
           <Badge variant="outline" className={meta.className}>
             {meta.label}
           </Badge>
-          <Badge variant="outline" className="border-border bg-background text-muted-foreground">
+          <Badge variant="outline" className="">
             {session.assetType === 'project_character' ? '角色助手' : session.assetType === 'story_qa' ? '故事问答' : '世界观助手'}
           </Badge>
         </div>

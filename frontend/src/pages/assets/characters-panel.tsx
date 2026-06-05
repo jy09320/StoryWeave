@@ -693,10 +693,10 @@ function CharacterDetail({ character, deletePending, isGeneratingPortrait, onEdi
               <img
                 src={character.portrait_url}
                 alt={character.name}
-                className="size-24 rounded-xl object-cover ring-2 ring-border shadow-md"
+                className="size-24 rounded-xl object-cover ring-2 ring-border shadow-[0_1px_3px_rgba(0,0,0,0.03)]"
               />
             ) : (
-              <div className="flex size-24 items-center justify-center rounded-xl bg-linear-to-br from-primary/20 to-primary/5 ring-2 ring-border shadow-md">
+              <div className="flex size-24 items-center justify-center rounded-xl bg-primary/5 ring-2 ring-border shadow-[0_1px_3px_rgba(0,0,0,0.03)]">
                 <User className="size-10 text-primary/40" />
               </div>
             )}

@@ -1,6 +1,7 @@
 import { NavLink, Outlet } from 'react-router-dom'
 import { clsx } from 'clsx'
 import { Users, BookOpen, Network, Image } from '@phosphor-icons/react'
+import { useScrollReveal, useStaggerReveal } from '@/hooks/use-scroll-reveal'
 
 const assetNavItems = [
   {
@@ -42,6 +43,9 @@ const assetNavItems = [
 ]
 
 export function AssetsPage() {
+  const navListRef = useStaggerReveal<HTMLDivElement>()
+  const bottomRef = useScrollReveal<HTMLDivElement>()
+
   return (
     <div className="flex h-full">
       {/* Sidebar */}
@@ -50,6 +54,7 @@ export function AssetsPage() {
           我的资产
         </p>
 
+        <div ref={navListRef}>
         {assetNavItems.map((item) => {
           const Icon = item.icon
           return (
@@ -113,9 +118,10 @@ export function AssetsPage() {
             </NavLink>
           )
         })}
+        </div>
 
         {/* Bottom decoration */}
-        <div className="mt-auto pt-4 border-t border-border/50">
+        <div ref={bottomRef} className="mt-auto pt-4 border-t border-border/50">
           <div className="rounded-xl bg-muted/40 p-3 text-center">
             <div className="text-[10px] text-muted-foreground/60 leading-relaxed">
               创作素材库

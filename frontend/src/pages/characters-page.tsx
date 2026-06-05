@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
+import { useScrollReveal, useStaggerReveal } from '@/hooks/use-scroll-reveal'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useParams } from 'react-router-dom'
 import { Spinner, ChatCenteredText, Plus, PaperPlaneRight, Sparkle, Trash } from '@phosphor-icons/react'
@@ -119,6 +120,9 @@ export function CharactersPage() {
   const { projectId } = useParams<{ projectId?: string }>()
   const isProjectScoped = Boolean(projectId)
   const queryClient = useQueryClient()
+
+  const topRevealRef = useScrollReveal<HTMLDivElement>()
+  const globalGridRevealRef = useScrollReveal<HTMLDivElement>()
 
   const [searchKeyword] = useState('')
   const [selectedCharacterId, setSelectedCharacterId] = useState<string | null>(null)
@@ -325,7 +329,7 @@ export function CharactersPage() {
 
   return (
     <>
-      <div className="space-y-6 pb-8">
+      <div ref={topRevealRef} className="space-y-6 pb-8">
 
         {isProjectScoped ? (
           <section className="space-y-4">
@@ -373,7 +377,7 @@ export function CharactersPage() {
                 }
               />
             ) : (
-              <section className="grid gap-4 xl:grid-cols-[300px_minmax(0,1fr)]">
+              <section ref={globalGridRevealRef} className="grid gap-4 xl:grid-cols-[300px_minmax(0,1fr)]">
                 <aside>
                   <CharacterList
                     characters={displayedCharacters}
@@ -593,6 +597,8 @@ interface CharacterDetailProps {
 }
 
 function CharacterDetail({ character, isProjectScoped, linkedCharacterIds, attachPending, deletePending, onAttach, onEdit, onDelete }: CharacterDetailProps) {
+  const staggerRef = useStaggerReveal<HTMLDivElement>()
+
   return (
     <>
       <Card className="border border-border bg-card/95">
@@ -650,7 +656,7 @@ function CharacterDetail({ character, isProjectScoped, linkedCharacterIds, attac
         </CardFooter>
       </Card>
 
-      <div className="grid gap-4 xl:grid-cols-2">
+      <div ref={staggerRef} className="grid gap-4 xl:grid-cols-2">
         <InfoBlock label="人物档案" value={character.profile || '未填写人物档案'} />
         <InfoBlock label="性格特征" value={character.personality || '未填写性格特征'} />
         <InfoBlock label="背景经历" value={character.background || '未填写背景经历'} />
