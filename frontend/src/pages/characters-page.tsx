@@ -38,6 +38,8 @@ import {
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { formatDate } from '@/lib/format'
+import { AssetWorkspace, type TreeNode, type Tab } from '@/components/asset-workspace/AssetWorkspace'
+import { CharacterEditor } from '@/components/asset-workspace/CharacterEditor'
 import {
   attachProjectCharacter,
   deleteCharacter,
@@ -140,6 +142,12 @@ export function CharactersPage() {
   const [editForm, setEditForm] = useState<CharacterFormState>(defaultFormState)
   const [activeTab, setActiveTab] = useState<'detail' | 'chat'>('detail')
 
+  // Workspace state for project-scoped view
+  const [workspaceSearch, setWorkspaceSearch] = useState('')
+  const [workspaceDimension, setWorkspaceDimension] = useState('tags')
+  const [openTabs, setOpenTabs] = useState<Tab[]>([])
+  const [activeTabId, setActiveTabId] = useState<string | null>(null)
+
   // Create-character dialog state
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
   const [createForm, setCreateForm] = useState<CharacterFormState>(defaultFormState)
@@ -223,6 +231,91 @@ export function CharactersPage() {
   const selectedCharacter = useMemo(
     () => displayedCharacters.find((character) => character.id === selectedCharacterId) ?? displayedCharacters[0] ?? null,
     [displayedCharacters, selectedCharacterId],
+  )
+
+  // Tree nodes for workspace view
+  const treeNodes = useMemo((): TreeNode[] => {
+    if (!characters) return []
+
+    const filtered = workspaceSearch
+      ? characters.filter(
+          (c) =>
+            c.name.toLowerCase().includes(workspaceSearch.toLowerCase()) ||
+            (c.alias && c.alias.toLowerCase().includes(workspaceSearch.toLowerCase()))
+        )
+      : characters
+
+    if (workspaceDimension === 'none') {
+      return filtered.map((c) => ({
+        id: c.id,
+        label: c.name,
+        type: 'leaf' as const,
+        meta: c.alias || undefined,
+      }))
+    }
+
+    // Group by tags
+    const groups = new Map<string, typeof characters>()
+    for (const char of filtered) {
+      const groupKey = char.tags?.split(',')[0]?.trim() || '未分组'
+      if (!groups.has(groupKey)) groups.set(groupKey, [])
+      groups.get(groupKey)!.push(char)
+    }
+
+    return Array.from(groups.entries()).map(([label, chars]) => ({
+      id: `group-${label}`,
+      label,
+      type: 'group' as const,
+      children: chars.map((c) => ({
+        id: c.id,
+        label: c.name,
+        type: 'leaf' as const,
+        meta: c.alias || undefined,
+      })),
+    }))
+  }, [characters, workspaceSearch, workspaceDimension])
+
+  // Tab management handlers
+  const handleNodeSelect = useCallback(
+    (nodeId: string) => {
+      if (nodeId.startsWith('group-')) return
+      if (!openTabs.find((t) => t.id === nodeId)) {
+        const char = characters?.find((c) => c.id === nodeId)
+        if (char) {
+          setOpenTabs((prev) => [...prev, { id: char.id, label: char.name }])
+        }
+      }
+      setActiveTabId(nodeId)
+    },
+    [openTabs, characters]
+  )
+
+  const handleTabClose = useCallback(
+    (tabId: string) => {
+      setOpenTabs((prev) => {
+        const next = prev.filter((t) => t.id !== tabId)
+        if (activeTabId === tabId) {
+          setActiveTabId(next.length > 0 ? next[next.length - 1].id : null)
+        }
+        return next
+      })
+    },
+    [activeTabId]
+  )
+
+  const handleCreateNew = useCallback(() => {
+    setCreateDialogOpen(true)
+  }, [])
+
+  const handleDirtyChange = useCallback(
+    (dirty: boolean) => {
+      if (activeTabId) {
+        setOpenTabs((prev) =>
+          prev.map((t) => (t.id === activeTabId ? { ...t, dirty } : t))
+        )
+      }
+    },
+    [activeTabId]
   )
 
   function ensureSelectedCharacter() {
@@ -340,36 +433,34 @@ export function CharactersPage() {
       <div ref={topRevealRef} className="space-y-6 pb-8">
 
         {isProjectScoped ? (
-          <section className="space-y-4">
-            {displayedCharacters.length === 0 ? (
-              <EmptyState
-                title={searchKeyword ? '没有匹配的角色' : '当前项目还没有角色'}
-                description={searchKeyword ? '换个关键词再试试。' : '先创建角色，或把已有角色绑定到当前项目。'}
-              />
-            ) : (
-              <>
-                <CharacterList
-                  characters={displayedCharacters}
-                  selectedCharacter={selectedCharacter}
-                  linkedCharacterIds={linkedCharacterIds}
-                  isProjectScoped={isProjectScoped}
-                  onSelect={handleSelectCharacter}
+          <div className="h-[calc(100vh-120px)]">
+            <AssetWorkspace
+              treeNodes={treeNodes}
+              selectedNodeId={activeTabId}
+              onNodeSelect={handleNodeSelect}
+              onCreateNew={handleCreateNew}
+              searchValue={workspaceSearch}
+              onSearchChange={setWorkspaceSearch}
+              dimension={workspaceDimension}
+              dimensionOptions={[
+                { value: 'tags', label: '按标签' },
+                { value: 'none', label: '不分组' },
+              ]}
+              onDimensionChange={setWorkspaceDimension}
+              typeFilter={null}
+              tabs={openTabs}
+              activeTabId={activeTabId}
+              onTabSelect={setActiveTabId}
+              onTabClose={handleTabClose}
+              renderEditor={(tabId) => (
+                <CharacterEditor
+                  key={tabId}
+                  characterId={tabId}
+                  onDirtyChange={handleDirtyChange}
                 />
-                {selectedCharacter ? (
-                  <CharacterDetail
-                    character={selectedCharacter}
-                    isProjectScoped={isProjectScoped}
-                    linkedCharacterIds={linkedCharacterIds}
-                    attachPending={attachCharacterMutation.isPending}
-                    deletePending={deleteCharacterMutation.isPending}
-                    onAttach={() => handleAttachToProject(selectedCharacter)}
-                    onEdit={() => openEditDialog(selectedCharacter)}
-                    onDelete={() => setDeleteCharacterTarget(selectedCharacter)}
-                  />
-                ) : null}
-              </>
-            )}
-          </section>
+              )}
+            />
+          </div>
         ) : (
           /* Global: two-column layout with tabs */
           <>
