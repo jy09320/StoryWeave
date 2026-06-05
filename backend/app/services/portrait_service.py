@@ -20,7 +20,7 @@ IMAGE_MODELS = [
 ]
 
 STYLE_PROMPT = (
-    "小说人物肖像插画，半写实动漫风格，精细刻画，温暖光照，上半身构图，纯净背景，高画质。"
+    "日系动漫风格角色立绘，精致赛璐璐上色，清晰线条，柔和光影，上半身构图，纯净背景，高画质。"
 )
 
 
@@ -29,8 +29,17 @@ def _build_prompt(
     description: str | None,
     personality: str | None,
     profile: str | None,
+    source_work: str | None = None,
 ) -> str:
-    parts = [STYLE_PROMPT, f"角色姓名：{name}。"]
+    parts = [STYLE_PROMPT]
+
+    if source_work:
+        parts.append(
+            f"该角色出自《{source_work}》。"
+            f"请严格参考该作品中 {name} 的官方形象、发色、瞳色、服装等特征进行绘制。"
+        )
+
+    parts.append(f"角色姓名：{name}。")
 
     if description:
         parts.append(f"外貌描述：{description}。")
@@ -124,6 +133,7 @@ class PortraitService:
         character_description: str | None = None,
         character_personality: str | None = None,
         character_profile: str | None = None,
+        source_work: str | None = None,
         api_key: str,
         base_url: str | None = None,
         model_id: str | None = None,
@@ -137,6 +147,7 @@ class PortraitService:
             character_description,
             character_personality,
             character_profile,
+            source_work=source_work,
         )
 
         models_to_try = [model_id] if model_id else [m["id"] for m in IMAGE_MODELS]

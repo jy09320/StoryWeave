@@ -125,6 +125,17 @@ async def generate_portrait(
     if not character:
         raise HTTPException(status_code=404, detail="Character not found")
 
+    # Look up the project this character belongs to (for source_work info)
+    from app.models.project import Project, ProjectCharacter
+    project_result = await db.execute(
+        select(Project)
+        .join(ProjectCharacter, ProjectCharacter.project_id == Project.id)
+        .where(ProjectCharacter.character_id == character_id)
+        .limit(1)
+    )
+    project = project_result.scalar_one_or_none()
+    source_work = project.source_work if project and project.type != "original" else None
+
     # Get API key from runtime config
     config = await runtime_ai_config_service.get_effective_config(db, current_user.id)
     api_key = config.get("api_key")
@@ -140,6 +151,7 @@ async def generate_portrait(
             character_description=character.description,
             character_personality=character.personality,
             character_profile=character.profile,
+            source_work=source_work,
             api_key=api_key,
             base_url=base_url,
             model_id=body.model_id,
