@@ -31,6 +31,8 @@ services:
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
       ANTHROPIC_BASE_URL: ${ANTHROPIC_BASE_URL:-}
+    volumes:
+      - backend_data:/app/data
     ports:
       - "${BACKEND_PORT:-8001}:8000"
 
@@ -48,3 +50,4 @@ services:
 
 volumes:
   postgres_data:
+  backend_data:
