@@ -318,6 +318,41 @@ export function CharactersPage() {
     [activeTabId]
   )
 
+  // Context menu handlers for tree nodes
+  const handleNodeRename = useCallback(
+    (nodeId: string) => {
+      const char = characters?.find((c) => c.id === nodeId)
+      if (char) {
+        setEditingCharacter(char)
+        setEditForm(getInitialFormState(char))
+      }
+    },
+    [characters]
+  )
+
+  const handleNodeDelete = useCallback(
+    (nodeId: string) => {
+      const char = characters?.find((c) => c.id === nodeId)
+      if (char) {
+        setDeleteCharacterTarget(char)
+      }
+    },
+    [characters]
+  )
+
+  const handleNodeOpenInNewTab = useCallback(
+    (nodeId: string) => {
+      if (!openTabs.find((t) => t.id === nodeId)) {
+        const char = characters?.find((c) => c.id === nodeId)
+        if (char) {
+          setOpenTabs((prev) => [...prev, { id: char.id, label: char.name }])
+        }
+      }
+      setActiveTabId(nodeId)
+    },
+    [openTabs, characters]
+  )
+
   function ensureSelectedCharacter() {
     if (!displayedCharacters.length) {
       setSelectedCharacterId(null)
@@ -459,6 +494,9 @@ export function CharactersPage() {
                   onDirtyChange={handleDirtyChange}
                 />
               )}
+              onNodeRename={handleNodeRename}
+              onNodeDelete={handleNodeDelete}
+              onNodeOpenInNewTab={handleNodeOpenInNewTab}
             />
           </div>
         ) : (
