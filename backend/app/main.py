@@ -1,7 +1,9 @@
 from contextlib import asynccontextmanager
+import os
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from app.api.routes import ai, auth, chapters, character_chat, characters, project_asset_ai, project_settings, projects, runtime_settings, story_graph
 from app.core.config import settings
@@ -28,6 +30,7 @@ app.add_middleware(
 register_exception_handlers(app)
 
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
+app.include_router(story_graph.router, prefix="/api/projects", tags=["story-graph"])
 app.include_router(projects.router, prefix="/api/projects", tags=["projects"])
 app.include_router(project_settings.router, prefix="/api/projects", tags=["project-settings"])
 app.include_router(project_asset_ai.router, prefix="/api/projects", tags=["project-asset-ai"])
@@ -36,9 +39,13 @@ app.include_router(characters.router, prefix="/api/characters", tags=["character
 app.include_router(character_chat.router, prefix="/api/characters", tags=["character-chat"])
 app.include_router(ai.router, prefix="/api/ai", tags=["ai"])
 app.include_router(runtime_settings.router, prefix="/api/ai", tags=["ai-runtime-settings"])
-app.include_router(story_graph.router, prefix="/api/projects", tags=["story-graph"])
 
 
 @app.get("/api/health")
 async def health_check():
     return {"status": "ok"}
+
+
+# Static file serving (portraits, etc.)
+os.makedirs("data/portraits", exist_ok=True)
+app.mount("/static", StaticFiles(directory="data"), name="static")

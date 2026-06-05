@@ -594,6 +594,7 @@ class CharacterResponse(ORMResponseModel):
     background: str | None
     relationship_notes: str | None
     tags: str | None
+    portrait_url: str | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -977,6 +978,11 @@ class StoryGraphResponse(BaseModel):
     events: list[StoryEventResponse] = Field(default_factory=list)
     relations: list[StoryRelationResponse] = Field(default_factory=list)
     open_loops: list[StoryOpenLoopResponse] = Field(default_factory=list)
+
+
+class StoryEntityListResponse(BaseModel):
+    items: list[StoryEntityResponse] = Field(default_factory=list)
+    total: int = 0
 
 
 # ---------------------------------------------------------------------------

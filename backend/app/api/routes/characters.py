@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -7,8 +8,14 @@ from app.core.database import get_db
 from app.models.project import Character
 from app.models.user import User
 from app.schemas.project import CharacterCreate, CharacterResponse, CharacterUpdate
+from app.services.portrait_service import portrait_service
+from app.services.runtime_ai_config import runtime_ai_config_service
 
 router = APIRouter()
+
+
+class PortraitRequest(BaseModel):
+    model_id: str | None = None
 
 
 @router.get("/", response_model=list[CharacterResponse])
@@ -51,6 +58,22 @@ async def create_character(
     return character
 
 
+@router.get("/portrait-models")
+async def list_portrait_models(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Return available image model IDs from the user's runtime config."""
+    config = await runtime_ai_config_service.get_effective_config(db, current_user.id)
+    api_key = config.get("api_key")
+    if not api_key:
+        raise HTTPException(status_code=400, detail="请先在设置中心配置 API Key。")
+
+    base_url = config.get("base_url")
+    models = await portrait_service.get_available_models(api_key=api_key, base_url=base_url)
+    return {"models": models}
+
+
 @router.get("/{character_id}", response_model=CharacterResponse)
 async def get_character(
     character_id: str,
@@ -83,6 +106,48 @@ async def update_character(
     for key, value in data.model_dump(exclude_unset=True).items():
         setattr(character, key, value)
 
+    await db.commit()
+    await db.refresh(character)
+    return character
+
+
+@router.post("/{character_id}/portrait", response_model=CharacterResponse)
+async def generate_portrait(
+    character_id: str,
+    body: PortraitRequest = PortraitRequest(),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    result = await db.execute(
+        select(Character).where(Character.id == character_id, Character.owner_id == current_user.id)
+    )
+    character = result.scalar_one_or_none()
+    if not character:
+        raise HTTPException(status_code=404, detail="Character not found")
+
+    # Get API key from runtime config
+    config = await runtime_ai_config_service.get_effective_config(db, current_user.id)
+    api_key = config.get("api_key")
+    if not api_key:
+        raise HTTPException(status_code=400, detail="请先在设置中心配置 API Key 后再生成形象。")
+
+    base_url = config.get("base_url")
+
+    try:
+        portrait_url = await portrait_service.generate(
+            character_id=character.id,
+            character_name=character.name,
+            character_description=character.description,
+            character_personality=character.personality,
+            character_profile=character.profile,
+            api_key=api_key,
+            base_url=base_url,
+            model_id=body.model_id,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"形象生成失败：{e}")
+
+    character.portrait_url = portrait_url
     await db.commit()
     await db.refresh(character)
     return character

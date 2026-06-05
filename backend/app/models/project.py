@@ -129,6 +129,7 @@ class Character(Base):
     background: Mapped[str | None] = mapped_column(Text)
     relationship_notes: Mapped[str | None] = mapped_column(Text)
     tags: Mapped[str | None] = mapped_column(String(500))
+    portrait_url: Mapped[str | None] = mapped_column(String(500))
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 
