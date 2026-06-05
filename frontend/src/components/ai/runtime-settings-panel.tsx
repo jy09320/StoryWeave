@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { Bot, KeyRound, LoaderCircle, Pencil, Plus, RefreshCw, Server, Sparkles, Star, Trash2, X } from 'lucide-react'
+import { LoaderCircle, Pencil, Plus, Server, Star, Trash2, X } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
@@ -69,6 +69,19 @@ function ProviderLabel({ provider }: { provider: string }) {
   const option = MODEL_PROVIDER_OPTIONS.find((o) => o.value === provider)
   return <>{option?.label ?? provider}</>
 }
+
+type ModelCategory = '大语言模型' | '视觉模型' | '全模态模型' | '向量模型' | '其他'
+
+function classifyModel(modelId: string): ModelCategory {
+  const id = modelId.toLowerCase()
+  if (/text-embedding|embedding/.test(id)) return '向量模型'
+  if (/qwen.*vl|vl.*qwen|vision/.test(id)) return '视觉模型'
+  if (/audio|speech|tts|asr|cosyvoice|sambert|paraformer/.test(id)) return '全模态模型'
+  if (/qwen|gpt|deepseek|llama|mistral|gemini|claude|baichuan|yi-|internlm|chatglm|glm/.test(id)) return '大语言模型'
+  return '其他'
+}
+
+const CATEGORY_ORDER: ModelCategory[] = ['大语言模型', '视觉模型', '全模态模型', '向量模型', '其他']
 
 export function RuntimeSettingsPanel() {
   const runtimeSettingsQuery = useQuery({
@@ -525,24 +538,38 @@ export function RuntimeSettingsPanel() {
 
                 {availableModels.length > 0 ? (
                   <div className="rounded-2xl border border-border bg-muted/35 p-4">
-                    <div className="mb-3 text-sm font-medium text-foreground">当前可用模型</div>
-                    <div className="flex flex-wrap gap-2">
-                      {availableModels.map((model) => {
-                        const selected = model.id === form.modelId
+                    <div className="mb-3 text-sm font-medium text-foreground">
+                      当前可用模型
+                      <span className="ml-2 text-xs font-normal text-muted-foreground">共 {availableModels.length} 个</span>
+                    </div>
+                    <div className="space-y-3">
+                      {CATEGORY_ORDER.map((category) => {
+                        const models = availableModels.filter((m) => classifyModel(m.id) === category)
+                        if (models.length === 0) return null
                         return (
-                          <button
-                            key={model.id}
-                            type="button"
-                            className={[
-                              'rounded-full border px-3 py-1.5 text-xs transition',
-                              selected
-                                ? 'border-primary bg-primary/15 text-primary'
-                                : 'border-border bg-background text-muted-foreground hover:border-primary/25 hover:text-foreground',
-                            ].join(' ')}
-                            onClick={() => setForm((prev) => ({ ...prev, modelId: model.id }))}
-                          >
-                            {model.id}
-                          </button>
+                          <div key={category}>
+                            <div className="mb-1.5 text-xs font-medium text-muted-foreground/70">{category}</div>
+                            <div className="flex flex-wrap gap-2">
+                              {models.map((model) => {
+                                const selected = model.id === form.modelId
+                                return (
+                                  <button
+                                    key={model.id}
+                                    type="button"
+                                    className={[
+                                      'rounded-full border px-3 py-1.5 text-xs transition',
+                                      selected
+                                        ? 'border-primary bg-primary/15 text-primary'
+                                        : 'border-border bg-background text-muted-foreground hover:border-primary/25 hover:text-foreground',
+                                    ].join(' ')}
+                                    onClick={() => setForm((prev) => ({ ...prev, modelId: model.id }))}
+                                  >
+                                    {model.id}
+                                  </button>
+                                )
+                              })}
+                            </div>
+                          </div>
                         )
                       })}
                     </div>
@@ -563,7 +590,7 @@ export function RuntimeSettingsPanel() {
         ) : null}
       </div>
 
-      {/* Right: active config + capabilities + instructions */}
+      {/* Right: active config + capabilities */}
       <div className="space-y-4">
         <Card className="border border-border bg-card/95 shadow-[0_16px_36px_rgba(148,163,184,0.16)]">
           <CardHeader>
@@ -582,6 +609,9 @@ export function RuntimeSettingsPanel() {
                 {capabilityMutation.isPending ? '检测中...' : '检测能力'}
               </Button>
             </div>
+            <CardDescription>
+              兼容性检测的是当前已生效的运行时配置，不代表所有网关具备同等兼容性。
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3 text-sm text-foreground/85">
             {activeConfig ? (
@@ -603,63 +633,22 @@ export function RuntimeSettingsPanel() {
               </div>
             )}
             {!activeConfig?.api_key_masked ? <div className="text-xs text-amber-300">请先保存可用的 API Key，再进行能力检测。</div> : null}
-          </CardContent>
-        </Card>
 
-        <Card className="border border-border bg-card/95 shadow-[0_16px_36px_rgba(148,163,184,0.16)]">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-lg text-foreground">
-              <Sparkles className="size-4 text-primary" />
-              兼容性检测
-            </CardTitle>
-            <CardDescription>
-              检测的是当前已生效的运行时配置，不代表所有国产网关都具备同等兼容性。
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
             {capabilityResult ? (
-              <>
-                <div className="rounded-2xl border border-border bg-muted/35 p-4 text-xs leading-5 text-muted-foreground">
+              <div className="space-y-2 pt-1">
+                <div className="text-xs text-muted-foreground">
                   已检测 {capabilityResult.provider} / {capabilityResult.model_id}
-                  <span className="ml-2">时间：{new Date(capabilityResult.checked_at).toLocaleString('zh-CN')}</span>
+                  <span className="ml-2">{new Date(capabilityResult.checked_at).toLocaleString('zh-CN')}</span>
                 </div>
                 <CapabilityRow label="文本生成" item={capabilityResult.text_generation} />
                 <CapabilityRow label="结构化助手" item={capabilityResult.structured_output} />
                 <CapabilityRow label="Tool Calling" item={capabilityResult.tool_calling} />
-              </>
+              </div>
             ) : (
               <div className="rounded-2xl border border-dashed border-border bg-muted/20 p-4 text-sm leading-6 text-muted-foreground">
-                保存好运行时配置后，执行一次能力检测，就能看到这套模型配置是否适合文本生成和结构化助手。
+                保存配置后点击「检测能力」，可验证该模型是否支持文本生成与结构化输出。
               </div>
             )}
-          </CardContent>
-        </Card>
-
-        <Card className="border border-border bg-card/95 shadow-[0_16px_36px_rgba(148,163,184,0.16)]">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-lg text-foreground">
-              <Sparkles className="size-4 text-primary" />
-              使用说明
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3 text-sm leading-6 text-foreground/85">
-            <div className="rounded-2xl border border-border bg-muted/35 p-4">
-              可以配置多套不同平台的 API（OpenAI、Anthropic、Deepseek 等兼容网关），点击列表项即可切换活跃配置。
-            </div>
-            <div className="rounded-2xl border border-border bg-muted/35 p-4">
-              <div className="flex items-center gap-2 text-foreground">
-                <Bot className="size-4 text-primary" />
-                先刷新模型列表，再保存默认模型。
-              </div>
-              <div className="mt-2 flex items-center gap-2 text-muted-foreground">
-                <KeyRound className="size-4" />
-                修改 API Key 后会立即影响后端新发起的 AI 请求。
-              </div>
-              <div className="mt-2 flex items-center gap-2 text-muted-foreground">
-                <RefreshCw className="size-4" />
-                若外部服务变更模型清单，回到这里刷新即可。
-              </div>
-            </div>
           </CardContent>
         </Card>
       </div>

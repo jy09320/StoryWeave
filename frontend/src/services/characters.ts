@@ -31,6 +31,16 @@ export async function deleteCharacter(characterId: string) {
   return characterId
 }
 
+export async function generatePortrait(characterId: string, modelId?: string): Promise<Character> {
+  const { data } = await apiClient.post<Character>(`/characters/${characterId}/portrait`, { model_id: modelId ?? null })
+  return data
+}
+
+export async function listPortraitModels(): Promise<string[]> {
+  const { data } = await apiClient.get<{ models: string[] }>('/characters/portrait-models')
+  return data.models
+}
+
 // ---------------------------------------------------------------------------
 // Character Chat Sessions
 // ---------------------------------------------------------------------------

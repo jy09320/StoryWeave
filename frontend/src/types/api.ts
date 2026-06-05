@@ -56,6 +56,7 @@ export interface Character {
   background: string | null
   relationship_notes: string | null
   tags: string | null
+  portrait_url: string | null
   created_at: string
   updated_at: string
 }

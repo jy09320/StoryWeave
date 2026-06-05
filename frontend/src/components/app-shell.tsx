@@ -9,6 +9,7 @@ import {
   ChevronDown,
   ChevronRight,
   Home,
+  Library,
   LoaderCircle,
   LogOut,
   Maximize2,
@@ -20,7 +21,6 @@ import {
   SendHorizontal,
   Settings2,
   Sparkles,
-  Users2,
 } from 'lucide-react'
 import logoUrl from '@/assets/logo.png'
 import { Link, NavLink, Outlet, useLocation, useNavigate, useParams } from 'react-router-dom'
@@ -49,7 +49,7 @@ import { useAuth } from '@/contexts/auth-context'
 
 const primaryNavItems = [
   { to: '/workspace', label: '首页', icon: Home, end: true },
-  { to: '/characters', label: '角色库', icon: Users2, end: false },
+  { to: '/assets', label: '我的资产', icon: Library, end: false },
   { to: '/ai-toolbox', label: '模板广场', icon: Sparkles, end: false },
   { to: '/settings', label: '设置', icon: Settings2, end: false },
 ]
@@ -2299,10 +2299,10 @@ export function AppShell() {
 
           <main
             className={clsx(
-              'min-h-0 flex-1 px-4 md:px-5',
-              isAIWorkspaceRoute || location.pathname.endsWith('/graph')
-                ? 'flex flex-col overflow-hidden py-4'
-                : 'overflow-y-auto py-5',
+              'min-h-0 flex-1',
+              isAIWorkspaceRoute || location.pathname.endsWith('/graph') || location.pathname.startsWith('/assets')
+                ? 'flex flex-col overflow-hidden'
+                : 'overflow-y-auto px-4 py-5 md:px-5',
             )}
           >
             <Outlet />

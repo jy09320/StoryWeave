@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useParams } from 'react-router-dom'import { LoaderCircle, MessageSquare, Plus, Send, Sparkles, Trash2 } from 'lucide-react'
+import { useParams } from 'react-router-dom'
+import { LoaderCircle, MessageSquare, Plus, Send, Sparkles, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { EmptyState } from '@/components/empty-state'
