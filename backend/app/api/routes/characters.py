@@ -156,7 +156,7 @@ async def enhance_description(
             owner_id=current_user.id,
         )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"AI 增强失败：{e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
     return {
         "enhanced_description": enhanced_description,
