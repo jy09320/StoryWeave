@@ -350,7 +350,7 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
   const loadingFallback = !isEditorReady ? (
     <div
         className={cn(
-          'min-h-[560px] rounded-[24px] border border-border/90 bg-card px-8 py-8 text-sm text-muted-foreground shadow-sm',
+          'min-h-[560px] rounded-xl border border-border/90 bg-card px-8 py-8 text-sm text-muted-foreground shadow-sm',
           className,
         )}
       >
@@ -493,7 +493,7 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
     <div
       ref={containerRef}
       className={cn(
-        'relative rounded-[24px] border border-border bg-card shadow-sm transition-[border-color,box-shadow] duration-200 focus-within:border-primary/30 focus-within:shadow-[0_0_0_3px_rgba(16,185,129,0.08),0_2px_6px_rgba(16,34,53,0.06)]',
+        'relative rounded-xl border border-border bg-card shadow-sm transition-[border-color,box-shadow] duration-200 focus-within:border-primary/30 focus-within:shadow-[0_0_0_2px_rgba(16,185,129,0.1)]',
         className,
       )}
       onMouseMove={(event) => {
@@ -532,7 +532,7 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
     >
       {bubbleState.visible ? (
         <div
-          className="absolute z-20 -translate-x-1/2 rounded-2xl border border-border bg-background/95 p-1 shadow-xl shadow-slate-200/70 backdrop-blur"
+          className="absolute z-20 -translate-x-1/2 rounded-xl border border-border bg-background/95 p-1 shadow-[0_1px_3px_rgba(0,0,0,0.04)] backdrop-blur"
           style={{ top: bubbleState.top, left: bubbleState.left }}
         >
           <div className="flex items-center gap-1">
@@ -559,7 +559,7 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
 
       {mentionState.visible && filteredMentionItems.length > 0 ? (
         <div
-          className="absolute z-20 w-64 rounded-2xl border border-border bg-background/98 p-1 shadow-xl shadow-slate-200/70 backdrop-blur"
+          className="absolute z-20 w-64 rounded-xl border border-border bg-background/98 p-1 shadow-[0_1px_3px_rgba(0,0,0,0.04)] backdrop-blur"
           style={{ top: mentionState.top, left: mentionState.left }}
         >
           {filteredMentionItems.map((item) => (
@@ -590,7 +590,7 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
 
       {slashState.visible && filteredSlashCommands.length > 0 ? (
         <div
-          className="absolute z-20 w-72 rounded-2xl border border-border bg-background/98 p-1 shadow-xl shadow-slate-200/70 backdrop-blur"
+          className="absolute z-20 w-72 rounded-xl border border-border bg-background/98 p-1 shadow-[0_1px_3px_rgba(0,0,0,0.04)] backdrop-blur"
           style={{ top: slashState.top, left: slashState.left }}
         >
           {filteredSlashCommands.map((command) => (
@@ -619,7 +619,7 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
 
       {hoveredMention.visible ? (
         <div
-          className="absolute z-20 w-72 rounded-2xl border border-border bg-background/98 p-3 shadow-xl shadow-slate-200/70 backdrop-blur"
+          className="absolute z-20 w-72 rounded-xl border border-border bg-background/98 p-3 shadow-[0_1px_3px_rgba(0,0,0,0.04)] backdrop-blur"
           style={{ top: hoveredMention.top, left: hoveredMention.left }}
         >
           <div className="text-sm font-medium text-foreground">{hoveredMention.label}</div>

@@ -1048,11 +1048,11 @@ function CharacterChatPanel({ character }: { character: Character }) {
           {messages.map((msg, i) => (
             <div key={`${selectedSessionId}-${i}`} className={msg.role === 'user' ? 'flex justify-end' : 'flex justify-start'}>
               {msg.role === 'user' ? (
-                <div className="max-w-[85%] rounded-2xl rounded-br-md bg-foreground/8 px-4 py-2.5 text-sm text-foreground">
+                <div className="max-w-[85%] rounded-xl rounded-br-md bg-foreground/8 px-4 py-2.5 text-sm text-foreground">
                   {msg.content}
                 </div>
               ) : (
-                <div className="max-w-[90%] rounded-2xl rounded-bl-md border border-border bg-card px-4 py-3">
+                <div className="max-w-[90%] rounded-xl rounded-bl-md border border-border bg-card px-4 py-3">
                   <div className="mb-2 flex items-center gap-1.5">
                     <Sparkle className="size-3 text-primary" />
                     <span className="text-[11px] font-medium text-primary/70">{character.name}</span>
@@ -1066,7 +1066,7 @@ function CharacterChatPanel({ character }: { character: Character }) {
           {/* Streaming content */}
           {isStreaming && streamingContent ? (
             <div className="flex justify-start">
-              <div className="max-w-[90%] rounded-2xl rounded-bl-md border border-border bg-card px-4 py-3">
+              <div className="max-w-[90%] rounded-xl rounded-bl-md border border-border bg-card px-4 py-3">
                 <div className="mb-2 flex items-center gap-1.5">
                   <Sparkle className="size-3 text-primary" />
                   <span className="text-[11px] font-medium text-primary/70">{character.name}</span>
@@ -1079,7 +1079,7 @@ function CharacterChatPanel({ character }: { character: Character }) {
           {/* Loading indicator */}
           {isStreaming && !streamingContent ? (
             <div className="flex justify-start">
-              <div className="flex items-center gap-2 rounded-2xl border border-border bg-card px-4 py-3 text-sm text-muted-foreground">
+              <div className="flex items-center gap-2 rounded-xl border border-border bg-card px-4 py-3 text-sm text-muted-foreground">
                 <Spinner className="size-3.5 animate-spin text-primary" />
                 {character.name}正在思考…
               </div>
@@ -1089,7 +1089,7 @@ function CharacterChatPanel({ character }: { character: Character }) {
           {/* Error */}
           {error ? (
             <div className="flex justify-start">
-              <div className="max-w-[90%] rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+              <div className="max-w-[90%] rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
                 {error}
               </div>
             </div>

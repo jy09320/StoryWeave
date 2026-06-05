@@ -1062,7 +1062,7 @@ ${nextText}` : nextText
   return (
     <div className="space-y-5">
       <section className="space-y-5">
-        <Card className="overflow-hidden border border-border bg-background shadow-[0_2px_12px_rgba(80,60,20,0.06)]">
+        <Card className="overflow-hidden border border-border bg-background shadow-[0_1px_3px_rgba(0,0,0,0.03)]">
           <CardHeader className="gap-5 border-b border-border bg-sidebar/80 px-6 py-5">
             <div className="space-y-4">
               <div className="space-y-4">
@@ -1098,7 +1098,7 @@ ${nextText}` : nextText
                           />
                         </button>
                         {isStatusMenuOpen ? (
-                          <div className="absolute left-0 top-[calc(100%+10px)] z-20 min-w-[220px] rounded-2xl border border-border bg-popover/98 p-2 text-sm text-popover-foreground shadow-[0_22px_54px_rgba(15,23,42,0.18)] backdrop-blur">
+                          <div className="absolute left-0 top-[calc(100%+10px)] z-20 min-w-[220px] rounded-xl border border-border bg-popover/98 p-2 text-sm text-popover-foreground shadow-[0_1px_3px_rgba(0,0,0,0.04)] backdrop-blur">
                             <div className="px-2 pb-1 pt-1 text-[11px] tracking-[0.18em] text-muted-foreground">切换章节状态</div>
                             <div className="space-y-1">
                               {CHAPTER_STATUS_OPTIONS.map((option) => {
@@ -1196,7 +1196,7 @@ ${nextText}` : nextText
                 value={activeForm.notes}
                 onChange={handleNotesChange}
                 rows={5}
-                className="min-h-[132px] rounded-2xl border-border bg-background text-foreground placeholder:text-muted-foreground"
+                className="min-h-[132px] rounded-xl border-border bg-background text-foreground placeholder:text-muted-foreground"
                 placeholder="例如：这章节奏放慢，重点写两人之间的试探；回收第 3 章密信伏笔。"
               />
             </section>
@@ -1370,7 +1370,7 @@ ${nextText}` : nextText
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-3">
-                    <div className="max-h-72 overflow-y-auto whitespace-pre-wrap rounded-2xl border border-border bg-muted/45 p-4 text-sm leading-7 text-foreground/85">
+                    <div className="max-h-72 overflow-y-auto whitespace-pre-wrap rounded-xl border border-border bg-muted/45 p-4 text-sm leading-7 text-foreground/85">
                       {version.plain_text || version.content}
                     </div>
                     <div className="flex justify-end">
@@ -1398,7 +1398,7 @@ ${nextText}` : nextText
           {bubbleDialog ? (
             <>
               <div className="min-h-0 flex-1 space-y-4 overflow-y-auto pr-1">
-              <div className="rounded-2xl border border-border bg-muted/45 px-4 py-3">
+              <div className="rounded-xl border border-border bg-muted/45 px-4 py-3">
                 <div className="mb-1 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">选中文字</div>
                 <div className="whitespace-pre-wrap text-sm leading-6 text-foreground/85">{bubbleDialog.selectedText}</div>
               </div>
@@ -1415,7 +1415,7 @@ ${nextText}` : nextText
               </div>
 
               {bubbleGen.result.trim() ? (
-                <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/8 px-4 py-3">
+                <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/8 px-4 py-3">
                   <div className="mb-1 text-[11px] uppercase tracking-[0.18em] text-emerald-600">生成结果</div>
                   <div className="whitespace-pre-wrap text-sm leading-6 text-foreground/85">{bubbleGen.result}</div>
                 </div>

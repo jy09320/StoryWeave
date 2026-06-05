@@ -244,7 +244,7 @@ export function ProjectAssetAIDialog({
         <form className="grid max-h-[85vh] gap-0 lg:grid-cols-[minmax(0,1.15fr)_380px]" onSubmit={onSubmit}>
           <div className="border-b border-border lg:border-r lg:border-b-0">
             <div className="border-b border-border px-6 py-4">
-              <div className="rounded-2xl border border-dashed border-border/80 bg-muted/30 px-4 py-4 text-sm text-muted-foreground">
+              <div className="rounded-xl border border-dashed border-border/80 bg-muted/30 px-4 py-4 text-sm text-muted-foreground">
                 <div className="flex items-center gap-2 font-medium text-foreground">
                   <FileArrowUp className={`size-4 ${meta.accentClassName}`} />
                   文件解析入口预留
@@ -271,7 +271,7 @@ export function ProjectAssetAIDialog({
             <ScrollArea className="h-[calc(85vh-265px)]">
               <div className="space-y-4 px-6 py-5">
                 {resolvedMessages.map((message) => (
-                  <div key={message.id} className={`rounded-2xl border px-4 py-4 text-sm leading-6 ${messageTypeClassName[message.role]}`}>
+                  <div key={message.id} className={`rounded-xl border px-4 py-4 text-sm leading-6 ${messageTypeClassName[message.role]}`}>
                     <div className="flex flex-wrap items-center gap-2">
                       <Badge variant="outline">{messageRoleLabel[message.role]}</Badge>
                       {message.title ? <span className="font-medium text-foreground">{message.title}</span> : null}
@@ -319,7 +319,7 @@ export function ProjectAssetAIDialog({
             <ScrollArea className="flex-1">
               <div className="space-y-4 px-6 py-5">
                 {assetType === 'world_setting' && latestWorldResult ? (
-                  <div className="rounded-2xl border border-sky-500/25 bg-sky-500/8 px-4 py-4 text-sm leading-6 text-foreground/85">
+                  <div className="rounded-xl border border-sky-500/25 bg-sky-500/8 px-4 py-4 text-sm leading-6 text-foreground/85">
                     <div className="flex items-center gap-2 font-medium text-foreground">
                       <Sparkle className="size-4 text-sky-500" />
                       最近一次世界观分析结果
@@ -339,7 +339,7 @@ export function ProjectAssetAIDialog({
                 ) : null}
 
                 {assetType === 'project_character' && latestCharacterResult ? (
-                  <div className="rounded-2xl border border-amber-500/25 bg-amber-500/10 px-4 py-4 text-sm leading-6 text-foreground/85">
+                  <div className="rounded-xl border border-amber-500/25 bg-amber-500/10 px-4 py-4 text-sm leading-6 text-foreground/85">
                     <div className="font-medium text-foreground">最近一次角色分析摘要</div>
                     <div className="mt-2 text-muted-foreground">
                       已识别 {latestCharacterResult.detected_characters.length} 个角色，生成 {latestCharacterResult.suggested_actions.length} 条建议动作。
@@ -354,7 +354,7 @@ export function ProjectAssetAIDialog({
                   </div>
                 ) : null}
 
-                <div className="rounded-2xl border border-border bg-muted/20 px-4 py-4 text-sm leading-6 text-foreground/85">
+                <div className="rounded-xl border border-border bg-muted/20 px-4 py-4 text-sm leading-6 text-foreground/85">
                   <div className="font-medium text-foreground">结构化预览</div>
                   <div className="mt-2 space-y-2 text-muted-foreground">
                     {assetType === 'world_setting' && worldPreviewLines.length

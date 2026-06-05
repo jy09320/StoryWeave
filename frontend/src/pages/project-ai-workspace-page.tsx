@@ -499,7 +499,7 @@ export function ProjectAIWorkspacePage() {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <section className="grid min-h-0 flex-1 overflow-hidden rounded-2xl border border-border bg-card/95 shadow-[0_16px_36px_rgba(148,163,184,0.12)] xl:grid-cols-[300px_minmax(0,1fr)_360px]">
+      <section className="grid min-h-0 flex-1 overflow-hidden rounded-xl border border-border bg-card/95 shadow-[0_1px_3px_rgba(0,0,0,0.03)] xl:grid-cols-[300px_minmax(0,1fr)_360px]">
         <aside className="min-h-0 border-b border-border bg-muted/15 xl:border-b-0 xl:border-r">
           <Card className="flex h-full min-h-0 flex-col rounded-none border-0 bg-transparent shadow-none">
             <CardHeader>
@@ -966,7 +966,7 @@ function StoryQAPanel({
           {state.messages.map((msg) => {
             if (msg.role === 'system') {
               return (
-                <div key={msg.id} className="flex items-start gap-3 rounded-2xl border border-border bg-muted/20 p-4">
+                <div key={msg.id} className="flex items-start gap-3 rounded-xl border border-border bg-muted/20 p-4">
                   <MagnifyingGlass className="mt-0.5 size-4 shrink-0 text-primary" />
                   <p className="whitespace-pre-line text-sm leading-6 text-muted-foreground">{msg.content}</p>
                 </div>
@@ -975,7 +975,7 @@ function StoryQAPanel({
             if (msg.role === 'user') {
               return (
                 <div key={msg.id} className="flex justify-end">
-                  <div className="max-w-[85%] rounded-2xl rounded-br-md bg-foreground/8 px-4 py-2.5 text-sm text-foreground">
+                  <div className="max-w-[85%] rounded-xl rounded-br-md bg-foreground/8 px-4 py-2.5 text-sm text-foreground">
                     {msg.content}
                   </div>
                 </div>
@@ -983,7 +983,7 @@ function StoryQAPanel({
             }
             return (
               <div key={msg.id} className="flex justify-start">
-                <div className="max-w-[90%] rounded-2xl rounded-bl-md border border-border bg-card px-4 py-3">
+                <div className="max-w-[90%] rounded-xl rounded-bl-md border border-border bg-card px-4 py-3">
                   <div className="mb-2 flex items-center gap-1.5">
                     <Sparkle className="size-3 text-primary" />
                     <span className="text-[11px] font-medium text-primary/70">偶记</span>
@@ -995,7 +995,7 @@ function StoryQAPanel({
           })}
           {isLoading ? (
             <div className="flex justify-start">
-              <div className="flex items-center gap-2 rounded-2xl border border-border bg-card px-4 py-3 text-sm text-muted-foreground">
+              <div className="flex items-center gap-2 rounded-xl border border-border bg-card px-4 py-3 text-sm text-muted-foreground">
                 <Spinner className="size-3.5 animate-spin text-primary" />
                 正在查询故事记忆…
               </div>
@@ -1003,7 +1003,7 @@ function StoryQAPanel({
           ) : null}
           {state.taskStatus === 'failed' && state.lastError ? (
             <div className="flex justify-start">
-              <div className="max-w-[90%] rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+              <div className="max-w-[90%] rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
                 {state.lastError}
               </div>
             </div>

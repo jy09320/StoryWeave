@@ -358,7 +358,7 @@ export function ProjectWorldPage() {
             </CardHeader>
             <CardContent className="space-y-3">
               {projectCharacters.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-border bg-muted/35 px-4 py-5 text-sm leading-6 text-muted-foreground">
+                <div className="rounded-xl border border-dashed border-border bg-muted/35 px-4 py-5 text-sm leading-6 text-muted-foreground">
                   当前项目还没有绑定角色。
                 </div>
               ) : (
@@ -392,7 +392,7 @@ function AIDraftInfo({ label, value }: { label: string; value: string | null | u
 
 function SummaryBlock({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl border border-border bg-muted/35 p-4">
+    <div className="rounded-xl border border-border bg-muted/35 p-4">
       <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">{label}</div>
       <p className="mt-2 text-sm leading-6 text-foreground">{value}</p>
     </div>
@@ -401,7 +401,7 @@ function SummaryBlock({ label, value }: { label: string; value: string }) {
 
 function ProjectCharacterCard({ item }: { item: ProjectCharacter }) {
   return (
-    <div className="rounded-2xl border border-border bg-muted/35 p-4">
+    <div className="rounded-xl border border-border bg-muted/35 p-4">
       <div className="flex flex-wrap items-center gap-2">
         <div className="text-sm font-medium text-foreground">{item.character.name}</div>
         {item.role_label ? (

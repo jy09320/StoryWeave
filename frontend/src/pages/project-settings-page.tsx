@@ -323,7 +323,7 @@ export function ProjectSettingsPage() {
         </div>
       </div>
 
-      <section className="rounded-2xl border border-border bg-card px-5 py-5">
+      <section className="rounded-xl border border-border bg-card px-5 py-5">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <h2 className="text-base font-semibold text-foreground">AI 项目草案</h2>
@@ -402,7 +402,7 @@ export function ProjectSettingsPage() {
       </section>
 
       <form className="space-y-6" onSubmit={handleSave}>
-        <section className="rounded-2xl border border-border bg-card px-5 py-5">
+        <section className="rounded-xl border border-border bg-card px-5 py-5">
           <div className="mb-4">
             <h2 className="text-base font-semibold text-foreground">基础信息</h2>
             <p className="mt-1 text-sm text-muted-foreground">维护项目名称、简介和基础属性。</p>
@@ -477,7 +477,7 @@ export function ProjectSettingsPage() {
           </div>
         </section>
 
-        <section className="rounded-2xl border border-border bg-card px-5 py-5">
+        <section className="rounded-xl border border-border bg-card px-5 py-5">
           <div className="mb-4">
             <h2 className="text-base font-semibold text-foreground">创作定位</h2>
             <p className="mt-1 text-sm text-muted-foreground">明确频道、题材和标签，后续 AI 与工作流都围绕这里展开。</p>
@@ -543,7 +543,7 @@ export function ProjectSettingsPage() {
           </div>
         </section>
 
-        <section className="rounded-2xl border border-border bg-card px-5 py-5">
+        <section className="rounded-xl border border-border bg-card px-5 py-5">
           <div className="mb-4">
             <h2 className="text-base font-semibold text-foreground">故事提要</h2>
             <p className="mt-1 text-sm text-muted-foreground">一句话描述这个项目最核心的设定或冲突。</p>

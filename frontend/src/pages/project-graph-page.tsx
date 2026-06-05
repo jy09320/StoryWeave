@@ -212,7 +212,7 @@ function NodeDetailPanel({
   )
 
   return (
-    <div className="absolute right-4 top-4 z-30 w-[340px] max-h-[calc(100vh-12rem)] overflow-y-auto rounded-2xl border border-border bg-card/95 shadow-xl backdrop-blur">
+    <div className="absolute right-4 top-4 z-30 w-[340px] max-h-[calc(100vh-12rem)] overflow-y-auto rounded-xl border border-border bg-card/95 shadow-[0_1px_3px_rgba(0,0,0,0.04)] backdrop-blur">
       <div className="flex items-start justify-between gap-3 p-4 pb-3">
         <div className="flex items-center gap-2.5 min-w-0">
           <span
@@ -605,7 +605,7 @@ function ForceGraph({
       ref={svgRef}
       width={width}
       height={height}
-      className="rounded-2xl border border-border bg-card/40"
+      className="rounded-xl border border-border bg-card/40"
       style={{ background: 'radial-gradient(circle at 50% 50%, hsl(var(--card) / 0.6), hsl(var(--card) / 0.2))' }}
     />
   )

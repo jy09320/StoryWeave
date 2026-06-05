@@ -225,7 +225,7 @@ function MessageBubble({ message }: { message: ProjectAssetAIMessage }) {
   if (message.role === 'user') {
     return (
       <div className="flex justify-end">
-        <div className="max-w-[85%] rounded-2xl rounded-tr-sm border border-primary/20 bg-primary/15 px-4 py-2.5">
+        <div className="max-w-[85%] rounded-xl rounded-tr-sm border border-primary/20 bg-primary/15 px-4 py-2.5">
           {message.title ? (
             <div className="mb-1 text-[10px] font-medium text-primary/70">{message.title}</div>
           ) : null}
@@ -245,7 +245,7 @@ function MessageBubble({ message }: { message: ProjectAssetAIMessage }) {
         {message.title ? (
           <div className="mb-1 text-xs font-medium text-foreground">{message.title}</div>
         ) : null}
-        <div className={`rounded-2xl rounded-tl-sm border px-4 py-2.5 ${messageLeftStyle[role]}`}>
+        <div className={`rounded-xl rounded-tl-sm border px-4 py-2.5 ${messageLeftStyle[role]}`}>
           <p className="whitespace-pre-wrap text-sm leading-6 text-muted-foreground">{message.content}</p>
         </div>
       </div>
@@ -261,7 +261,7 @@ function StreamingBubble({ text, accentClassName }: { text: string; accentClassN
       </div>
       <div className="min-w-0 flex-1">
         <div className="mb-1 text-xs font-medium text-foreground">AI 助手</div>
-        <div className="rounded-2xl rounded-tl-sm border border-border bg-muted/40 px-4 py-2.5">
+        <div className="rounded-xl rounded-tl-sm border border-border bg-muted/40 px-4 py-2.5">
           {text ? (
             <p className="whitespace-pre-wrap text-sm leading-6 text-muted-foreground">{text}<span className="ml-0.5 inline-block h-3.5 w-px animate-pulse bg-foreground/50" /></p>
           ) : (
@@ -594,7 +594,7 @@ export function ProjectAssetAIPanel({
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-border bg-card/95">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-border bg-card/95">
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-2.5">
         <div className="flex items-center gap-2">

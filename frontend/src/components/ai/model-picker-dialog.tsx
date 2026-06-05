@@ -59,7 +59,7 @@ export function ModelPickerDialog({
         className="absolute inset-0 bg-black/55 backdrop-blur-sm"
         onClick={() => onOpenChange(false)}
       />
-      <div className="absolute left-1/2 top-1/2 z-[81] grid w-[min(720px,calc(100vw-32px))] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-3xl border border-border bg-popover shadow-2xl shadow-slate-300/40">
+      <div className="absolute left-1/2 top-1/2 z-[81] grid w-[min(720px,calc(100vw-32px))] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-xl border border-border bg-popover shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
         <div className="flex items-start justify-between gap-4 border-b border-border px-6 py-5">
           <div>
             <div className="text-lg font-semibold text-foreground">选择模型</div>
@@ -101,7 +101,7 @@ export function ModelPickerDialog({
             </div>
           ) : null}
 
-          <ScrollArea className="h-[360px] rounded-2xl border border-border bg-muted/20">
+          <ScrollArea className="h-[360px] rounded-xl border border-border bg-muted/20">
             <div className="space-y-2 p-3">
               {availableModels.length > 0 ? (
                 availableModels.map((model) => {

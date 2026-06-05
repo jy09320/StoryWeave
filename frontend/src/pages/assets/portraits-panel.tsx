@@ -19,7 +19,7 @@ function PortraitCard({ character }: { character: Character }) {
   const [loaded, setLoaded] = useState(false)
 
   return (
-    <div className="group relative overflow-hidden rounded-xl border border-border bg-muted transition-shadow hover:shadow-md">
+    <div className="group relative overflow-hidden rounded-xl border border-border bg-muted transition-shadow hover:shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
       <div className="aspect-square overflow-hidden bg-muted">
         {character.portrait_url ? (
           <img

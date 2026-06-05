@@ -507,7 +507,7 @@ export function AIToolboxPage() {
 
   return (
     <div className="space-y-6 pb-10">
-      <section className="rounded-2xl border border-border bg-card/95 p-6 shadow-sm">
+      <section className="rounded-xl border border-border bg-card/95 p-6 shadow-sm">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-3xl space-y-3">
             <div className="flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-primary/80">
@@ -615,7 +615,7 @@ export function AIToolboxPage() {
                     key={template.id}
                     type="button"
                     onClick={() => setSelectedTemplateId(template.id)}
-                    className={`rounded-2xl border p-4 text-left transition ${
+                    className={`rounded-xl border p-4 text-left transition ${
                       isActive
                         ? 'border-primary/30 bg-primary/10 shadow-sm'
                         : 'border-border bg-background/75 hover:bg-muted/35'
@@ -732,7 +732,7 @@ export function AIToolboxPage() {
                     }))
                   }
                   rows={9}
-                  className="min-h-[220px] rounded-2xl border-border bg-background text-foreground placeholder:text-muted-foreground"
+                  className="min-h-[220px] rounded-xl border-border bg-background text-foreground placeholder:text-muted-foreground"
                   placeholder={selectedTemplate.placeholder}
                 />
               </div>
@@ -748,7 +748,7 @@ export function AIToolboxPage() {
                     }))
                   }
                   rows={7}
-                  className="rounded-2xl border-border bg-background text-foreground placeholder:text-muted-foreground"
+                  className="rounded-xl border-border bg-background text-foreground placeholder:text-muted-foreground"
                 />
               </div>
 
@@ -793,7 +793,7 @@ export function AIToolboxPage() {
                 readOnly
                 value={generation.result}
                 rows={16}
-                className="min-h-[320px] rounded-2xl border-border bg-background text-foreground"
+                className="min-h-[320px] rounded-xl border-border bg-background text-foreground"
                 placeholder="运行模板后，生成结果会出现在这里。"
               />
 

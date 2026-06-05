@@ -53,7 +53,7 @@ function capabilityBadgeClassName(status: AIRuntimeCapabilityItem['status']) {
 
 function CapabilityRow({ label, item }: { label: string; item: AIRuntimeCapabilityItem }) {
   return (
-    <div className="rounded-2xl border border-border bg-muted/35 p-4">
+    <div className="rounded-xl border border-border bg-muted/35 p-4">
       <div className="flex items-center justify-between gap-3">
         <div className="text-sm font-medium text-foreground">{label}</div>
         <Badge variant="outline" className={capabilityBadgeClassName(item.status)}>
@@ -338,7 +338,7 @@ export function RuntimeSettingsPanel() {
       {/* Left: config list + form */}
       <div className="space-y-4">
         {/* Config list card */}
-        <Card className="border border-border bg-card/95 shadow-[0_16px_36px_rgba(148,163,184,0.16)]">
+        <Card className="border border-border bg-card/95 shadow-[0_1px_3px_rgba(0,0,0,0.03)]">
           <CardHeader>
             <div className="flex items-center justify-between gap-3">
               <div>
@@ -353,7 +353,7 @@ export function RuntimeSettingsPanel() {
           </CardHeader>
           <CardContent>
             {configs.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-border bg-muted/20 p-8 text-center text-sm text-muted-foreground">
+              <div className="rounded-xl border border-dashed border-border bg-muted/20 p-8 text-center text-sm text-muted-foreground">
                 还没有任何配置，点击「新增配置」创建第一个 API 配置。
               </div>
             ) : (
@@ -365,7 +365,7 @@ export function RuntimeSettingsPanel() {
                     <div
                       key={config.id}
                       className={[
-                        'flex items-center gap-3 rounded-2xl border p-4 transition cursor-pointer',
+                        'flex items-center gap-3 rounded-xl border p-4 transition cursor-pointer',
                         active
                           ? 'border-primary/30 bg-primary/8'
                           : editing
@@ -433,7 +433,7 @@ export function RuntimeSettingsPanel() {
 
         {/* Edit/Create form */}
         {showForm ? (
-          <Card className="border border-border bg-card/95 shadow-[0_16px_36px_rgba(148,163,184,0.16)]">
+          <Card className="border border-border bg-card/95 shadow-[0_1px_3px_rgba(0,0,0,0.03)]">
             <CardHeader>
               <div className="flex items-center justify-between gap-3">
                 <CardTitle className="text-lg text-foreground">
@@ -537,7 +537,7 @@ export function RuntimeSettingsPanel() {
                 </div>
 
                 {availableModels.length > 0 ? (
-                  <div className="rounded-2xl border border-border bg-muted/35 p-4">
+                  <div className="rounded-xl border border-border bg-muted/35 p-4">
                     <div className="mb-3 text-sm font-medium text-foreground">
                       当前可用模型
                       <span className="ml-2 text-xs font-normal text-muted-foreground">共 {availableModels.length} 个</span>
@@ -592,7 +592,7 @@ export function RuntimeSettingsPanel() {
 
       {/* Right: active config + capabilities */}
       <div className="space-y-4">
-        <Card className="border border-border bg-card/95 shadow-[0_16px_36px_rgba(148,163,184,0.16)]">
+        <Card className="border border-border bg-card/95 shadow-[0_1px_3px_rgba(0,0,0,0.03)]">
           <CardHeader>
             <div className="flex items-start justify-between gap-3">
               <CardTitle className="flex items-center gap-2 text-lg text-foreground">
@@ -616,19 +616,19 @@ export function RuntimeSettingsPanel() {
           <CardContent className="space-y-3 text-sm text-foreground/85">
             {activeConfig ? (
               <>
-                <div className="rounded-2xl border border-primary/18 bg-primary/8 p-4">
+                <div className="rounded-xl border border-primary/18 bg-primary/8 p-4">
                   <div>配置名：{activeConfig.name}</div>
                   <div className="mt-2">提供商：<ProviderLabel provider={activeConfig.provider} /></div>
                   <div className="mt-2">默认模型：{activeConfig.model_id}</div>
                   <div className="mt-2">来源：{settings.source === 'database' ? '运行时配置接口' : '环境变量'}</div>
                 </div>
-                <div className="rounded-2xl border border-border bg-muted/35 p-4">
+                <div className="rounded-xl border border-border bg-muted/35 p-4">
                   <div>Base URL：{activeConfig.base_url || '使用默认地址'}</div>
                   <div className="mt-2">Key：{activeConfig.api_key_masked || '未展示'}</div>
                 </div>
               </>
             ) : (
-              <div className="rounded-2xl border border-dashed border-border bg-muted/20 p-4 text-sm text-muted-foreground">
+              <div className="rounded-xl border border-dashed border-border bg-muted/20 p-4 text-sm text-muted-foreground">
                 还没有任何配置。点击「新增配置」创建一个。
               </div>
             )}
@@ -645,7 +645,7 @@ export function RuntimeSettingsPanel() {
                 <CapabilityRow label="Tool Calling" item={capabilityResult.tool_calling} />
               </div>
             ) : (
-              <div className="rounded-2xl border border-dashed border-border bg-muted/20 p-4 text-sm leading-6 text-muted-foreground">
+              <div className="rounded-xl border border-dashed border-border bg-muted/20 p-4 text-sm leading-6 text-muted-foreground">
                 保存配置后点击「检测能力」，可验证该模型是否支持文本生成与结构化输出。
               </div>
             )}
