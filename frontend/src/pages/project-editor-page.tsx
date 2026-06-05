@@ -1062,12 +1062,12 @@ ${nextText}` : nextText
   return (
     <div className="space-y-5">
       <section className="space-y-5">
-        <Card className="overflow-hidden border border-border bg-card/95 shadow-[0_18px_44px_rgba(148,163,184,0.18)]">
-          <CardHeader className="gap-5 border-b border-border bg-background/72 px-6 py-5">
+        <Card className="overflow-hidden border border-border bg-background shadow-[0_2px_12px_rgba(80,60,20,0.06)]">
+          <CardHeader className="gap-5 border-b border-border bg-sidebar/80 px-6 py-5">
             <div className="space-y-4">
               <div className="space-y-4">
                 <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                  <Link to={`/projects/${projectId}`} className="inline-flex items-center gap-1 hover:text-foreground">
+                  <Link to={`/projects/${projectId}`} className="inline-flex items-center gap-1 text-muted-foreground transition hover:text-foreground">
                     <ChevronLeft className="size-4" />
                     返回工作台
                   </Link>

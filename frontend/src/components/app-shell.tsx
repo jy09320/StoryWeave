@@ -2087,10 +2087,10 @@ export function AppShell() {
                 title={item.label}
                 className={({ isActive }) =>
                   clsx(
-                    'flex min-h-15 flex-col items-center justify-center gap-1.5 rounded-2xl px-2 py-2 text-center transition',
+                    'flex min-h-15 flex-col items-center justify-center gap-1.5 rounded-xl px-2 py-2 text-center transition',
                     isActive
-                      ? 'bg-background text-foreground shadow-sm'
-                      : 'text-muted-foreground hover:bg-background/70 hover:text-foreground',
+                      ? 'bg-card text-foreground shadow-sm ring-1 ring-border/80'
+                      : 'text-muted-foreground hover:bg-card/70 hover:text-foreground',
                   )
                 }
               >
@@ -2102,7 +2102,7 @@ export function AppShell() {
         </nav>
 
         <div className="mt-4 flex flex-col items-center gap-2">
-          <div className="rounded-full border border-primary/15 bg-primary/10 px-2.5 py-1 text-[10px] text-primary">
+          <div className="rounded-full border border-primary/20 bg-primary/8 px-2.5 py-1 text-[10px] text-primary/80">
             就绪
           </div>
           {user ? (
@@ -2128,9 +2128,9 @@ export function AppShell() {
 
       {shouldRenderProjectTree ? (
         <aside className="hidden w-[280px] shrink-0 border-r border-border bg-sidebar md:flex md:flex-col">
-          <div className="border-b border-border px-6 py-6">
-            <div className="text-[11px] uppercase tracking-[0.24em] text-muted-foreground">Project</div>
-            <div className="mt-2 text-lg font-semibold text-foreground">{project?.title ?? '正在加载项目...'}</div>
+          <div className="border-b border-border px-6 py-5">
+            <div className="text-[10px] uppercase tracking-[0.26em] text-muted-foreground/70">Project</div>
+            <div className="mt-1.5 text-base font-semibold text-foreground">{project?.title ?? '正在加载项目...'}</div>
           </div>
 
           <div className="flex-1 overflow-y-auto px-4 py-5">
@@ -2188,7 +2188,7 @@ export function AppShell() {
 
       <div className="flex min-w-0 flex-1">
         <div className="flex min-w-0 flex-1 flex-col bg-transparent">
-          <header className="sticky top-0 z-20 border-b border-border bg-background/88 backdrop-blur">
+          <header className="sticky top-0 z-20 border-b border-border bg-background/92 backdrop-blur-sm">
             <div className="flex items-center justify-between gap-4 px-5 py-4">
               <div className="flex min-w-0 items-center gap-3">
                 {isProjectScoped && !isZenMode ? (
@@ -2196,7 +2196,7 @@ export function AppShell() {
                     <button
                       type="button"
                       aria-label="切换项目栏，快捷键 Ctrl+B"
-                      className="inline-flex size-10 items-center justify-center rounded-xl border border-border bg-background text-muted-foreground transition hover:border-primary/25 hover:text-foreground"
+                      className="inline-flex size-10 items-center justify-center rounded-xl border border-border bg-card text-muted-foreground transition hover:border-border hover:bg-sidebar hover:text-foreground"
                       onClick={() => setIsProjectTreeOpen((prev) => !prev)}
                     >
                       {isProjectTreeOpen ? <PanelLeftClose className="size-4" /> : <PanelLeftOpen className="size-4" />}
@@ -2669,10 +2669,10 @@ function HeaderIconButton({
         aria-label={`${label}，快捷键 ${shortcut}`}
         onClick={onClick}
         className={clsx(
-          'inline-flex size-10 items-center justify-center rounded-xl border bg-white transition',
+          'inline-flex size-10 items-center justify-center rounded-xl border transition',
           active
-            ? 'border-primary/35 bg-primary/10 text-primary'
-            : 'border-border text-muted-foreground hover:border-border hover:text-foreground',
+            ? 'border-primary/40 bg-primary/10 text-primary'
+            : 'border-border bg-card text-muted-foreground hover:border-border hover:bg-sidebar hover:text-foreground',
         )}
       >
         <Icon className="size-4" />
@@ -2715,8 +2715,8 @@ function ProjectTreeLink({
       to={to}
       onClick={onNavigate}
       className={clsx(
-        'flex items-center justify-between rounded-2xl px-4 py-3 transition',
-        active ? 'bg-background text-foreground shadow-sm ring-1 ring-border' : 'text-muted-foreground hover:bg-background hover:text-foreground',
+        'flex items-center justify-between rounded-xl px-4 py-2.5 transition',
+        active ? 'bg-card text-foreground shadow-sm ring-1 ring-border/70' : 'text-muted-foreground hover:bg-card/80 hover:text-foreground',
       )}
     >
       <div className="min-w-0">

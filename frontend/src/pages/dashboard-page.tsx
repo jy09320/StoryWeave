@@ -392,7 +392,7 @@ export function DashboardPage() {
   return (
     <div className="space-y-6 pb-10">
       <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
-        <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
+        <div className="rounded-xl border border-border bg-card p-5 shadow-[0_4px_20px_rgba(80,60,20,0.07)]">
           <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
             <div className="space-y-3">
               <div className="text-[11px] uppercase tracking-[0.22em] text-primary/80">Project Focus</div>
@@ -439,7 +439,7 @@ export function DashboardPage() {
               {featuredProject ? (
                 <Link
                   to={`/projects/${featuredProject.id}`}
-                  className="inline-flex h-10 items-center justify-center rounded-md border border-border bg-background px-4 text-sm text-foreground transition hover:bg-muted"
+                  className="inline-flex h-10 items-center justify-center rounded-lg border border-border bg-card px-4 text-sm text-foreground transition hover:bg-sidebar"
                 >
                   进入项目
                 </Link>
@@ -451,7 +451,7 @@ export function DashboardPage() {
         <RecentActivityHeatmap days={heatmapDays} compact stats={stats} />
       </section>
 
-      <section className="rounded-2xl border border-border bg-card">
+      <section className="rounded-xl border border-border bg-card shadow-[0_2px_8px_rgba(80,60,20,0.05)]">
         <div className="flex items-center justify-between border-b border-border/70 px-5 py-4">
           <div className="text-sm font-medium text-foreground">项目列表</div>
           <Button variant="outline" size="sm" onClick={() => setIsCreateOpen(true)}>
@@ -476,7 +476,7 @@ export function DashboardPage() {
         ) : (
           <div className="divide-y divide-border/70">
             {projects.map((project) => (
-              <div key={project.id} className="group grid gap-4 px-5 py-4 transition-colors hover:bg-muted/30 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+              <div key={project.id} className="grid gap-4 px-5 py-4 transition-colors hover:bg-muted/40 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
                 <div className="min-w-0 space-y-2">
                   <div className="flex flex-wrap items-center gap-2">
                     <div className="truncate text-base font-medium text-foreground">{project.title}</div>
@@ -514,7 +514,7 @@ export function DashboardPage() {
                   </Button>
                   <Link
                     to={`/projects/${project.id}`}
-                    className="inline-flex h-9 items-center justify-center rounded-md bg-amber-500 px-3 text-sm font-medium text-black transition-all hover:bg-amber-600 hover:shadow-sm"
+                    className="inline-flex h-9 items-center justify-center rounded-lg bg-foreground px-4 text-sm font-medium text-background transition hover:opacity-80"
                   >
                     打开项目
                   </Link>
@@ -588,7 +588,7 @@ function RecentActivityHeatmap({
   const monthLabels = columns.map((column) => column[0]?.date.toLocaleDateString('zh-CN', { month: 'short' }) ?? '')
 
   return (
-    <div className="rounded-2xl border border-border bg-card p-5">
+    <div className="rounded-xl border border-border bg-card p-5 shadow-[0_4px_20px_rgba(80,60,20,0.07)]">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="space-y-1">
           <div className="text-sm font-medium text-foreground">最近活跃热力板</div>
@@ -667,9 +667,9 @@ function RecentActivityHeatmap({
 
 function MiniMetric({ label, value }: { label: string; value: number }) {
   return (
-    <div className="rounded-xl border border-border/60 bg-muted/30 px-3 py-2.5">
+    <div className="rounded-lg border border-border/80 bg-sidebar px-3 py-2.5">
       <div className="text-[10px] text-muted-foreground">{label}</div>
-      <div className="mt-1 text-lg font-semibold text-foreground">{value}</div>
+      <div className="mt-0.5 text-lg font-semibold text-foreground">{value}</div>
     </div>
   )
 }

@@ -265,7 +265,7 @@ export function ProjectWorkspacePage() {
           {latestChapter ? (
             <Link
               to={`/projects/${project.id}/editor/${latestChapter.id}`}
-              className="inline-flex h-9 items-center gap-2 rounded-full bg-primary px-4 text-sm font-medium text-primary-foreground transition hover:opacity-90"
+              className="inline-flex h-9 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground transition hover:opacity-85"
             >
               <PenSquare className="size-4" />
               继续写作
@@ -273,7 +273,7 @@ export function ProjectWorkspacePage() {
           ) : null}
           <Link
             to={`/projects/${project.id}/settings`}
-            className="inline-flex h-9 items-center gap-2 rounded-full border border-border bg-background px-4 text-sm text-foreground transition hover:bg-muted"
+            className="inline-flex h-9 items-center gap-2 rounded-lg border border-border bg-card px-4 text-sm text-foreground transition hover:bg-sidebar"
           >
             项目设定
           </Link>
@@ -285,7 +285,7 @@ export function ProjectWorkspacePage() {
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
-        <section className="rounded-2xl border border-border bg-card">
+        <section className="rounded-xl border border-border bg-card shadow-[0_2px_8px_rgba(80,60,20,0.05)]">
           <div className="flex items-center justify-between border-b border-border px-5 py-4">
             <h2 className="font-semibold text-foreground">章节管理</h2>
             <span className="text-sm text-muted-foreground">共 {chapters.length} 章</span>
@@ -296,7 +296,7 @@ export function ProjectWorkspacePage() {
           ) : (
             <div className="divide-y divide-border">
               {chapters.map((chapter) => (
-                <div key={chapter.id} className="flex items-center gap-3 px-5 py-3">
+                <div key={chapter.id} className="flex items-center gap-3 px-5 py-3 transition-colors hover:bg-muted/50">
                   <span className="w-14 shrink-0 text-xs text-muted-foreground">第 {chapter.order_index} 章</span>
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-sm font-medium text-foreground">{chapter.title}</div>
@@ -307,7 +307,7 @@ export function ProjectWorkspacePage() {
                   <div className="flex shrink-0 items-center gap-2">
                     <Link
                       to={`/projects/${project.id}/editor/${chapter.id}`}
-                      className="inline-flex h-8 items-center rounded-lg bg-primary px-3 text-xs font-medium text-primary-foreground transition hover:opacity-90"
+                      className="inline-flex h-8 items-center rounded-lg bg-foreground px-3 text-xs font-medium text-background transition hover:opacity-80"
                     >
                       编辑
                     </Link>
@@ -345,7 +345,7 @@ export function ProjectWorkspacePage() {
         </section>
 
         <aside className="space-y-4 xl:sticky xl:top-4 xl:self-start">
-          <div className="rounded-2xl border border-border bg-card px-5 py-4">
+          <div className="rounded-xl border border-border bg-card px-5 py-4 shadow-[0_2px_8px_rgba(80,60,20,0.05)]">
             <div className="mb-3 flex items-center justify-between">
               <span className="text-sm font-medium text-foreground">项目设定</span>
               <Link to={`/projects/${project.id}/settings`} className="text-xs text-primary hover:underline">
@@ -392,7 +392,7 @@ export function ProjectWorkspacePage() {
             </div>
           </div>
 
-          <div className="rounded-2xl border border-border bg-card px-5 py-4">
+          <div className="rounded-xl border border-border bg-card px-5 py-4 shadow-[0_2px_8px_rgba(80,60,20,0.05)]">
             <div className="mb-3 flex items-center justify-between">
               <span className="text-sm font-medium text-foreground">世界观</span>
               <Link to={`/projects/${project.id}/world`} className="text-xs text-primary hover:underline">
@@ -410,7 +410,7 @@ export function ProjectWorkspacePage() {
             )}
           </div>
 
-          <div className="rounded-2xl border border-border bg-card px-5 py-4">
+          <div className="rounded-xl border border-border bg-card px-5 py-4 shadow-[0_2px_8px_rgba(80,60,20,0.05)]">
             <div className="mb-3 flex items-center justify-between">
               <span className="text-sm font-medium text-foreground">角色 · {projectCharacters.length}</span>
               <Link to={`/projects/${project.id}/characters`} className="text-xs text-primary hover:underline">
