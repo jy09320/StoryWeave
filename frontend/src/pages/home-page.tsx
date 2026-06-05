@@ -163,7 +163,7 @@ function EnergyLine() {
   return (
     <div ref={ref} className="absolute top-0 left-[23px] h-full w-px lg:left-[35px]">
       {/* Background track */}
-      <div className="absolute inset-0 bg-[#e5e5e7]" />
+      <div className="absolute inset-0 bg-border" />
       {/* Animated fill */}
       <motion.div
         className="absolute top-0 left-0 w-full bg-gradient-to-b from-primary via-primary to-primary/40"
@@ -220,7 +220,7 @@ export function HomePage() {
             <img src={logoUrl} alt="偶记" className="h-20 w-auto object-contain" />
           </div>
 
-          <nav className="hidden items-center gap-8 text-sm font-medium text-[#1D1D1F] md:flex">
+          <nav className="hidden items-center gap-8 text-sm font-medium text-foreground md:flex">
             <a href="#product" className="transition hover:text-foreground">产品能力</a>
             <a href="#workflow" className="transition hover:text-foreground">工作流</a>
             <a href="#launch" className="transition hover:text-foreground">开始使用</a>
@@ -229,13 +229,13 @@ export function HomePage() {
           <div className="flex items-center gap-3">
             <Link
               to="/workspace"
-              className="hidden h-9 items-center justify-center rounded-full border border-black/8 bg-white/80 px-4 text-sm text-foreground transition hover:bg-white md:inline-flex"
+              className="hidden h-9 items-center justify-center rounded-full border border-black/8 bg-white/80 px-4 text-sm text-foreground transition-all duration-200 hover:-translate-y-px hover:bg-white hover:shadow-sm active:translate-y-0 md:inline-flex"
             >
               进入工作台
             </Link>
             <Link
               to="/ai-toolbox"
-              className="inline-flex h-9 items-center justify-center rounded-full bg-foreground px-4 text-sm font-medium text-background transition hover:opacity-80"
+              className="inline-flex h-9 items-center justify-center rounded-full bg-foreground px-4 text-sm font-medium text-background transition-all duration-200 hover:-translate-y-px hover:shadow-md active:translate-y-0 active:scale-[0.98]"
             >
               体验 AI 写作
             </Link>
@@ -247,7 +247,7 @@ export function HomePage() {
       {/*  Hero — headline + AI memory demo                            */}
       {/* ============================================================ */}
       {/* Hero — text only, centered in viewport */}
-      <section className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden pt-20 pb-12">
+      <section className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden pt-20 pb-16">
         {/* Subtle background glow */}
         <div
           className="pointer-events-none absolute inset-0"
@@ -255,6 +255,13 @@ export function HomePage() {
             background:
               'radial-gradient(ellipse 60% 50% at 50% 40%, rgba(16,185,129,0.06), transparent),' +
               'radial-gradient(ellipse 40% 40% at 30% 60%, rgba(14,165,233,0.04), transparent)',
+          }}
+        />
+        {/* Paper grain texture */}
+        <div
+          className="pointer-events-none fixed inset-0 z-[1] opacity-[0.025]"
+          style={{
+            backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")`,
           }}
         />
 
@@ -265,12 +272,12 @@ export function HomePage() {
               initial={{ opacity: 0, y: -12 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.1 }}
-              className="mb-8 flex items-center gap-2.5 rounded-full border border-black/5 bg-white/85 px-4 py-2 shadow-[0_2px_16px_rgba(0,0,0,0.04)]"
+              className="mb-8 flex items-center gap-2.5 rounded-full border border-black/5 bg-white/85 px-4 py-2 shadow-[0_2px_16px_rgba(0,0,0,0.04)] transition-all duration-200 hover:-translate-y-px hover:shadow-[0_4px_20px_rgba(0,0,0,0.06)]"
               style={{ backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)' }}
             >
               <span className="size-1.5 rounded-full bg-primary/60" />
               <span className="text-[13px] text-muted-foreground">继续写</span>
-              <span className="max-w-40 truncate text-[13px] font-medium" style={{ color: '#1D1D1F' }}>{recentProjects[0].title}</span>
+              <span className="max-w-40 truncate text-[13px] font-medium text-foreground">{recentProjects[0].title}</span>
               <Link to="/workspace" className="flex shrink-0 items-center gap-1 text-[13px] text-primary hover:underline">
                 <ArrowRight className="size-3" />
               </Link>
@@ -284,12 +291,12 @@ export function HomePage() {
               initial="hidden"
               animate="visible"
               custom={0.15}
-              className="mt-4 text-6xl font-bold leading-[1.12] text-[#1D1D1F] sm:text-7xl lg:text-8xl"
-              style={{ letterSpacing: '-0.02em' }}
+              className="mt-4 font-serif text-6xl font-bold leading-[1.08] tracking-tight text-foreground sm:text-7xl lg:text-[5.5rem]"
+              style={{ letterSpacing: '-0.025em' }}
             >
               你的故事
               <br />
-              <span className="relative inline-block bg-linear-to-r from-[#1D1D1F] to-emerald-700/80 bg-clip-text text-transparent">
+              <span className="relative inline-block bg-linear-to-r from-foreground to-emerald-700/80 bg-clip-text text-transparent">
                 一直都在等你回来
               </span>
             </motion.h1>
@@ -299,7 +306,7 @@ export function HomePage() {
               initial="hidden"
               animate="visible"
               custom={0.3}
-              className="mt-4 max-w-xl text-lg leading-8 text-[#86868b]"
+              className="mt-4 max-w-xl text-lg leading-8 text-muted-foreground"
             >
               AI 记得你的角色、设定与剧情。
               <br />
@@ -317,7 +324,7 @@ export function HomePage() {
               {useCases.map((tag) => (
                 <span
                   key={tag}
-                  className="rounded-full border border-black/5 bg-white/70 px-3.5 py-1 text-[13px] text-[#6e6e73]"
+                  className="rounded-full border border-black/5 bg-white/70 px-3.5 py-1 text-[13px] text-muted-foreground/70"
                 >
                   ✓ {tag}
                 </span>
@@ -333,14 +340,13 @@ export function HomePage() {
             >
               <Link
                 to="/workspace"
-                className="inline-flex h-11 items-center justify-center rounded-full px-6 text-sm font-medium text-white shadow-[0_4px_20px_rgba(0,0,0,0.18)] transition hover:opacity-85 hover:shadow-[0_6px_28px_rgba(0,0,0,0.22)]"
-                style={{ backgroundColor: '#000' }}
+                className="inline-flex h-11 items-center justify-center rounded-full bg-foreground px-7 text-sm font-medium text-background shadow-[0_4px_20px_rgba(0,0,0,0.18)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_8px_30px_rgba(0,0,0,0.22)] active:translate-y-0 active:scale-[0.98]"
               >
                 创建我的故事
               </Link>
               <a
                 href="#product"
-                className="inline-flex h-11 items-center justify-center rounded-full border border-black/8 bg-white/80 px-6 text-sm text-foreground transition hover:bg-white"
+                className="inline-flex h-11 items-center justify-center rounded-full border border-black/8 bg-white/80 px-7 text-sm text-foreground transition-all duration-200 hover:-translate-y-0.5 hover:bg-white hover:shadow-[0_4px_16px_rgba(0,0,0,0.06)] active:translate-y-0"
               >
                 看看它能记住什么 ↓
               </a>
@@ -506,27 +512,41 @@ export function HomePage() {
         >
           <motion.h2
             variants={fadeUp}
-            className="text-center text-2xl font-semibold tracking-tight text-[#1D1D1F] sm:text-3xl"
+            className="text-center font-serif text-2xl font-semibold tracking-tight text-foreground sm:text-3xl"
           >
             每个写故事的人，都有过这样的时刻
           </motion.h2>
 
-          <div className="mt-14 grid gap-5 lg:grid-cols-3">
-            {resonanceCards.map((card) => (
+          <div className="mt-14 grid gap-5 lg:grid-cols-2">
+            {/* First card — larger, spans left column */}
+            <motion.div
+              variants={staggerItem}
+              className="relative overflow-hidden rounded-2xl bg-white p-8 shadow-[0_20px_60px_rgba(0,0,0,0.04)] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_24px_70px_rgba(0,0,0,0.07)] lg:row-span-2"
+            >
+              <span className="font-mono text-sm text-primary/30 select-none">//</span>
+              <p className="mt-3 text-xl font-semibold leading-7 text-foreground">{resonanceCards[0].quote}</p>
+              <p className="mt-3 text-sm leading-7 text-muted-foreground">{resonanceCards[0].detail}</p>
+              <div className="mt-6 rounded-xl border border-black/4 bg-muted/15 p-4">
+                <div className="text-xs text-muted-foreground/60">场景</div>
+                <div className="mt-2 text-sm text-foreground/70">你写了 20 万字的长篇，三个月后回来续写——角色的名字还记得，但他和谁结过仇、在哪拿的戒指，全忘了。</div>
+              </div>
+            </motion.div>
+
+            {/* Right column — stacked cards */}
+            {resonanceCards.slice(1).map((card) => (
               <motion.div
                 key={card.quote}
                 variants={staggerItem}
-                className="relative overflow-hidden rounded-2xl bg-white p-7 shadow-[0_20px_60px_rgba(0,0,0,0.04)] transition-shadow duration-300 hover:shadow-[0_24px_70px_rgba(0,0,0,0.07)]"
+                className="relative overflow-hidden rounded-2xl border border-transparent bg-white p-7 shadow-[0_20px_60px_rgba(0,0,0,0.04)] transition-all duration-300 hover:-translate-y-0.5 hover:border-primary/10 hover:shadow-[0_24px_70px_rgba(0,0,0,0.07)]"
               >
-                {/* Code-style quote marker */}
                 <span className="font-mono text-sm text-primary/30 select-none">//</span>
-                <p className="mt-3 text-lg font-semibold leading-7 text-[#1D1D1F]">{card.quote}</p>
-                <p className="mt-3 text-sm leading-6 text-[#86868b]">{card.detail}</p>
+                <p className="mt-3 text-lg font-semibold leading-7 text-foreground">{card.quote}</p>
+                <p className="mt-3 text-sm leading-6 text-muted-foreground">{card.detail}</p>
               </motion.div>
             ))}
           </div>
 
-          <motion.p variants={fadeUp} className="mt-12 text-center text-sm text-[#86868b]">
+          <motion.p variants={fadeUp} className="mt-12 text-center text-sm text-muted-foreground">
             偶记记得你的故事，帮你把这些都接住。
           </motion.p>
         </motion.div>
@@ -545,7 +565,7 @@ export function HomePage() {
         >
           <motion.div variants={fadeUp} className="text-center">
             <div className="text-[11px] uppercase tracking-[0.22em] text-primary/70">它记住了什么</div>
-            <h2 className="mt-3 text-3xl font-bold tracking-tight text-[#1D1D1F]">这才是 AI 记忆的真正样子</h2>
+            <h2 className="mt-3 font-serif text-3xl font-bold tracking-tight text-foreground">这才是 AI 记忆的真正样子</h2>
           </motion.div>
 
           <div className="mt-14 grid gap-6 lg:grid-cols-2">
@@ -632,7 +652,7 @@ export function HomePage() {
         >
           <motion.div variants={fadeUp}>
             <div className="text-[11px] uppercase tracking-[0.22em] text-primary/70">核心能力</div>
-            <h2 className="mt-3 text-3xl font-bold tracking-tight text-[#1D1D1F]">不只是写作工具，是故事的长期记忆</h2>
+            <h2 className="mt-3 font-serif text-3xl font-bold tracking-tight text-foreground">不只是写作工具，是故事的长期记忆</h2>
           </motion.div>
 
           {/* Bento grid: 1 large + 2 small */}
@@ -644,8 +664,8 @@ export function HomePage() {
                   <div className="flex size-12 items-center justify-center rounded-xl bg-linear-to-br from-emerald-500/15 to-sky-500/10 text-emerald-700">
                     <Brain className="size-6" />
                   </div>
-                  <h3 className="mt-6 text-xl font-semibold text-[#1D1D1F]">{featureGroups[0].title}</h3>
-                  <p className="mt-4 text-sm leading-8 text-[#86868b]">{featureGroups[0].description}</p>
+                  <h3 className="mt-6 text-xl font-semibold text-foreground">{featureGroups[0].title}</h3>
+                  <p className="mt-4 text-sm leading-8 text-muted-foreground">{featureGroups[0].description}</p>
 
                   {/* Tags — right after description */}
                   <div className="mt-5 flex flex-wrap gap-2">
@@ -685,8 +705,8 @@ export function HomePage() {
                   <div className="flex size-11 items-center justify-center rounded-xl bg-linear-to-br from-emerald-500/15 to-sky-500/10 text-emerald-700">
                     <Layers3 className="size-5" />
                   </div>
-                  <h3 className="mt-5 text-lg font-semibold text-[#1D1D1F]">{featureGroups[1].title}</h3>
-                  <p className="mt-3 text-sm leading-7 text-[#86868b]">{featureGroups[1].description}</p>
+                  <h3 className="mt-5 text-lg font-semibold text-foreground">{featureGroups[1].title}</h3>
+                  <p className="mt-3 text-sm leading-7 text-muted-foreground">{featureGroups[1].description}</p>
                 </div>
               </GlowCard>
             </motion.div>
@@ -698,8 +718,8 @@ export function HomePage() {
                   <div className="flex size-11 items-center justify-center rounded-xl bg-linear-to-br from-emerald-500/15 to-sky-500/10 text-emerald-700">
                     <Search className="size-5" />
                   </div>
-                  <h3 className="mt-5 text-lg font-semibold text-[#1D1D1F]">{featureGroups[2].title}</h3>
-                  <p className="mt-3 text-sm leading-7 text-[#86868b]">{featureGroups[2].description}</p>
+                  <h3 className="mt-5 text-lg font-semibold text-foreground">{featureGroups[2].title}</h3>
+                  <p className="mt-3 text-sm leading-7 text-muted-foreground">{featureGroups[2].description}</p>
                 </div>
               </GlowCard>
             </motion.div>
@@ -720,7 +740,7 @@ export function HomePage() {
         >
           <motion.div variants={fadeUp} className="lg:sticky lg:top-24 lg:self-center">
             <div className="text-[11px] uppercase tracking-[0.22em] text-primary/70">开始的方式</div>
-            <h2 className="mt-3 text-3xl font-bold tracking-tight text-[#1D1D1F]">三步，把你的故事安顿好</h2>
+            <h2 className="mt-3 font-serif text-3xl font-bold tracking-tight text-foreground">三步，把你的故事安顿好</h2>
           </motion.div>
 
           <motion.div variants={staggerContainer} className="relative">
@@ -732,7 +752,7 @@ export function HomePage() {
                 <motion.div
                   key={step.index}
                   variants={staggerItem}
-                  className="relative flex gap-8 py-7 pl-14 lg:pl-16"
+                  className="group relative flex gap-8 rounded-xl py-7 pl-14 transition-colors duration-200 hover:bg-muted/30 lg:pl-16"
                 >
                   {/* Step number — lights up when energy line reaches it */}
                   <motion.span
@@ -745,8 +765,8 @@ export function HomePage() {
                     {step.index}
                   </motion.span>
                   <div>
-                    <div className="text-lg font-medium text-[#1D1D1F]">{step.title}</div>
-                    <div className="mt-2 text-sm leading-7 text-[#86868b]">{step.description}</div>
+                    <div className="text-lg font-medium text-foreground">{step.title}</div>
+                    <div className="mt-2 text-sm leading-7 text-muted-foreground">{step.description}</div>
                   </div>
                 </motion.div>
               ))}
@@ -770,26 +790,25 @@ export function HomePage() {
         >
           <motion.div variants={fadeUp}>
             <div className="text-[11px] uppercase tracking-[0.22em] text-primary/70">开始使用</div>
-            <h2 className="mt-3 text-4xl font-bold tracking-tight text-[#1D1D1F]">
+            <h2 className="mt-3 font-serif text-4xl font-bold tracking-tight text-foreground">
               让 AI 读你的故事，
               <br />
               然后记住它
             </h2>
-            <p className="mt-4 max-w-xl text-sm leading-7 text-[#86868b]">
+            <p className="mt-4 max-w-xl text-sm leading-7 text-muted-foreground">
               导入你已有的小说，或者从零开始。偶记会记住每一个角色、每一条设定、每一章剧情。
             </p>
 
             <div className="mt-8 flex flex-wrap gap-3">
               <Link
                 to="/workspace"
-                className="inline-flex h-11 items-center justify-center rounded-full px-6 text-sm font-semibold text-white shadow-[0_4px_20px_rgba(0,0,0,0.18)] transition hover:opacity-85 hover:shadow-[0_6px_28px_rgba(0,0,0,0.22)]"
-                style={{ backgroundColor: '#000' }}
+                className="inline-flex h-11 items-center justify-center rounded-full bg-foreground px-7 text-sm font-semibold text-background shadow-[0_4px_20px_rgba(0,0,0,0.18)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_8px_30px_rgba(0,0,0,0.22)] active:translate-y-0 active:scale-[0.98]"
               >
                 免费开始写
               </Link>
               <Link
                 to="/ai-toolbox"
-                className="inline-flex h-11 items-center justify-center rounded-full border border-black/8 bg-white/80 px-6 text-sm text-foreground transition hover:bg-white"
+                className="inline-flex h-11 items-center justify-center rounded-full border border-black/8 bg-white/80 px-7 text-sm text-foreground transition-all duration-200 hover:-translate-y-0.5 hover:bg-white hover:shadow-[0_4px_16px_rgba(0,0,0,0.06)] active:translate-y-0"
               >
                 让 AI 先读你的旧稿
               </Link>

@@ -2,6 +2,7 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/geist";
+@import "@fontsource-variable/noto-serif";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -71,8 +72,9 @@
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
-  --font-heading: var(--font-sans);
+  --font-heading: 'Noto Serif Variable', 'Noto Serif SC', 'Songti SC', serif;
   --font-sans: 'Geist Variable', sans-serif;
+  --font-serif: 'Noto Serif Variable', 'Noto Serif SC', 'Songti SC', serif;
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -98,6 +100,7 @@
 
   html {
     color-scheme: light;
+    scroll-behavior: smooth;
     @apply font-sans;
   }
 
@@ -199,5 +202,12 @@
     transition-property: color, background-color, border-color, box-shadow, opacity;
     transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
     transition-duration: 150ms;
+  }
+
+  /* Visible focus ring for keyboard navigation */
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+    border-radius: var(--radius);
   }
 }
