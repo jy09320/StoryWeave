@@ -602,3 +602,36 @@ export interface StoryQAResponse {
   sources: StoryQASourceRef[]
   query_terms: string[]
 }
+
+// ---------------------------------------------------------------------------
+// Character Chat Sessions
+// ---------------------------------------------------------------------------
+
+export interface CharacterChatMessage {
+  role: 'user' | 'assistant'
+  content: string
+  created_at: string
+}
+
+export interface CharacterChatSession {
+  id: string
+  character_id: string
+  project_id: string | null
+  title: string
+  messages: CharacterChatMessage[]
+  model_id: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface CharacterChatSessionCreatePayload {
+  project_id?: string | null
+  title?: string | null
+  model_id?: string | null
+}
+
+export interface CharacterChatRequest {
+  message: string
+  project_id?: string | null
+  model_id?: string | null
+}
