@@ -3,11 +3,8 @@ import { useQuery } from '@tanstack/react-query'
 import { motion, useScroll, useTransform, useInView } from 'framer-motion'
 import {
   ArrowRight,
-  BookOpenText,
   Brain,
   StackSimple,
-  Question,
-  MagnifyingGlass,
   Sparkle,
 } from '@phosphor-icons/react'
 import { Link } from 'react-router-dom'
@@ -16,6 +13,7 @@ import logoUrl from '@/assets/logo.png'
 import { CharacterGraphDemo } from '@/components/home/character-graph-demo'
 import { MemoryFlowDemo } from '@/components/home/memory-flow-demo'
 import { PipelineDemo } from '@/components/home/pipeline-demo'
+import { WorldviewSearchDemo } from '@/components/home/worldview-search-demo'
 import { formatDate, parseApiDate } from '@/lib/format'
 import { listProjects } from '@/services/projects'
 import type { Project } from '@/types/api'
@@ -57,11 +55,6 @@ const featureGroups = [
     icon: StackSimple,
     title: '上下文续写',
     description: '自动检索关联章节再动笔。不会冒出未定义角色，不会跳过已埋伏笔。续写完美贴合你的风格。',
-  },
-  {
-    icon: MagnifyingGlass,
-    title: '世界观检索',
-    description: '自然语言查询你的故事宇宙。主角第一次遇见艾琳是哪一章？戒指是在哪里拿到的？直接回答。',
   },
 ] as const
 
@@ -444,89 +437,25 @@ export function HomePage() {
       </section>
 
       {/* ============================================================ */}
-      {/*  AI Memory Demo — real case                                  */}
+      {/*  Worldview Search — animated retrieval demo                   */}
       {/* ============================================================ */}
       <section className="border-b border-black/4 bg-muted/20">
         <motion.div
           className="mx-auto w-full max-w-7xl px-6 py-24 lg:px-10"
           initial="hidden"
           whileInView="visible"
-          viewport={{ once: true, amount: 0.2 }}
+          viewport={{ once: true, amount: 0.15 }}
           variants={staggerContainer}
         >
           <motion.div variants={fadeUp} className="text-center">
-            <div className="text-[11px] uppercase tracking-[0.22em] text-primary/70">它记住了什么</div>
-            <h2 className="mt-3 font-serif text-3xl font-bold tracking-tight text-foreground">这才是 AI 记忆的真正样子</h2>
+            <div className="text-[11px] uppercase tracking-[0.22em] text-primary/70">自然语言检索</div>
+            <h2 className="mt-3 font-serif text-3xl font-bold tracking-tight text-foreground">用一句话，找到故事里的任何细节</h2>
+            <p className="mt-3 text-sm text-muted-foreground">不用翻章节列表，不用记页码。像和一个读过你全部作品的朋友聊天一样。</p>
           </motion.div>
 
-          <div className="mt-14 grid gap-6 lg:grid-cols-2">
-            {/* Memory card */}
-            <motion.div
-              variants={staggerItem}
-              className="rounded-2xl bg-white p-8 shadow-[0_20px_60px_rgba(0,0,0,0.04)]"
-            >
-              <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                <BookOpenText className="size-4 text-primary" />
-                项目：北境烽火
-              </div>
-              <div className="mt-4 space-y-3">
-                <div>
-                  <div className="text-[11px] uppercase tracking-widest text-muted-foreground/60">角色</div>
-                  <div className="mt-1.5 flex flex-wrap gap-1.5">
-                    {['莱纳', '艾琳', '洛维斯'].map((name) => (
-                      <span key={name} className="rounded-full bg-primary/8 px-2.5 py-0.5 text-xs text-foreground/70">{name}</span>
-                    ))}
-                  </div>
-                </div>
-                <div>
-                  <div className="text-[11px] uppercase tracking-widest text-muted-foreground/60">世界观</div>
-                  <div className="mt-1 text-sm text-foreground/70">北境七城</div>
-                </div>
-                <div>
-                  <div className="text-[11px] uppercase tracking-widest text-muted-foreground/60">最近剧情</div>
-                  <div className="mt-1 text-sm text-foreground/70">主角发现王室血统的秘密</div>
-                </div>
-                <div>
-                  <div className="text-[11px] uppercase tracking-widest text-muted-foreground/60">未完成伏笔</div>
-                  <div className="mt-1 flex items-center gap-1.5">
-                    <span className="size-1.5 rounded-full bg-amber-400" />
-                    <span className="text-sm text-foreground/70">银月教团的预言</span>
-                  </div>
-                </div>
-              </div>
-            </motion.div>
-
-            {/* AI conversation */}
-            <motion.div
-              variants={staggerItem}
-              className="rounded-2xl bg-white p-8 shadow-[0_20px_60px_rgba(0,0,0,0.04)]"
-            >
-              <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                <Question className="size-4 text-primary" />
-                向 AI 提问
-              </div>
-              <div className="mt-4 space-y-3">
-                <div className="flex justify-end">
-                  <div className="max-w-[80%] rounded-2xl rounded-br-md bg-foreground/6 px-4 py-2.5">
-                    <div className="text-sm text-foreground/80">主角什么时候得到戒指的？</div>
-                  </div>
-                </div>
-                <div className="flex justify-start">
-                  <div className="max-w-[85%] rounded-2xl rounded-bl-md bg-primary/6 px-4 py-2.5">
-                    <div className="flex items-center gap-1.5 mb-1">
-                      <Sparkle className="size-3 text-primary" />
-                      <span className="text-[11px] font-medium text-primary/70">偶记</span>
-                    </div>
-                    <div className="text-sm leading-relaxed text-foreground/75">
-                      第 17 章《雪夜》，从父亲遗物中获得。
-                      <br />
-                      当时莱纳正在整理北境旧宅的书房，在一个上锁的抽屉里发现了它。
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </motion.div>
-          </div>
+          <motion.div variants={staggerItem} className="mt-14">
+            <WorldviewSearchDemo />
+          </motion.div>
         </motion.div>
       </section>
 
@@ -546,7 +475,7 @@ export function HomePage() {
             <h2 className="mt-3 font-serif text-3xl font-bold tracking-tight text-foreground">不只是写作工具，是故事的长期记忆</h2>
           </motion.div>
 
-          {/* Bento grid: 1 large + 2 small */}
+          {/* Bento grid: 1 large + 1 small */}
           <div className="mt-14 grid gap-4 lg:grid-cols-2 lg:grid-rows-2">
             {/* Large card — spans 2 rows */}
             <motion.div variants={staggerItem} className="lg:row-span-2">
@@ -573,8 +502,8 @@ export function HomePage() {
               </GlowCard>
             </motion.div>
 
-            {/* Small card 1 — with pipeline demo */}
-            <motion.div variants={staggerItem}>
+            {/* Small card — with pipeline demo */}
+            <motion.div variants={staggerItem} className="lg:row-span-2">
               <GlowCard className="h-full rounded-2xl bg-white p-7 shadow-[0_20px_60px_rgba(0,0,0,0.04)] transition-all duration-300 hover:-translate-y-0.5">
                 <div className="relative z-20">
                   <div className="flex size-11 items-center justify-center rounded-xl bg-linear-to-br from-emerald-500/15 to-sky-500/10 text-emerald-700">
@@ -585,19 +514,6 @@ export function HomePage() {
                   <div className="mt-5">
                     <PipelineDemo />
                   </div>
-                </div>
-              </GlowCard>
-            </motion.div>
-
-            {/* Small card 2 */}
-            <motion.div variants={staggerItem}>
-              <GlowCard className="h-full rounded-2xl bg-white p-7 shadow-[0_20px_60px_rgba(0,0,0,0.04)] transition-all duration-300 hover:-translate-y-0.5">
-                <div className="relative z-20">
-                  <div className="flex size-11 items-center justify-center rounded-xl bg-linear-to-br from-emerald-500/15 to-sky-500/10 text-emerald-700">
-                    <MagnifyingGlass className="size-5" />
-                  </div>
-                  <h3 className="mt-5 text-lg font-semibold text-foreground">{featureGroups[2].title}</h3>
-                  <p className="mt-3 text-sm leading-7 text-muted-foreground">{featureGroups[2].description}</p>
                 </div>
               </GlowCard>
             </motion.div>
