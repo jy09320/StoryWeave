@@ -182,72 +182,69 @@ export function ProjectWorldPage() {
 
   return (
     <div className="flex h-full flex-col gap-4">
-      {/* Top: navigation and AI draft controls */}
-      <div className="shrink-0 space-y-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <Link
-            to={
-              returnToEditor
-                ? `/projects/${returnToEditor.projectId}/editor/${returnToEditor.chapterId}`
-                : `/projects/${project.id}`
-            }
-            className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-border bg-background px-3 text-sm font-medium text-foreground transition hover:bg-muted"
-          >
-            <ArrowLeft className="size-4" />
-            {returnToEditor ? '返回当前章节' : '返回工作台'}
-          </Link>
-          <Link
-            to={`/ai-toolbox?task=consistency&projectId=${project.id}${returnToEditor ? `&chapterId=${returnToEditor.chapterId}` : ''}`}
-            className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-primary/20 bg-primary/10 px-3 text-sm font-medium text-primary transition hover:bg-primary/15"
-          >
-            <Sparkle className="size-4" />
-            设定巡检模板
-          </Link>
-        </div>
+      {/* Top: single-row toolbar */}
+      <div className="shrink-0 flex flex-wrap items-center gap-2">
+        <Link
+          to={
+            returnToEditor
+              ? `/projects/${returnToEditor.projectId}/editor/${returnToEditor.chapterId}`
+              : `/projects/${project.id}`
+          }
+          className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-border bg-background px-3 text-sm font-medium text-foreground transition hover:bg-muted"
+        >
+          <ArrowLeft className="size-4" />
+          {returnToEditor ? '返回当前章节' : '返回工作台'}
+        </Link>
 
-        {/* AI draft toolbar */}
-        <div className="flex flex-wrap items-center gap-2">
-          {aiDraft ? (
-            <Button type="button" variant="outline" onClick={() => setAiDraft(null)}>
-              清空草案
-            </Button>
-          ) : null}
-          <Button
-            type="button"
-            variant="outline"
-            onClick={handleGenerateAIDraft}
-            disabled={generateDraftMutation.isPending}
-          >
-            <Sparkle className="mr-2 size-4" />
-            {generateDraftMutation.isPending ? '生成中...' : 'AI 生成草案'}
-          </Button>
-          <Button
-            type="button"
-            onClick={handleApplyAIDraft}
-            disabled={!aiDraft || applyDraftMutation.isPending}
-          >
-            {applyDraftMutation.isPending ? '应用中...' : '应用到编辑区'}
-          </Button>
-        </div>
+        <div className="flex-1" />
 
-        {/* AI draft preview */}
         {aiDraft ? (
-          <div className="rounded-xl border border-border bg-background px-4 py-4">
-            <div className="text-sm font-medium text-foreground">
-              {aiDraft.world_setting_title}
-            </div>
-            <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-muted-foreground">
-              {aiDraft.world_setting_overview}
-            </p>
-            <div className="mt-4 grid gap-3 md:grid-cols-2">
-              <AIDraftInfo label="核心规则" value={aiDraft.world_setting_rules} />
-              <AIDraftInfo label="主要势力" value={aiDraft.world_setting_factions} />
-              <AIDraftInfo label="关键地点" value={aiDraft.world_setting_locations} />
-              <AIDraftInfo label="时间线" value={aiDraft.world_setting_timeline} />
-            </div>
-          </div>
+          <Button type="button" variant="outline" size="sm" onClick={() => setAiDraft(null)}>
+            清空草案
+          </Button>
         ) : null}
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={handleGenerateAIDraft}
+          disabled={generateDraftMutation.isPending}
+        >
+          <Sparkle className="mr-1.5 size-3.5" />
+          {generateDraftMutation.isPending ? '生成中...' : 'AI 生成草案'}
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          onClick={handleApplyAIDraft}
+          disabled={!aiDraft || applyDraftMutation.isPending}
+        >
+          {applyDraftMutation.isPending ? '应用中...' : '应用到编辑区'}
+        </Button>
+        <Link
+          to={`/ai-toolbox?task=consistency&projectId=${project.id}${returnToEditor ? `&chapterId=${returnToEditor.chapterId}` : ''}`}
+          className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-background text-muted-foreground transition hover:bg-muted hover:text-foreground"
+          title="设定巡检模板"
+        >
+          <Sparkle className="size-4" />
+        </Link>
       </div>
+
+      {/* AI draft preview — only shown when a draft exists */}
+      {aiDraft ? (
+        <div className="shrink-0 rounded-xl border border-border bg-background px-4 py-4">
+          <div className="text-sm font-medium text-foreground">{aiDraft.world_setting_title}</div>
+          <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-muted-foreground">
+            {aiDraft.world_setting_overview}
+          </p>
+          <div className="mt-4 grid gap-3 md:grid-cols-2">
+            <AIDraftInfo label="核心规则" value={aiDraft.world_setting_rules} />
+            <AIDraftInfo label="主要势力" value={aiDraft.world_setting_factions} />
+            <AIDraftInfo label="关键地点" value={aiDraft.world_setting_locations} />
+            <AIDraftInfo label="时间线" value={aiDraft.world_setting_timeline} />
+          </div>
+        </div>
+      ) : null}
 
       {/* Bottom: asset workspace */}
       <div className="min-h-0 flex-1 overflow-hidden">

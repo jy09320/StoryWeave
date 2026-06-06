@@ -661,7 +661,7 @@ export function AppShell() {
       }
 
       const key = event.key.toLowerCase()
-      if (key === 'b' && isProjectScoped && !isZenMode && !isAssetWorkspaceRoute) {
+      if (key === 'b' && isProjectScoped && !isZenMode) {
         event.preventDefault()
         setIsProjectTreeOpen((prev) => !prev)
       }
@@ -885,7 +885,7 @@ export function AppShell() {
     editorUtilityContext?.projectId === projectId && editorUtilityContext?.chapterId === chapterId
       ? editorUtilityContext
       : null
-  const shouldRenderProjectTree = isProjectScoped && isProjectTreeOpen && !isZenMode && !isAssetWorkspaceRoute
+  const shouldRenderProjectTree = isProjectScoped && isProjectTreeOpen && !isZenMode
   const shouldRenderUtility = isProjectScoped && isUtilityOpen && !isZenMode
   const shouldRenderAIPanel = isEditorRoute && isAIPanelOpen && !isZenMode
   const scopedEditorAIDraft =
