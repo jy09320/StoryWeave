@@ -2072,7 +2072,7 @@ export function AppShell() {
     <div className="flex h-screen bg-background text-foreground selection:bg-primary/15 selection:text-foreground">
       {diagnosticsDialog}
       <aside className="flex w-[88px] shrink-0 flex-col items-center border-r border-border bg-sidebar px-3 py-5">
-        <img src={logoUrl} alt="偶记" className="size-14 object-contain" />
+        <img src={logoUrl} alt="偶记" className="size-20 object-contain" />
 
         <nav className="mt-8 flex flex-1 flex-col items-stretch gap-2">
           {primaryNavItems.map((item) => {
