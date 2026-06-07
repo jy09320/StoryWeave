@@ -13,6 +13,7 @@ StoryWeave 是一个面向个人创作者的 AI 写作平台，支持同人文�
 - Dashboard：最近进展看板、项目列表、快速创建入口
 - 项目工作台：章节管理、角色绑定、世界观设定
 - 角色库：结构化角色卡片，可跨项目复用
+- AI 工具箱：独立于项目的 AI 辅助功能集合
 
 ### 智能编辑器
 - Tiptap 富文本编辑器 + 自动保存
@@ -24,6 +25,11 @@ StoryWeave 是一个面向个人创作者的 AI 写作平台，支持同人文�
 - **旧链路（直写）**：SSE 流式续写，速度更快
 - 连续性风险报告：时间线冲突、人设冲突、世界观冲突、伏笔推进错位
 - 调试接口：可查看规划计划、上下文包、token budget 报告
+
+### ACG/同人项目支持
+- 多项目类型：原创、同人、ACG 二创、影视衍生
+- AI 外貌增强：为同人角色自动补充原作形象描述，用户确认后生成肖像
+- 角色肖像生成：基于外貌描述 AI 生成角色立绘
 
 ### 长期记忆系统
 - 章节级结构化记忆（ChapterMemory）：关键事件、角色状态变化、伏笔、时间线标记
@@ -112,6 +118,7 @@ story-weave/
 │   │       ├── chapter_memory_service.py          # 章节记忆抽取
 │   │       └── story_memory_service.py            # 项目长期记忆聚合
 │   ├── alembic/               # 数据库迁移
+│   ├── scripts/               # 工具脚本（种子数据等）
 │   └── requirements.txt
 ├── frontend/
 │   └── src/
@@ -119,6 +126,9 @@ story-weave/
 │       ├── pages/             # 页面
 │       ├── services/          # API 服务层
 │       └── types/             # TypeScript 类型
+├── docs/
+│   └── superpowers/           # 功能设计文档与实现计划
+├── scripts/                   # 项目级工具脚本（截图、测试等）
 ├── plans/                     # 设计文档与规划
 ├── docker-compose.yml
 └── PLAN.md                    # 项目规划总览
@@ -148,8 +158,10 @@ story-weave/
 
 **已完成：**
 - Phase 1：MVP 基础链路
+- Phase 1.5：信息架构升级（Dashboard、工作台、AI 工具箱）
 - Phase 2：角色库、世界观、AI 上下文注入
 - Phase 3（部分）：多阶段续写流水线、长期记忆系统、多用户认证
+- ACG/同人项目支持：角色肖像生成、AI 外貌增强流程
 
 **进行中（Phase 3 待完成）：**
 - 剧情图谱系统（`graph_evidence` 预留，尚未实装）
