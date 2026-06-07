@@ -1,0 +1,8 @@
+{
+  "scripts": {
+    "pitch": "node -e \"const http=require('http'),fs=require('fs'),path=require('path'),cwd='docs/pitch';const m={'html':'text/html','json':'application/json','js':'text/javascript','css':'text/css','png':'image/png','jpg':'image/jpeg','jpeg':'image/jpeg','svg':'image/svg+xml'};http.createServer((q,r)=>{let u=q.url.split('?')[0];if(u==='/')u='/index.html';const f=path.join(cwd,u);fs.readFile(f,(e,d)=>{if(e){r.writeHead(404);r.end('404');return;}r.writeHead(200,{'Content-Type':m[path.extname(f).slice(1)]||'application/octet-stream'});r.end(d)});}).listen(5500,()=>console.log('\\n  Pitch: http://localhost:5500\\n'))\""
+  },
+  "dependencies": {
+    "playwright": "^1.60.0"
+  }
+}

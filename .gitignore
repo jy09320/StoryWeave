@@ -3,10 +3,18 @@ __pycache__/
 *.pyc
 *.pyo
 
+# Node
+node_modules/
+
 # Deployment
 deploy/production/.env
 
-# Skills
-.agents/
+# Claude Code
+.claude/settings.json
+.claude/settings.local.json
 .claude/skills/
+.agents/
 skills-lock.json
+
+# Pitch (local preview only)
+docs/pitch/
